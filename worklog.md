@@ -6,7 +6,12 @@
 
 ## What I worked on
 
-Briefly describe what you did.
+* Initialize git repository for project instead of working on Colab
+* Set up worklog.md and readme.md, as well as a project on GPT so everything related to this project is kept in the same place
+* Set up miniconda environment for the project
+* Improve download from arxiv by:
+    * better category detection
+    * better failure logging
 
 ## Files or data used
 
