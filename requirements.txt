@@ -1,0 +1,10 @@
+feedparser 
+torch 
+transformers 
+scikit-learn 
+tqdm 
+umap-learn 
+sentence-transformers 
+supabase
+pandas
+matplotlib
