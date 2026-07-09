@@ -1,2 +1,4 @@
 skipped_papers.txt
 failure.jsonl
+.vscode
+__pycache__

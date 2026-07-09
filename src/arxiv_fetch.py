@@ -1,0 +1,135 @@
+import time
+from datetime import datetime, timedelta
+import requests
+import feedparser
+from typing import Any, Optional
+from logger import IngestionLogger
+
+# base url for the arxiv api.
+BASE_URL = "http://export.arxiv.org/api/query"
+
+# Do not change these parameters. Arxiv specifically asks for a 3 second delay between API calls
+ARXIV_MAX_PER_REQUEST = 1000
+SLEEP_TIME = 3
+
+
+class MetadataExtractionError(Exception):
+    def __init__(self, arxiv_id: str, message: str):
+        self.arxiv_id = arxiv_id
+        self.message = message
+        super().__init__(
+            f"Failed to extract metadata from {arxiv_id}: {message}")
+
+
+class ArxivFetchError(Exception):
+    pass
+
+
+def build_arxiv_query(categories: list[str], keywords: Optional[list[str]]) -> str:
+    query = '(' + " OR ".join(f"cat:{c}" for c in categories) + ')'
+    if keywords:
+        keywords = [f"abs:\"{kw}\"" for kw in keywords]
+        query += f" AND (" + " OR ".join(keywords) + ')'
+    return query
+
+
+def download_from_arxiv(categories, start=0, keywords=None):
+    """fetches Arxiv feed of papers in the specified `categories` up to 
+    `days_back` days ago, which contain any specified `keywords`. 
+    """
+
+    query = build_arxiv_query(categories, keywords)
+    params = {
+        "search_query": query,
+        "start": start,
+        "max_results": ARXIV_MAX_PER_REQUEST,
+        "sortBy": "submittedDate",
+        "sortOrder": "descending",
+    }
+    try:
+        response = requests.get(BASE_URL, params=params)
+        feed = feedparser.parse(response.text)
+    except Exception as e:
+        raise ArxivFetchError(str(e))
+
+    if not feed.entries:
+        raise ArxivFetchError("No response from Arxiv")
+
+    return feed
+
+
+def extract_entry_metadata(entry: feedparser.utils.FeedParserDict) -> dict[str, Any]:
+    try:
+        published = datetime.strptime(entry.updated, "%Y-%m-%dT%H:%M:%SZ")
+        return {
+            "title": entry.title.strip(),
+            "authors": [a.name for a in entry.authors],
+            "published": published.isoformat(),
+            "abstract": entry.summary.strip(),
+            "id": entry.id.split("/abs/")[-1],
+            "url": entry.link,
+            "arxiv_category": entry.arxiv_primary_category['term']
+        }
+    except Exception as e:
+        raise MetadataExtractionError(getattr(entry, "link", ""), str(e))
+
+
+def fetch_arxiv_data(categories, max_results, logger: IngestionLogger, days_back=7, keywords=None):
+    start = 0
+    collected = 0
+    cutoff_date = datetime.now() - timedelta(days=days_back)
+    collected_papers = []
+    skipped_papers = []
+
+    while collected < max_results:
+        try:
+            feed = download_from_arxiv(categories, start, keywords)
+        except ArxivFetchError as e:
+            logger.log_failure(e, "arxiv_download")
+
+        for entry in feed.entries:
+            try:
+                paper = extract_entry_metadata(entry)
+            except MetadataExtractionError as e:
+                logger.log_failure(e, "metadata_extraction")
+
+            if datetime.fromisoformat(paper.get("published", "")) < cutoff_date:
+                break
+
+            # Ocassionally, a paper will be marked in many categories, but the primary
+            # category will not be relevant (i.e. 'https://arxiv.org/abs/2607.06524v1')
+            # we don't want to collect those papers, since they are unlikely to be relevant.
+            if paper.get('arxiv_category') not in categories:
+                skipped_papers.append(paper)
+                continue
+
+            collected += 1
+            collected_papers.append(paper)
+        start += ARXIV_MAX_PER_REQUEST
+        time.sleep(SLEEP_TIME)
+
+    return collected_papers, skipped_papers
+
+
+if __name__ == "__main__":
+    from pprint import pp
+    MAX_RESULTS = 100
+    CATEGORIES = ["cs.DS", "cs.IT", "cs.CC", "math.CO"]
+    DAYS_BACK = 7
+    KEYWORDS = [
+        "locally+decodable+code",
+        "matrix+concentration",
+        "coding+theory",
+        "hypergraph",
+        "random+tensor",
+        "matching+vectors",
+        "rainbow+cycle",
+    ]
+    logger = IngestionLogger("./failure.jsonl")
+    papers, skipped = fetch_arxiv_data(
+        CATEGORIES, MAX_RESULTS, logger, DAYS_BACK, keywords=None)
+    print(f"Collected {len(papers)} papers")
+
+    # Example: print first paper
+    pp(papers[10])
+    pp(skipped[3])

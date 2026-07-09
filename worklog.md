@@ -17,37 +17,78 @@
 
 List any datasets, papers, scripts, notebooks, or output files.
 
-*
-*
+* data_collection.ipynb
+* requirements.txt
+* readme.md
+* wordklog.md
 
-## Method used
-
-Describe the main approach.
-
-Example: generated embeddings, cleaned abstracts, ran k-means, inspected clusters, made a visualization.
-
-## Results
+<!-- ## Results
 
 Write the main outcome.
 
 * Number of papers:
 * Number of clusters:
 * Useful observations:
-* Problems noticed:
+* Problems noticed: -->
 
 ## Decisions made
 
 Record any choices you made and why.
 
-Example: decided to use title + abstract instead of abstract only because the clusters were clearer.
+Decided to skip collecting papers whose primary label is not in the categories list, as they seem to be 
+tangentially related at best, and quite irrelevant most of the time.
 
 ## Issues or questions
 
 List anything confusing, broken, or worth checking later.
 
-*
-*
+* Might want to refactor failure logging in a cleaner way. Logger class that has an in-memory buffer and 
+can flush to a file seems like a better way to handle logging, especially since the construction of the log
+message might not be the same in every scenario.
 
 ## Next step
 
-Write the next concrete thing to do.
+Update intro extraction, bulk download Arxiv papers and upload to Supabase, deduplication
+
+
+**Date: July 9, 2026**
+**Time spent: 2 hours**
+**Goal for this session: Update intro extraction, upload papers to supabase and deduplicate. Start logging to files and supabase. **
+
+## What I worked on
+
+* Create a better logging system. Now logs things as jsonl
+* Make arxiv fetch function more modular and handles errors better
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/data_collection.ipynb
+* src/arxiv_fetch.py
+* src/logger.py
+
+<!-- ## Results
+
+Write the main outcome.
+
+* Number of papers:
+* Number of clusters:
+* Useful observations:
+* Problems noticed: -->
+
+## Decisions made
+
+Record any choices you made and why.
+
+Make separate logger class, because I will eventually want to log errors in a database, and I want to reuse the class for logging errors with intro extraction and tex source downloads. Moved functions into a .py file instead of keeping everything in .ipynb so that it is easy to reuse.
+
+## Issues or questions
+
+List anything confusing, broken, or worth checking later.
+
+* Might not want to open and close file every time I log. Could buffer and flush periodically, but that seems overengineered for my use case. 
+
+## Next step
+
+Update intro extraction, bulk download Arxiv papers and upload to Supabase, deduplication
