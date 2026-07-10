@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 import requests
 import feedparser
 from typing import Any, Optional
-from .extract_intro import IntroExtractionError, get_intro_text, MathCoarseness
-from .logger import IngestionLogger
+from extract_intro import IntroExtractionError, get_intro_text, MathCoarseness
+from logger import IngestionLogger
+from tqdm import tqdm
+import logging
 
 # base url for the arxiv api.
 BASE_URL = "http://export.arxiv.org/api/query"
@@ -103,21 +105,29 @@ def fetch_arxiv_data(
     days_back: int = 7,
     keywords: Optional[list[str]] = None,
     coarseness: MathCoarseness = "coarse",
+    show_progress: bool = True,
 ):
     start = 0
     collected = 0
+    skipped = 0
+    hit_ratio = 1
     cutoff_date = datetime.now() - timedelta(days=days_back)
     collected_papers = []
 
     with requests.Session() as session:
         while collected < max_results:
+            # EWMA of hit ratio to estimate how many batches are left. +1 to avoid division by 0
+            hit_ratio = 0.8 * hit_ratio + 0.2 * (collected / (collected + skipped + 1))
+            logging.info(
+                f"Collected {collected} papers so far. Expect {hit_ratio * (max_results - collected) / ARXIV_MAX_PER_REQUEST} more batches."
+            )
             try:
-                feed = download_from_arxiv(categories, start, keywords)
+                feed = download_from_arxiv(categories, 2000, keywords)
             except ArxivFetchError as e:
                 logger.log_failure(e, "arxiv_download")
                 break
 
-            for entry in feed.entries:
+            for entry in tqdm(feed.entries, disable=not show_progress):
                 try:
                     paper = extract_entry_metadata(entry)
                 except MetadataExtractionError as e:
@@ -137,6 +147,7 @@ def fetch_arxiv_data(
                         paper["abstract"],
                         paper["published"],
                     )
+                    skipped += 1
                     continue
 
                 if add_intro_text(session, paper, logger, coarseness):
@@ -155,19 +166,16 @@ if __name__ == "__main__":
 
     MAX_RESULTS = 100
     CATEGORIES = ["cs.DS", "cs.IT", "cs.CC", "math.CO"]
-    DAYS_BACK = 7
+    DAYS_BACK = 7 * 365
     KEYWORDS = [
         "locally+decodable+code",
         "matrix+concentration",
         "coding+theory",
         "hypergraph",
-        "random+tensor",
-        "matching+vectors",
-        "rainbow+cycle",
     ]
-    logger = IngestionLogger("./failure.jsonl", "../skipped_papers.txt")
+    logger = IngestionLogger("../failure.jsonl", "../skipped_papers.txt")
     papers = fetch_arxiv_data(CATEGORIES, MAX_RESULTS, logger, DAYS_BACK, keywords=None)
     print(f"Collected {len(papers)} papers")
 
     # Example: print first paper
-    pp(papers[10])
+    pp(papers[0])
