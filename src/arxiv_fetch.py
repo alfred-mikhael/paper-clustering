@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import requests
 import feedparser
 from typing import Any, Optional
-from extract_intro import IntroExtractionError, get_intro_text, MathCoarseness
-from logger import IngestionLogger
+from .extract_intro import IntroExtractionError, get_intro_text, MathCoarseness
+from .logger import IngestionLogger
 from tqdm import tqdm
 import logging
 
@@ -49,7 +49,7 @@ def download_from_arxiv(categories, start=0, keywords=None):
         "sortOrder": "descending",
     }
     try:
-        response = requests.get(BASE_URL, params=params)
+        response = requests.get(BASE_URL, params=params, timeout=60)
         feed = feedparser.parse(response.text)
     except Exception as e:
         raise ArxivFetchError(str(e))
@@ -106,7 +106,7 @@ def fetch_arxiv_data(
     keywords: Optional[list[str]] = None,
     coarseness: MathCoarseness = "coarse",
     show_progress: bool = True,
-):
+) -> list[dict[str, Any]]:
     start = 0
     collected = 0
     skipped = 0
@@ -122,7 +122,7 @@ def fetch_arxiv_data(
                 f"Collected {collected} papers so far. Expect {hit_ratio * (max_results - collected) / ARXIV_MAX_PER_REQUEST} more batches."
             )
             try:
-                feed = download_from_arxiv(categories, 2000, keywords)
+                feed = download_from_arxiv(categories, start, keywords)
             except ArxivFetchError as e:
                 logger.log_failure(e, "arxiv_download")
                 break

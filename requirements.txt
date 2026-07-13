@@ -5,6 +5,7 @@ scikit-learn
 tqdm 
 umap-learn 
 sentence-transformers 
+einops
 supabase
 pandas
 matplotlib
