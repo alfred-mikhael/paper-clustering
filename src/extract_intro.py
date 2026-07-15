@@ -8,7 +8,7 @@ import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Callable, Iterable, Literal, Optional
+from typing import Iterable, Literal, Optional
 
 import requests
 
@@ -260,15 +260,15 @@ def download_source(session: requests.Session, arxiv_id: str) -> bytes:
 
 
 def get_intro_text(
-    session: requests.Session, arxiv_id: str, coarseness: MathCoarseness = "fine"
+    session: requests.Session, arxiv_id: str, coarseness: MathCoarseness = "coarse"
 ) -> str:
     """Download an arXiv source package and return embedding-ready introduction text."""
     try:
         source_bytes = download_source(session, arxiv_id)
-        expanded_source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
-        if not expanded_source:
+        source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
+        if not source:
             return ""
-        intro = extract_intro_from_latex(expanded_source)
+        intro = extract_intro_from_latex(source)
         return clean_latex_for_embedding(intro, coarseness=coarseness)
     except (
         requests.RequestException,
@@ -321,182 +321,38 @@ def decode_source(raw: bytes) -> str:
     return raw.decode("utf-8", errors="ignore")
 
 
-def build_main_tex_source(sources: list[TexSource]) -> str:
-    source_map = {_normalize_path(source.name): source.text for source in sources}
-    candidates = [
-        name
-        for name in source_map
-        if PurePosixPath(name).suffix.lower() in TEX_SOURCE_SUFFIXES
-    ]
-    main_name = max(
-        candidates or source_map,
-        key=lambda name: _main_file_score(name, source_map[name]),
-    )
-    return _expand_inputs(main_name, source_map)
-
-
 def build_intro_tex_source(sources: list[TexSource]) -> str:
+    """Select the most likely main TeX file and expand its includes."""
     source_map = {_normalize_path(source.name): source.text for source in sources}
-    candidates = [
-        name
-        for name in source_map
-        if PurePosixPath(name).suffix.lower() in TEX_SOURCE_SUFFIXES
-    ]
+    if not source_map:
+        return ""
     main_name = max(
-        candidates or source_map,
-        key=lambda name: _main_file_score(name, source_map[name]),
+        source_map, key=lambda name: _main_file_score(name, source_map[name])
     )
-
-    main_text = source_map[main_name]
-    if extract_intro_from_latex(main_text):
-        return main_text
-
-    intro_expanded = _expand_inputs(
-        main_name,
-        source_map,
-        include_filter=_is_likely_intro_include,
-    )
-    if extract_intro_from_latex(intro_expanded):
-        return intro_expanded
-
     return _expand_inputs(main_name, source_map)
 
 
 def build_intro_tex_source_from_bytes(source_bytes: bytes, arxiv_id: str) -> str:
-    if tarfile.is_tarfile(io.BytesIO(source_bytes)):
-        return _build_intro_tex_source_from_tar(source_bytes)
-
-    buffer = io.BytesIO(source_bytes)
-    if zipfile.is_zipfile(buffer):
-        return _build_intro_tex_source_from_zip(source_bytes)
-
-    if source_bytes.startswith(b"\x1f\x8b"):
-        decompressed = gzip.decompress(source_bytes)
-        return build_intro_tex_source_from_bytes(decompressed, arxiv_id)
-
-    return decode_source(source_bytes)
-
-
-def _build_intro_tex_source_from_tar(source_bytes: bytes) -> str:
-    with tarfile.open(fileobj=io.BytesIO(source_bytes), mode="r:*") as tar:
-        members = {
-            _normalize_path(member.name): member
-            for member in tar.getmembers()
-            if member.isfile() and _is_latex_file(member.name)
-        }
-        if not members:
-            return ""
-
-        cache: dict[str, str] = {}
-
-        def read_source(name: str) -> str:
-            normalized = _normalize_path(name)
-            if normalized not in cache:
-                extracted = tar.extractfile(members[normalized])
-                cache[normalized] = (
-                    decode_source(extracted.read()) if extracted is not None else ""
-                )
-            return cache[normalized]
-
-        return _build_intro_tex_source_lazy(list(members), read_source)
-
-
-def _build_intro_tex_source_from_zip(source_bytes: bytes) -> str:
-    with zipfile.ZipFile(io.BytesIO(source_bytes)) as archive:
-        name_map = {
-            _normalize_path(name): name
-            for name in archive.namelist()
-            if _is_latex_file(name)
-        }
-        names = list(name_map)
-        if not names:
-            return ""
-
-        cache: dict[str, str] = {}
-
-        def read_source(name: str) -> str:
-            normalized = _normalize_path(name)
-            if normalized not in cache:
-                cache[normalized] = decode_source(archive.read(name_map[normalized]))
-            return cache[normalized]
-
-        return _build_intro_tex_source_lazy(names, read_source)
-
-
-def _build_intro_tex_source_lazy(
-    source_names: list[str], read_source: Callable[[str], str]
-) -> str:
-    main_name = _select_main_tex_name(source_names, read_source)
-    if not main_name:
-        return ""
-
-    main_text = read_source(main_name)
-    if extract_intro_from_latex(main_text):
-        return main_text
-
-    intro_expanded = _expand_inputs_lazy(
-        main_name,
-        set(source_names),
-        read_source,
-        include_filter=_is_likely_intro_include,
-    )
-    if extract_intro_from_latex(intro_expanded):
-        return intro_expanded
-
-    return _expand_inputs_lazy(main_name, set(source_names), read_source)
-
-
-def _select_main_tex_name(
-    source_names: list[str], read_source: Callable[[str], str]
-) -> str:
-    candidates = [
-        name
-        for name in source_names
-        if PurePosixPath(name).suffix.lower() in TEX_SOURCE_SUFFIXES
-    ]
-    if not candidates:
-        return ""
-
-    def priority(name: str) -> tuple[int, int, str]:
-        path = PurePosixPath(name)
-        preferred = path.name.lower() in {
-            "main.tex",
-            "paper.tex",
-            "article.tex",
-            "ms.tex",
-        }
-        return (0 if preferred else 1, len(path.parts), name)
-
-    best_name = candidates[0]
-    best_score = (-1, -1)
-    for name in sorted(candidates, key=priority):
-        text = read_source(name)
-        score = _main_file_score(name, text)
-        if score > best_score:
-            best_name = name
-            best_score = score
-        if "\\begin{document}" in text:
-            return name
-
-    return best_name
+    return build_intro_tex_source(list(iter_tex_sources(source_bytes, arxiv_id)))
 
 
 def extract_intro_from_latex(source_text: str) -> str:
-    text = strip_latex_comments(source_text)
-    document = _document_body(text)
+    document = _document_body(strip_latex_comments(source_text))
     sections = list(SECTION_RE.finditer(document))
 
-    for idx, match in enumerate(sections):
+    for index, match in enumerate(sections):
         if not INTRO_TITLE_RE.search(match.group("title")):
             continue
 
-        start = match.end()
-        end = len(document)
-        for next_match in sections[idx + 1 :]:
-            if next_match.group("kind").lower() in {"part", "chapter", "section"}:
-                end = next_match.start()
-                break
-        return document[start:end]
+        end = next(
+            (
+                section.start()
+                for section in sections[index + 1 :]
+                if section.group("kind").lower() in {"part", "chapter", "section"}
+            ),
+            len(document),
+        )
+        return document[match.end() : end]
 
     if sections:
         first_section_start = sections[0].start()
@@ -550,18 +406,15 @@ def _main_file_score(name: str, text: str) -> tuple[int, int]:
     if "\\begin{document}" in text:
         score += 100
     if lower_name in {"main.tex", "paper.tex", "article.tex", "ms.tex"}:
-        score += 20
-    if SECTION_RE.search(text):
         score += 10
+    if SECTION_RE.search(text):
+        score += 20
+    if "\\input" in text:
+        score += 15
     return score, len(text)
 
 
-def _expand_inputs(
-    name: str,
-    sources: dict[str, str],
-    depth: int = 0,
-    include_filter=None,
-) -> str:
+def _expand_inputs(name: str, sources: dict[str, str], depth: int = 0) -> str:
     text = sources.get(name, "")
     if depth >= MAX_INCLUDE_DEPTH:
         return text
@@ -583,9 +436,7 @@ def _expand_inputs(
         target = normalized if normalized in sources else fallback
         if target not in sources:
             return " "
-        if include_filter is not None and not include_filter(target):
-            return " "
-        return _expand_inputs(target, sources, depth + 1, include_filter)
+        return _expand_inputs(target, sources, depth + 1)
 
     return re.sub(
         r"\\(?:input|include)\s*\{(?P<path>[^{}]+)\}",
@@ -593,57 +444,6 @@ def _expand_inputs(
         text,
         flags=re.IGNORECASE,
     )
-
-
-def _expand_inputs_lazy(
-    name: str,
-    source_names: set[str],
-    read_source: Callable[[str], str],
-    depth: int = 0,
-    include_filter=None,
-) -> str:
-    text = read_source(name)
-    if depth >= MAX_INCLUDE_DEPTH:
-        return text
-
-    base = PurePosixPath(name).parent
-
-    def replace(match: re.Match[str]) -> str:
-        include_name = match.group("path").strip()
-        if not include_name or include_name.startswith("|"):
-            return " "
-
-        candidate = PurePosixPath(include_name)
-        if candidate.suffix == "":
-            candidate = candidate.with_suffix(".tex")
-        if not candidate.is_absolute():
-            candidate = base / candidate
-        normalized = _normalize_path(str(candidate))
-        fallback = _normalize_path(str(PurePosixPath(candidate.name)))
-        target = normalized if normalized in source_names else fallback
-        if target not in source_names:
-            return " "
-        if include_filter is not None and not include_filter(target):
-            return " "
-        return _expand_inputs_lazy(
-            target,
-            source_names,
-            read_source,
-            depth + 1,
-            include_filter,
-        )
-
-    return re.sub(
-        r"\\(?:input|include)\s*\{(?P<path>[^{}]+)\}",
-        replace,
-        text,
-        flags=re.IGNORECASE,
-    )
-
-
-def _is_likely_intro_include(path: str) -> bool:
-    name = PurePosixPath(path).stem.lower()
-    return bool(INTRO_TITLE_RE.search(name))
 
 
 def _document_body(text: str) -> str:
@@ -778,8 +578,6 @@ def _extract_coarse_math_terms(math_text: str) -> list[str]:
         (r"\\(?:min|max|argmin|argmax)\b", "optimization"),
         (r"\\(?:otimes|tensor)\b", "tensor"),
         (r"\\(?:oplus|xor)\b", "xor"),
-        (r"\\(?:forall|exists)\b", "quantifier"),
-        (r"\\(?:leq|le|geq|ge|neq|ne|approx|sim|simeq|equiv)\b|[<>=]", "relations"),
         (r"\\(?:frac|binom|sqrt)\b", "formula"),
     ]
 
