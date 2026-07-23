@@ -225,3 +225,71 @@ Record any choices you made and why.
 ## Next step
 
 * Instead of extracting math from the papers, try to extract a few very important sentences. I will first do this programatically, and then later try with an LLM to do some structured extraction. It will also be helpful to have different embeddings for different purposes, so that it is easier to cluster by techniques and by areas. Most papers have some sort of "proof overview" or "technical overview" or "our techinques" section, but some do not, so it is a challenge to figure out how to extract information about the techniques used in a clear way. 
+
+**Date: July 21, 2026**
+**Time spent: 2 hours**
+**Goal for this session:** Since math removal is actually not helpful for model performance, try to extract some important sentences from the introduction and use that to enrich the embedding. I definitely want to extract any definitions and theorem statements in the introduction, and maybe in the second 
+
+## What I worked on
+
+Had codex generate some code for extracting enrichment from an introduction. I went back and forth with it a few times about what the regex should be and what sort of information is considered useful. I compared Nomic embeddings title + abstract + enrichment to BM25 with title + abstract + enrichment and BM25 with only title + abstract. Results showed that enrichment did not improve performance at all.  
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/test_enrichment.ipynb
+* src/extract_intro.py
+
+## Results
+
+Write the main outcome.
+
+Enrichment extracts sentences from the introduction that are relevant to the results or the proof techniques used, as well as the theorem statements for the main results. Naively appending the enrichment to the title and abstract did not improve performance for the Nomic embedding, or the BM25 scores. 
+
+## Decisions made
+
+Record any choices you made and why.
+
+* I did not include any mention of prior work in the enrichment, since it would dilute information about the current results and the techniques used. 
+* I decided to append the enrichment to the title and abstract, hoping that the Nomic model could learn more about the paper from it
+
+## Issues or questions
+
+* GPT recommends a multi-view embedding, where I try to extract information about techinques separately from information about the area, seperately from the baseline title + abstract, and then combine them all together. That sounds pretty promising, and apparantly it was used for the SPECTER model
+* I still need to think about math removal in the enrichment
+* I should test an embedding model with __just__ the enrichment, rather than title + abstract + enrichment, to see if the enrichment is really not good or if the issue is too much text diluting the main ideas. 
+* I also need to generate a good training data set with some labelled examples so I have a proper testbed. 
+
+## Next step
+* Generate a good training data set, with labels, and rerun tests for enrichment using that dataset. 
+
+**Date: July 22, 2026**
+**Time spent: 1 hours**
+**Goal for this session:** Plan out the training / test data set generation. I need to choose which papers to include, decide how the extraction should work, and make sure that everything will go properly before running it through a teacher model to generate labels. 
+
+## What I worked on
+
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/test_enrichment.ipynb
+* src/extract_intro.py
+
+## Results
+
+Write the main outcome.
+
+
+## Decisions made
+
+Record any choices you made and why.
+
+
+## Issues or questions
+
+
+## Next step
+
