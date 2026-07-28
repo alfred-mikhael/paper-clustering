@@ -307,25 +307,32 @@ Record any choices you made and why.
 ## Next step
 Keep experimenting with and finalize enrichment. Get a dataset and choose the anchor papers carefully. Get a small script to see how long it really takes to manually label data, and look into a semi-supervised approach which might be cheaper than using the OpenAI API.  
 
-**Date: July 27, 2026**
-**Time spent: 1 hour**
+**Date: July 28, 2026**
+**Time spent: 2 hour**
 **Goal for this session:** Keep working on text enrichment. Also do better preprocessing on the text before embedding and see if that makes any changes.
 
 ## What I worked on
-
+Continued working on the enrichmenet and did research into what sort of clustering people do. I found a good paper on clustering using LLMs, as well as a survey on various clustering techniques and their pros/cons. 
 
 ## Files or data used
 
 List any datasets, papers, scripts, notebooks, or output files.
 
+* extract_intro.py
 
 ## Results
+Enrichment keeps getting better, but it is not complete yet. It still catches some sentences that are not important and misses some important ones.
 
 ## Decisions made
 
 Record any choices you made and why.
 
+* I decided NOT to do the text preprocessing which I was planning to do, namely stopword removal and stemming. According to the research I did, this usually reduces the performance of LLMs and text embeddings, since they are trained on full sentences with all stop words, grammer, and transitions. 
+* I did put back a little bit of math handling. I just want to replace common constants with their english versions, so that the math doesn't become meaningless. I also removed dollar signs to hopefully reduce noise in the model.
+
 ## Issues or questions
+* I had this idea of chunking the text of papers so that each chunk fits into the context window of a BERT family embedding. When searching for the top10 nearest neieghbours, I can get the top5 for each cluster as candidates, and then take the top10 candidates which have best average cross-cluster relevance. The issue with this is that it would bias papers which are about the same topic, and use different techniques. 
+* What if I use BM25 or TF-IDF to help with the enrichment? I can try by computing BM25 indices for a small dataset, and then using those precomputed indices to give weight to sentences with keywords when doing enrichment. 
 
 ## Next step
-s
+I really like the idea of using BM25 to help filter in the enrichment step. I will try that out, and I can also learn about and try out some other cool classical techniques I come across, although it's hard to imagine how anything will be much different from BM25 or TF-IDF.

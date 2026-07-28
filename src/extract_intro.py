@@ -82,17 +82,19 @@ ENRICHMENT_PATTERNS = (
     (
         re.compile(
             r"\b(?:we|this (?:paper|work)|our work)\s+"
-            r"(?:show|prove|establish|demonstrate|obtain|derive|give|present|"
-            r"resolve|settle|improve|characterize|achieve|answer|confirm|refute|bound)\b",
+            r"(?:shows?|proves?|establishs?|demonstrates?|obtains?|derives?|gives?|present|"
+            r"resolves?|settles?|improves?|characterizes?|achieves?|answers?|confirms?|refutes?|bounds?)\b",
             re.IGNORECASE,
         ),
         5,
     ),
     # Explicit names for a paper's result, contribution, proof, or theorem.
+    # the ..+ is to prevent sentences like "that is our main contribution" from
+    # being detected.
     (
         re.compile(
             r"\b(?:our|the) (?:main |principal |key |new )?"
-            r"(?:results?|contributions?|proofs?)\b|\bmain theorem\b",
+            r"(?:results?|contributions?|proofs?)..+\b|\bmain theorem\b",
             re.IGNORECASE,
         ),
         4,
@@ -111,7 +113,7 @@ ENRICHMENT_PATTERNS = (
     (
         re.compile(
             r"\b(?:techniques?|argument|characteri[sz](?:e|ation)|methodology|methods?|approach|algorithms?|"
-            r"constructions?|formulation|idea|strategy|proof (?:idea|strategy|overview))\b",
+            r"constructions?|formulation|idea|strategy|impl[ies|y]|proof (?:idea|strategy|overview))\b",
             re.IGNORECASE,
         ),
         2,
@@ -129,10 +131,10 @@ ENRICHMENT_PATTERNS = (
     (
         re.compile(
             r"\b(?:we (?:define|call|say)|is defined as|means that|"
-            r"definition of|is called .+ if|by .+ we mean)\b",
+            r"definition of|is called .+ if|by .+ we mean|.+ is the|refer|denote)\b",
             re.IGNORECASE,
         ),
-        5,
+        3,
     ),
     # Weak connective phrases that matter only alongside another signal.
     (
@@ -288,6 +290,23 @@ STATEMENT_MARKUP_RE = re.compile(
 # Split only when terminal punctuation (possibly followed by a closing quote)
 # is followed by whitespace and a likely sentence-starting capital/digit.
 SENTENCE_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])")
+
+# Match the four standard inline/display math delimiter forms.  Each alternative
+# captures only the mathematical body so the delimiters can be discarded.  The
+# single-dollar body permits escaped characters (for example, ``\{``) without
+# mistaking them for delimiters.
+MATH_SPAN_RE = re.compile(
+    r"""
+    \$\$(?P<double_dollar>.*?)\$\$
+    |
+    (?<!\\)\$(?!\$)(?P<single_dollar>(?:\\.|[^$])*?)(?<!\\)\$(?!\$)
+    |
+    \\\[(?P<bracket>.*?)\\\]
+    |
+    \\\((?P<parenthesis>.*?)\\\)
+    """,
+    re.DOTALL | re.VERBOSE,
+)
 
 # Match the body of a standard abstract environment as an introduction fallback.
 ABSTRACT_RE = re.compile(
@@ -501,10 +520,11 @@ def _extract_enrichment_excerpts(introduction: str) -> str:
         cleaned = clean_latex_for_embedding(prose_text[start:end])
         section_bonus = 2 if IMPORTANT_SECTION_TITLE_RE.search(title) else 0
         for sentence_index, sentence in enumerate(_split_sentences(cleaned)):
-            print(sentence)
             if _should_exclude_sentence(sentence):
+                print(sentence, _enrichment_sentence_score(sentence))
                 continue
             score = section_bonus + _enrichment_sentence_score(sentence)
+            print(sentence, score)
             if score >= 3:
                 candidates.append((score, start + sentence_index, sentence))
 
@@ -723,6 +743,7 @@ def clean_latex_for_embedding(text: str) -> str:
     text = _preserve_href_text(text)
     text = _unwrap_environments(text)
     text = _unwrap_commands(text, KEEP_CONTENT_COMMANDS)
+    text = _normalize_math_spans(text)
     text = _decode_latex_escapes(text)
     text = _drop_remaining_commands(text)
     text = _normalize_embedding_whitespace(text)
@@ -969,7 +990,36 @@ def _read_balanced_group(text: str, idx: int) -> Optional[tuple[str, int]]:
     return None
 
 
+def _normalize_math_spans(text: str) -> str:
+    """Remove math delimiters and render mathematical braces as parentheses.
+
+    Brace replacement is limited to recognized math spans so braces used as
+    LaTeX grouping elsewhere remain available to the command-cleaning passes.
+    Escaped dollar signs and unmatched delimiters are removed in the final two
+    replacements, which guarantees that no dollar sign reaches the output.
+    """
+
+    def normalize(match: re.Match[str]) -> str:
+        body = next(group for group in match.groups() if group is not None)
+        body = body.replace(r"\{", "(").replace(r"\}", ")")
+        body = body.replace("{", "(").replace("}", ")")
+        # Retain the readable name of every named math command.  Doing this for
+        # the recognized math body avoids a growing command-specific allowlist
+        # and preserves operators such as ``\rightarrow``, ``\in``, and ``\to``.
+        body = re.sub(r"\\([A-Za-z@]+)\*?", r"\1", body)
+        return f" {body} "
+
+    text = MATH_SPAN_RE.sub(normalize, text)
+    return text.replace(r"\$", "").replace("$", "")
+
+
 def _decode_latex_escapes(text: str) -> str:
+    """Decode common LaTeX punctuation and accent commands.
+
+    Alphabetic accent commands require a braced argument.  Without that
+    boundary, the ``\r`` accent pattern would also match the beginning of
+    commands such as ``\rightarrow`` and silently turn it into ``ightarrow``.
+    """
     replacements = {
         "``": '"',
         "''": '"',
@@ -989,19 +1039,25 @@ def _decode_latex_escapes(text: str) -> str:
         text = text.replace(old, new)
 
     accent_replacements = {
-        # Match a TeX accent command and capture its ASCII base letter.
-        r"\\['`^\"~=.uvHtcbdkr]\s*\{?([A-Za-z])\}?": r"\1",
-        # The remaining patterns match common single-command Latin letters.
-        r"\\[ij]": "i",
-        r"\\AA": "A",
-        r"\\aa": "a",
-        r"\\AE": "AE",
-        r"\\ae": "ae",
-        r"\\O": "O",
-        r"\\o": "o",
-        r"\\OE": "OE",
-        r"\\oe": "oe",
-        r"\\ss": "ss",
+        # Punctuation accents are one-character commands, so their base letter
+        # may be bare or enclosed in braces.
+        r"\\['`^\"~=.]\s*\{?([A-Za-z])\}?": r"\1",
+        # Letter-named accents must use braces here to distinguish ``\r{a}``
+        # from longer named commands such as ``\rightarrow``.
+        r"\\[uvHtcbdkr]\s*\{([A-Za-z])\}": r"\1",
+        # These patterns require a command boundary so, for example, ``\O``
+        # cannot consume the start of the longer command ``\Omega``.
+        r"\\i(?![A-Za-z@])": "i",
+        r"\\j(?![A-Za-z@])": "j",
+        r"\\AA(?![A-Za-z@])": "A",
+        r"\\aa(?![A-Za-z@])": "a",
+        r"\\AE(?![A-Za-z@])": "AE",
+        r"\\ae(?![A-Za-z@])": "ae",
+        r"\\O(?![A-Za-z@])": "O",
+        r"\\o(?![A-Za-z@])": "o",
+        r"\\OE(?![A-Za-z@])": "OE",
+        r"\\oe(?![A-Za-z@])": "oe",
+        r"\\ss(?![A-Za-z@])": "ss",
     }
     for pattern, repl in accent_replacements.items():
         text = re.sub(pattern, repl, text)
@@ -1033,16 +1089,6 @@ def _normalize_embedding_whitespace(text: str) -> str:
     # Normalize spacing after clause punctuation and sentence punctuation.
     text = re.sub(r"\s*([,;:])\s*", r"\1 ", text)
     text = re.sub(r"\s*([.!?])\s*", r"\1 ", text)
-    # Remove dangling prepositions left behind when a citation/reference vanished.
-    text = re.sub(
-        r"\b(?:see|in|by|from|using|via)\s*[.!?](?:\s|$)", " ", text, flags=re.I
-    )
-    text = re.sub(
-        r"\b(?:and|or|see|in|by|from|with|using|via)\s*[.!?]\s*$", " ", text, flags=re.I
-    )
-    text = re.sub(
-        r"\b(?:and|or|see|in|by|from|with|using|via)\s*$", " ", text, flags=re.I
-    )
     # Remove whitespace before punctuation, then collapse all remaining whitespace.
     text = re.sub(r"\s+([,;:.!?])", r"\1", text)
     text = re.sub(r"\s+", " ", text)
@@ -1059,12 +1105,12 @@ if __name__ == "__main__":
         # This is a hard example, since it has a lot of .tex files and
         # they are in a different folder than the main.tex
         # print(get_intro_text(session, "1607.04703v3"))
-        print(get_enrichment_text(session, "2605.28793"))
+        # print(get_enrichment_text(session, "2605.28793"))
         print("--------------------------------------------------------")
         print(get_enrichment_text(session, "2404.05864"))
-        print("--------------------------------------------------------")
-        print(get_enrichment_text(session, "2404.06513v2"))
-        print("--------------------------------------------------------")
-        print(get_enrichment_text(session, "2607.19346v1"))
-        print("--------------------------------------------------------")
-        print(get_enrichment_text(session, "2607.14068v2"))
+        # print("--------------------------------------------------------")
+        # print(get_enrichment_text(session, "2404.06513v2"))
+        # print("--------------------------------------------------------")
+        # print(get_enrichment_text(session, "2607.19346v1"))
+        # print("--------------------------------------------------------")
+        # print(get_enrichment_text(session, "2607.14068v2"))
