@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import requests
 import feedparser
 from typing import Any, Optional
-from .extract_intro import IntroExtractionError, get_intro_text, MathCoarseness
+from .extract_intro import IntroExtractionError, get_intro_text
 from .logger import IngestionLogger
 from tqdm import tqdm
 import logging
@@ -80,11 +80,10 @@ def add_intro_text(
     session: requests.Session,
     paper: dict[str, Any],
     logger: IngestionLogger,
-    coarseness: MathCoarseness = "coarse",
 ) -> bool:
     arxiv_id = paper.get("id", "")
     try:
-        intro = get_intro_text(session, arxiv_id, coarseness)
+        intro = get_intro_text(session, arxiv_id)
         if not intro:
             raise IntroExtractionError(arxiv_id, "No introduction text found")
         paper["introduction"] = intro
@@ -104,7 +103,6 @@ def fetch_arxiv_data(
     logger: IngestionLogger,
     days_back: int = 7,
     keywords: Optional[list[str]] = None,
-    coarseness: MathCoarseness = "coarse",
     show_progress: bool = True,
 ) -> list[dict[str, Any]]:
     start = 0
@@ -150,7 +148,7 @@ def fetch_arxiv_data(
                     skipped += 1
                     continue
 
-                if add_intro_text(session, paper, logger, coarseness):
+                if add_intro_text(session, paper, logger):
                     collected += 1
                     collected_papers.append(paper)
                     if collected >= max_results:

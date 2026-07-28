@@ -265,8 +265,51 @@ Record any choices you made and why.
 * Generate a good training data set, with labels, and rerun tests for enrichment using that dataset. 
 
 **Date: July 22, 2026**
-**Time spent: 1 hours**
+**Time spent: 2 hours**
 **Goal for this session:** Plan out the training / test data set generation. I need to choose which papers to include, decide how the extraction should work, and make sure that everything will go properly before running it through a teacher model to generate labels. 
+
+## What I worked on
+
+Mostly planned out how I am going to label the data, and simplified enrichment code. 
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+
+## Results
+
+Write the main outcome.
+
+Here is the plan for generating a labelled dataset: 
+1. Must finalize enrichment from introduction
+2. Get a dataset of a couple thousand papers across a variety of different fields. I should focus on what is most relevant to me, and adjacent fields. 
+3. Select about 75 "anchor" papers which I will measure similarity to. These should be quite influential, and span a wide range of different ideas and fields
+4. Get the top10 most related papers from each of BM25, Nomic with enrichment, and SPECTER. Deduplicate and use these as the labelled pairs. There will be a lot of positives, but also a fair amount of semi-related and unrelated papers (hard negatives)
+5. Possibly run a model on the enrichment to generate a structured output
+6. Use OpenAI batch API to generate labels for each pair of papers. The model will receive the title, abstract, and the enrichment, and should output a score from 0 - 5, as well as a brief explanation of that score (what I ask for depends on how small I want to make the output tokens)
+7. This should generate about 1000 labelled pairs. I should manually validate a few hundred (write a python script to help speed this up), and then reserve those for testing. I can use the rest to do some initial fine-tuning. 
+
+## Decisions made
+
+Record any choices you made and why.
+
+* Will probably use the OpenAI batch API on GPT5.6 Luna, since it balances cost and quality. Total cost should be <=$20 for the first 1000 pairs. 
+* Will use this knowledge distillation sort of approach because I do not have the time to manually label 15-25k pairs. I can try writing a python script to see roughly how long it takes me. If it takes me roughly 30s per pair to label, then just labelling 1000 pairs will take roughly 8 hours of work - doable, but not pleasant. I can try looking into a semi-supervised approach to make things even cheaper?
+* Run a model on the enrichment to generate structured output: this reduces input size, and makes it easier for the teacher model to make good labels allowing me to use a cheaper model. Conversely, it has a fixed cost per new paper, which would be nice to avoid.
+
+## Issues or questions
+* How worthwhile is the OpenAI API? What can be done manually versus what should be labelled by a stronger model
+* Can I train a small local model to take the enrichment text extracted from the intro by regex and convert it into a more structured format? It will probably be much better in the long run than using an OpenAI model
+* Do I really need 15k training examples?
+
+## Next step
+Keep experimenting with and finalize enrichment. Get a dataset and choose the anchor papers carefully. Get a small script to see how long it really takes to manually label data, and look into a semi-supervised approach which might be cheaper than using the OpenAI API.  
+
+**Date: July 27, 2026**
+**Time spent: 1 hour**
+**Goal for this session:** Keep working on text enrichment. Also do better preprocessing on the text before embedding and see if that makes any changes.
 
 ## What I worked on
 
@@ -275,21 +318,14 @@ Record any choices you made and why.
 
 List any datasets, papers, scripts, notebooks, or output files.
 
-* notebooks/test_enrichment.ipynb
-* src/extract_intro.py
 
 ## Results
-
-Write the main outcome.
-
 
 ## Decisions made
 
 Record any choices you made and why.
 
-
 ## Issues or questions
 
-
 ## Next step
-
+s

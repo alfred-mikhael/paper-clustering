@@ -1,5 +1,4 @@
-"""Parses latex documents and extracts introduction section. Cleans up math notation in the introduction in
-3 levels of coarseness. Generated almost entirely by Codex using GPT 5.5 and 5.6."""
+"""Download arXiv sources and extract introductions and enrichment text."""
 
 import gzip
 import io
@@ -8,14 +7,13 @@ import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Iterable, Literal, Optional
+from typing import Iterable, Optional
 
 import requests
 
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_INCLUDE_DEPTH = 8
-MathCoarseness = Literal["no_math", "coarse", "fine"]
 TEX_SOURCE_SUFFIXES = {".tex", ".ltx"}
 
 
@@ -32,11 +30,18 @@ class TexSource:
     text: str
 
 
+@dataclass(frozen=True)
+class TexSection:
+    kind: str
+    title: str
+    text: str
+
+
 # Match a LaTeX section command, its level, and its brace-delimited title.
 # One nested pair of braces is supported in titles; arbitrary nesting is not.
 SECTION_RE = re.compile(
     r"""
-    \\(?P<kind>part|chapter|section|subsection|subsubsection)
+    \\(?P<kind>part|chapter|section|subsection|subsubsection|paragraph|subparagraph)
     \*?
     (?:\s*\[[^\]]*\])?
     \s*\{(?P<title>(?:[^{}]|\{[^{}]*\})*)\}
@@ -52,7 +57,7 @@ INTRO_TITLE_RE = re.compile(
 # Identify subsection titles whose prose deserves a small importance boost.
 IMPORTANT_SECTION_TITLE_RE = re.compile(
     r"\b(?:results?|contributions?|techniques?|methods?|approach|"
-    r"algorithms?|proof\s+(?:overview|outline|idea)|summary)\b",
+    r"algorithms?|proof\s+(?:overview|outline|idea)|summary|overview)\b",
     re.IGNORECASE,
 )
 
@@ -97,7 +102,7 @@ ENRICHMENT_PATTERNS = (
         re.compile(
             r"\b(?:we|this (?:paper|work))\s+"
             r"(?:use|develop|introduce|design|construct|apply|combine|analy[sz]e|"
-            r"reduce|exploit|invoke)\b",
+            r"reduce|exploit|invoke|establish|formulate)\b",
             re.IGNORECASE,
         ),
         4,
@@ -105,8 +110,8 @@ ENRICHMENT_PATTERNS = (
     # General method vocabulary; this is deliberately a weaker signal.
     (
         re.compile(
-            r"\b(?:techniques?|methodology|methods?|approach|algorithms?|"
-            r"constructions?|proof (?:idea|strategy|overview))\b",
+            r"\b(?:techniques?|argument|characteri[sz](?:e|ation)|methodology|methods?|approach|algorithms?|"
+            r"constructions?|formulation|idea|strategy|proof (?:idea|strategy|overview))\b",
             re.IGNORECASE,
         ),
         2,
@@ -131,7 +136,7 @@ ENRICHMENT_PATTERNS = (
     ),
     # Weak connective phrases that matter only alongside another signal.
     (
-        re.compile(r"\b(?:using|via|based on|building on)\b", re.IGNORECASE),
+        re.compile(r"\b(?:using|via|based|building)\b", re.IGNORECASE),
         2,
     ),
 )
@@ -263,22 +268,6 @@ THEOREM_TITLE_HISTORY_RE = re.compile(
 # Remove an unescaped percent sign and everything after it on the same line.
 COMMENT_RE = re.compile(r"(?<!\\)%.*")
 
-# Match display-math environments that should be preserved as math rather than
-# discarded as generic LaTeX environments.  The backreference pairs begin/end.
-MATH_ENV_RE = re.compile(
-    r"""
-    \\begin\{
-    (?P<env>
-        equation\*?|align\*?|alignat\*?|gather\*?|multline\*?|
-        displaymath|eqnarray\*?|split|cases|array|pmatrix|bmatrix|vmatrix
-    )
-    \}
-    (?P<content>.*?)
-    \\end\{(?P=env)\}
-    """,
-    re.IGNORECASE | re.DOTALL | re.VERBOSE,
-)
-
 # Match a simple environment whose body contains no nested environment of the
 # same name.  DOTALL allows the body to span lines.
 GENERIC_ENV_RE = re.compile(r"\\begin\{([a-zA-Z*]+)\}(.*?)\\end\{\1\}", re.DOTALL)
@@ -292,16 +281,13 @@ COMMAND_WITH_BRACE_ARG_RE = re.compile(
 # Match markup removed from a retained formal statement: either outer
 # environment command at a string boundary, or a label command anywhere.
 STATEMENT_MARKUP_RE = re.compile(
-    r"^\s*\\begin\s*\{[^{}]+\}|\\end\s*\{[^{}]+\}\s*$|"
-    r"\\label\s*\{[^{}]*\}",
+    r"^\s*\\begin\s*\{[^{}]+\}|\\end\s*\{[^{}]+\}\s*$|" r"\\label\s*\{[^{}]*\}",
     re.IGNORECASE,
 )
 
 # Split only when terminal punctuation (possibly followed by a closing quote)
 # is followed by whitespace and a likely sentence-starting capital/digit.
-SENTENCE_BOUNDARY_RE = re.compile(
-    r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])"
-)
+SENTENCE_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])")
 
 # Match the body of a standard abstract environment as an introduction fallback.
 ABSTRACT_RE = re.compile(
@@ -311,9 +297,7 @@ ABSTRACT_RE = re.compile(
 
 # Match \input{path} and \include{path}; the named group is resolved against
 # the in-memory source archive by ``_expand_inputs``.
-INCLUDE_RE = re.compile(
-    r"\\(?:input|include)\s*\{(?P<path>[^{}]+)\}", re.IGNORECASE
-)
+INCLUDE_RE = re.compile(r"\\(?:input|include)\s*\{(?P<path>[^{}]+)\}", re.IGNORECASE)
 
 # Remove environments whose contents cannot usefully become embedding prose.
 VERBATIM_ENV_RE = re.compile(
@@ -357,60 +341,6 @@ CITATION_COMMANDS = {
 }
 
 REFERENCE_COMMANDS = {"cref", "Cref", "eqref", "pageref", "ref", "subref"}
-
-# This is a preservation table, not the disabled math-to-English conversion
-# experiment below. Its purpose is only to stop generic LaTeX cleanup from
-# deleting familiar notation.
-COMMON_MATH_COMMANDS = {
-    r"\varepsilon": "ε",
-    r"\rightarrow": "→",
-    r"\Rightarrow": "⇒",
-    r"\subseteq": "⊆",
-    r"\supseteq": "⊇",
-    r"\emptyset": "∅",
-    r"\varnothing": "∅",
-    r"\infty": "∞",
-    r"\alpha": "α",
-    r"\beta": "β",
-    r"\gamma": "γ",
-    r"\delta": "δ",
-    r"\epsilon": "ε",
-    r"\theta": "θ",
-    r"\lambda": "λ",
-    r"\sigma": "σ",
-    r"\omega": "ω",
-    r"\Gamma": "Γ",
-    r"\Delta": "Δ",
-    r"\Theta": "Θ",
-    r"\Lambda": "Λ",
-    r"\Sigma": "Σ",
-    r"\Omega": "Ω",
-    r"\forall": "∀",
-    r"\exists": "∃",
-    r"\notin": "∉",
-    r"\subset": "⊂",
-    r"\supset": "⊃",
-    r"\approx": "≈",
-    r"\equiv": "≡",
-    r"\neq": "≠",
-    r"\ne": "≠",
-    r"\geq": "≥",
-    r"\ge": "≥",
-    r"\leq": "≤",
-    r"\le": "≤",
-    r"\in": "∈",
-    r"\to": "→",
-    r"\mapsto": "↦",
-    r"\times": "×",
-    r"\cdot": "·",
-    r"\pm": "±",
-    r"\sum": "∑",
-    r"\prod": "∏",
-    r"\ldots": "…",
-    r"\cdots": "…",
-    r"\dots": "…",
-    r"\ell": "ℓ",
-}
 
 DROP_COMMANDS = {
     "addcontentsline",
@@ -471,120 +401,6 @@ TEXTUAL_ENVS = {
     "proof",
 }
 
-LATEX_MATH_SYMBOLS = {
-    r"\alpha": "alpha",
-    r"\beta": "beta",
-    r"\gamma": "gamma",
-    r"\delta": "delta",
-    r"\epsilon": "epsilon",
-    r"\varepsilon": "epsilon",
-    r"\zeta": "zeta",
-    r"\eta": "eta",
-    r"\theta": "theta",
-    r"\vartheta": "theta",
-    r"\iota": "iota",
-    r"\kappa": "kappa",
-    r"\lambda": "lambda",
-    r"\mu": "mu",
-    r"\nu": "nu",
-    r"\xi": "xi",
-    r"\pi": "pi",
-    r"\rho": "rho",
-    r"\varrho": "rho",
-    r"\sigma": "sigma",
-    r"\tau": "tau",
-    r"\upsilon": "upsilon",
-    r"\phi": "phi",
-    r"\varphi": "phi",
-    r"\chi": "chi",
-    r"\psi": "psi",
-    r"\omega": "omega",
-    r"\Gamma": "gamma",
-    r"\Delta": "delta",
-    r"\Theta": "theta",
-    r"\Lambda": "lambda",
-    r"\Xi": "xi",
-    r"\Pi": "pi",
-    r"\Sigma": "sigma",
-    r"\Phi": "phi",
-    r"\Psi": "psi",
-    r"\Omega": "omega",
-    r"\mathbb{F}": "finite_field",
-    r"\mathbb F": "finite_field",
-    r"\mathbb{R}": "real",
-    r"\mathbb R": "real",
-    r"\mathbb{N}": "natural",
-    r"\mathbb N": "natural",
-    r"\mathbb{Z}": "integer",
-    r"\mathbb Z": "integer",
-    r"\mathbb{Q}": "rational",
-    r"\mathbb Q": "rational",
-    r"\mathbb{C}": "complex",
-    r"\mathbb C": "complex",
-    r"\mathcal{P}": "power_set",
-    r"\emptyset": "empty_set",
-    r"\varnothing": "empty_set",
-    r"\infty": "infinity",
-    r"\log": "log",
-    r"\ln": "ln",
-    r"\exp": "exp",
-    r"\poly": "poly",
-    r"\Pr": "probability",
-    r"\mathop": " ",
-    r"\operatorname": " ",
-    r"\mathbf": " ",
-    r"\mathrm": " ",
-    r"\mathsf": " ",
-    r"\mathit": " ",
-    r"\mathcal": " ",
-    r"\text": " ",
-}
-
-LATEX_MATH_OPERATORS = {
-    r"\leq": "leq",
-    r"\le": "leq",
-    r"\geq": "geq",
-    r"\ge": "geq",
-    r"\neq": "neq",
-    r"\ne": "neq",
-    r"\approx": "approx",
-    r"\sim": "sim",
-    r"\simeq": "simeq",
-    r"\equiv": "equiv",
-    r"\in": "in",
-    r"\notin": "not_in",
-    r"\subseteq": "subseteq",
-    r"\subset": "subset",
-    r"\supseteq": "supseteq",
-    r"\cup": "union",
-    r"\cap": "intersection",
-    r"\times": "times",
-    r"\cdot": "times",
-    r"\ast": "star",
-    r"\star": "star",
-    r"\oplus": "xor",
-    r"\otimes": "tensor",
-    r"\wedge": "and",
-    r"\vee": "or",
-    r"\land": "and",
-    r"\lor": "or",
-    r"\to": "to",
-    r"\rightarrow": "to",
-    r"\leftarrow": "from",
-    r"\mapsto": "maps_to",
-    r"\Rightarrow": "implies",
-    r"\implies": "implies",
-    r"\iff": "iff",
-    r"\forall": "for_all",
-    r"\exists": "exists",
-    r"\sum": "sum",
-    r"\prod": "product",
-    r"\min": "min",
-    r"\max": "max",
-    r"\argmin": "argmin",
-    r"\argmax": "argmax",
-}
-
 
 def download_source(session: requests.Session, arxiv_id: str) -> bytes:
     """Download the source archive for ``arxiv_id`` using the supplied session."""
@@ -595,21 +411,15 @@ def download_source(session: requests.Session, arxiv_id: str) -> bytes:
     return response.content
 
 
-def get_intro_text(
-    session: requests.Session, arxiv_id: str, coarseness: MathCoarseness = "coarse"
-) -> str:
-    """Download and clean the introduction of an arXiv paper.
-
-    ``coarseness`` is retained for API compatibility, but math replacement is
-    currently disabled in :func:`clean_latex_for_embedding`.
-    """
+def get_intro_text(session: requests.Session, arxiv_id: str) -> str:
+    """Download and clean the introduction of an arXiv paper."""
     try:
         source_bytes = download_source(session, arxiv_id)
         source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
         if not source:
             return ""
         intro = extract_intro_from_latex(source)
-        return clean_latex_for_embedding(intro, coarseness=coarseness)
+        return clean_latex_for_embedding(intro)
     except (
         requests.RequestException,
         tarfile.TarError,
@@ -688,9 +498,10 @@ def _extract_enrichment_excerpts(introduction: str) -> str:
         regions.append((0, len(prose_text), ""))
 
     for start, end, title in regions:
-        cleaned = clean_latex_for_embedding(prose_text[start:end], coarseness="fine")
+        cleaned = clean_latex_for_embedding(prose_text[start:end])
         section_bonus = 2 if IMPORTANT_SECTION_TITLE_RE.search(title) else 0
         for sentence_index, sentence in enumerate(_split_sentences(cleaned)):
+            print(sentence)
             if _should_exclude_sentence(sentence):
                 continue
             score = section_bonus + _enrichment_sentence_score(sentence)
@@ -762,8 +573,7 @@ def _should_exclude_sentence(sentence: str) -> bool:
     if CITATION_LED_ORGANIZATION_RE.search(sentence):
         return True
     return bool(
-        DOCUMENT_LOCATION_RE.search(sentence)
-        and ORGANIZATION_VERB_RE.search(sentence)
+        DOCUMENT_LOCATION_RE.search(sentence) and ORGANIZATION_VERB_RE.search(sentence)
     )
 
 
@@ -878,20 +688,36 @@ def extract_intro_from_latex(source_text: str) -> str:
     return abstract_match.group(1) if abstract_match else ""
 
 
-def clean_latex_for_embedding(text: str, coarseness: MathCoarseness = "fine") -> str:
-    """Normalize LaTeX markup while preserving citations and familiar notation.
+def extract_sections_from_latex(source_text: str) -> list[TexSection]:
+    """Return every sectioning command and its contents in document order.
 
-    The ``coarseness`` argument remains for compatibility with existing callers.
-    The experimental math-to-English replacement remains disabled; a small,
-    syntax-preserving pass protects common symbols from generic command cleanup.
+    Each section ends at the next sectioning command, so returned text does not
+    overlap. The section kind distinguishes parts, chapters, sections,
+    subsections, paragraphs, and their supported variants.
     """
+    document = _document_body(strip_latex_comments(source_text))
+    matches = list(SECTION_RE.finditer(document))
+    return [
+        TexSection(
+            kind=match.group("kind").lower(),
+            title=match.group("title").strip(),
+            text=document[
+                match.end() : (
+                    matches[index + 1].start()
+                    if index + 1 < len(matches)
+                    else len(document)
+                )
+            ].strip(),
+        )
+        for index, match in enumerate(matches)
+    ]
+
+
+def clean_latex_for_embedding(text: str) -> str:
+    """Remove LaTeX markup and normalize prose for embedding."""
     text = strip_latex_comments(text)
     text = _drop_latex_definitions(text)
     text = _drop_verbatim_blocks(text)
-    # Math replacement is intentionally disabled. The experimental helper
-    # functions are retained below in case the experiment is revisited.
-    # text = _replace_math(text, coarseness)
-    text = _preserve_common_math_notation(text)
     text = _normalize_citation_commands(text)
     text = _drop_commands_with_arguments(text, DROP_COMMANDS)
     text = _preserve_href_text(text)
@@ -980,212 +806,6 @@ def _drop_verbatim_blocks(text: str) -> str:
     return VERBATIM_ENV_RE.sub(" ", text)
 
 
-def _preserve_common_math_notation(text: str) -> str:
-    """Protect common math symbols and macros without interpreting the math.
-
-    Delimiters are retained as dollar signs. Unknown commands inside math are
-    reduced to their names (for example, a paper-defined ``\\F`` becomes
-    ``F``), which preserves more information than deleting them.
-    """
-
-    def normalize(match: re.Match[str]) -> str:
-        return _normalize_math_fragment(match.group("content"))
-
-    text = MATH_ENV_RE.sub(lambda match: f" $$ {normalize(match)} $$ ", text)
-    # Each pattern captures only the content between one kind of math delimiter.
-    # The final inline-dollar pattern excludes ``$$`` and accepts escaped chars.
-    delimiter_patterns = (
-        (r"\$\$(?P<content>.*?)\$\$", "$$"),
-        (r"\\\[(?P<content>.*?)\\\]", "$$"),
-        (r"\\\((?P<content>.*?)\\\)", "$"),
-        (r"(?<!\$)\$(?!\$)(?P<content>(?:\\.|[^$])*)(?<!\$)\$(?!\$)", "$"),
-    )
-    for pattern, delimiter in delimiter_patterns:
-        text = re.sub(
-            pattern,
-            lambda match, marker=delimiter: (
-                f" {marker}{_normalize_math_fragment(match.group('content'))}{marker} "
-            ),
-            text,
-            flags=re.DOTALL,
-        )
-    return text
-
-
-def _normalize_math_fragment(fragment: str) -> str:
-    """Preserve the surface form of one LaTeX math fragment using Unicode."""
-    domains = {
-        "R": "ℝ",
-        "C": "ℂ",
-        "Q": "ℚ",
-        "Z": "ℤ",
-        "N": "ℕ",
-        "F": "𝔽",
-    }
-    # Equation labels are metadata, not part of the mathematical expression.
-    fragment = re.sub(r"\\label\s*\{[^{}]*\}", " ", fragment)
-    # Convert the six common blackboard-bold domains to their Unicode symbols.
-    fragment = re.sub(
-        r"\\mathbb\s*\{\s*([RCQZNF])\s*\}",
-        lambda match: domains[match.group(1)],
-        fragment,
-    )
-
-    previous = None
-    while previous != fragment:
-        previous = fragment
-        # Convert simple, non-nested fractions to an explicit ``(a)/(b)`` form.
-        fragment = re.sub(
-            r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}",
-            r"(\1)/(\2)",
-            fragment,
-        )
-        # Convert a simple square-root argument to ``√(argument)``.
-        fragment = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"√(\1)", fragment)
-        # Unwrap font/text/operator commands while retaining their arguments.
-        fragment = re.sub(
-            r"\\(?:mathbf|mathcal|mathfrak|mathit|mathrm|mathsf|mathtt|text|"
-            r"operatorname)\s*\{([^{}]+)\}",
-            r"\1",
-            fragment,
-        )
-
-    fragment = fragment.replace(r"\left", "").replace(r"\right", "")
-    for latex, symbol in sorted(
-        COMMON_MATH_COMMANDS.items(), key=lambda item: len(item[0]), reverse=True
-    ):
-        fragment = fragment.replace(latex, symbol)
-
-    fragment = fragment.replace(r"\{", "⦃").replace(r"\}", "⦄")
-    # Replace TeX spacing commands with ordinary spaces.
-    fragment = re.sub(r"\\(?:,|;|:|!|quad|qquad)", " ", fragment)
-    # Preserve unknown paper-defined math macros as their bare command names.
-    fragment = re.sub(r"\\([A-Za-z@]+)\*?", r"\1", fragment)
-    fragment = fragment.replace("{", "").replace("}", "")
-    return fragment.replace("⦃", "{").replace("⦄", "}").strip()
-
-
-def _replace_math(text: str, coarseness: MathCoarseness) -> str:
-    """Legacy math-to-English experiment; currently disabled by its caller."""
-    _validate_math_coarseness(coarseness)
-
-    def replacement(match: re.Match[str]) -> str:
-        return f" {_latex_math_to_text(match.group('content'), coarseness)} "
-
-    def positional_replacement(match: re.Match[str]) -> str:
-        return f" {_latex_math_to_text(match.group(1), coarseness)} "
-
-    text = MATH_ENV_RE.sub(
-        replacement,
-        text,
-    )
-    # Match display math written as \[...\].
-    text = re.sub(
-        r"\\\[(.*?)\\\]",
-        positional_replacement,
-        text,
-        flags=re.DOTALL,
-    )
-    # Match inline math written as \(...\).
-    text = re.sub(
-        r"\\\((.*?)\\\)",
-        positional_replacement,
-        text,
-        flags=re.DOTALL,
-    )
-    # Match display math written between double dollar signs.
-    text = re.sub(
-        r"\$\$(.*?)\$\$",
-        positional_replacement,
-        text,
-        flags=re.DOTALL,
-    )
-    # Match single-dollar math while allowing escaped characters in its body.
-    text = re.sub(
-        r"(?<!\\)\$((?:\\.|[^$])*)(?<!\\)\$",
-        positional_replacement,
-        text,
-        flags=re.DOTALL,
-    )
-    return text
-
-
-def _validate_math_coarseness(coarseness: str) -> None:
-    if coarseness not in {"no_math", "coarse", "fine"}:
-        raise ValueError("coarseness must be one of 'no_math', 'coarse', or 'fine'")
-
-
-def _latex_math_to_text(math_text: str, coarseness: MathCoarseness) -> str:
-    if coarseness == "no_math":
-        return "math expression"
-
-    if coarseness == "coarse":
-        return _coarse_latex_math_to_text(math_text)
-
-    math_text = _normalize_common_math_domains(math_text)
-    math_text = _replace_latex_math_symbols(math_text)
-    math_text = _unwrap_math_command_arguments(math_text)
-    math_text = _replace_latex_math_operators(math_text)
-    math_text = _normalize_math_syntax(math_text)
-    return _compact_math_token(math_text)
-
-
-def _coarse_latex_math_to_text(math_text: str) -> str:
-    coarse_terms = _extract_coarse_math_terms(math_text)
-    return " ".join(coarse_terms or ["math expression"])
-
-
-def _extract_coarse_math_terms(math_text: str) -> list[str]:
-    raw = math_text.lower()
-    normalized = _unwrap_math_command_arguments(math_text)
-    normalized = normalized.lower()
-    search_text = f"{raw} {normalized}"
-    terms: list[str] = []
-
-    # Each regex recognizes one broad mathematical concept; the paired text is
-    # the coarse embedding token emitted when that concept occurs.
-    coarse_patterns = [
-        # A typed function declaration ending in \to or \rightarrow.
-        (
-            r"(\\[A-za-z]*|.).s?(:|\\colon|\\Colon).*\\(?:to|rightarrow)",
-            "function to",
-        ),
-        # Membership in a finite-field/Boolean vector space.
-        (
-            r"..s?\\in\s*(?:\\mathbb\s*\{\s*f\s*\}|\\mathbb\s+f|\\mathbf\s*\{\s*f\s*\}|f|\\(bits|Bits|nbits)(\^(\{?\\[A-za-z]*\}?|.))?)",
-            "finite field vector",
-        ),
-        # A literal Boolean cube or a project-specific bits macro.
-        (r"(\\?\{\s*0\s*,\s*1\s*\\?\})|\\(bits|Bits|nbits)", "boolean cube"),
-        # A finite field with a numeric or symbolic order.
-        (
-            r"(?:\\mathbb\s*\{\s*f\s*\}|\\mathbb\s+f|\\mathbf\s*\{\s*f\s*\}|f)"
-            r"\s*_\s*\{?\s*(?:2|q|p|[0-9]+)\s*\}?",
-            "finite field",
-        ),
-        # Standard blackboard-bold number domains.
-        (r"\\mathbb\s*\{\s*r\s*\}|\\mathbb\s+r", "real space"),
-        (r"\\mathbb\s*\{\s*c\s*\}|\\mathbb\s+c", "complex space"),
-        (r"\\mathbb\s*\{\s*z\s*\}|\\mathbb\s+z", "integer lattice"),
-        (r"\\mathbb\s*\{\s*n\s*\}|\\mathbb\s+n", "natural numbers"),
-        # Common probability, expectation, aggregation, and optimization macros.
-        (r"\\(?:pr|prob|probability|Pr)\b", "probability"),
-        (r"\\(?:mathbb\s*\{\s*e\s*\}|mathbb\s+e|expectation|ex)\b", "expectation"),
-        (r"\\(?:sum|prod)\b", "aggregate"),
-        (r"\\(?:min|max|argmin|argmax)\b", "optimization"),
-        # Tensor/XOR operators and formula-building commands.
-        (r"\\(?:otimes|tensor)\b", "tensor"),
-        (r"\\(?:oplus|xor)\b", "xor"),
-        (r"\\(?:frac|binom|sqrt)\b", "formula"),
-    ]
-
-    for pattern, term in coarse_patterns:
-        if re.search(pattern, search_text):
-            terms.append(term)
-
-    return _dedupe_preserving_order(terms)
-
-
 def _dedupe_preserving_order(items: Iterable[str]) -> list[str]:
     seen = set()
     deduped = []
@@ -1195,122 +815,6 @@ def _dedupe_preserving_order(items: Iterable[str]) -> list[str]:
         seen.add(item)
         deduped.append(item)
     return deduped
-
-
-def _normalize_common_math_domains(math_text: str) -> str:
-    # Match the Boolean cube {0,1}^n and retain its dimension.
-    math_text = re.sub(
-        r"\\?\{\s*0\s*,\s*1\s*\\?\}\s*\^\s*\{?\s*([A-Za-z0-9]+)\s*\}?",
-        r" finite_field_2_\1 ",
-        math_text,
-    )
-    # Match the dimension-free Boolean set {0,1}.
-    math_text = re.sub(
-        r"\\?\{\s*0\s*,\s*1\s*\\?\}",
-        " finite_field_2 ",
-        math_text,
-    )
-    # Match the discrete interval {1, ..., n}.
-    math_text = re.sub(
-        r"\\?\{\s*1\s*,\s*\\(?:ldots|dots|cdots)\s*,\s*([A-Za-z0-9]+)\s*\\?\}",
-        r" interval_\1 ",
-        math_text,
-    )
-    # Match the common shorthand [n] for a discrete interval.
-    math_text = re.sub(
-        r"\[\s*([A-Za-z0-9]+)\s*\]",
-        r" interval_\1 ",
-        math_text,
-    )
-    # Match an n-dimensional finite field F_q^n and retain q and n.
-    math_text = re.sub(
-        r"(?:\\mathbb\s*\{\s*F\s*\}|\\mathbb\s+F|F)\s*_\s*\{?\s*([A-Za-z0-9]+)\s*\}?"
-        r"\s*\^\s*\{?\s*([A-Za-z0-9]+)\s*\}?",
-        r" finite_field_\1_\2 ",
-        math_text,
-    )
-    # Match a finite field F_q without a vector-space exponent.
-    math_text = re.sub(
-        r"(?:\\mathbb\s*\{\s*F\s*\}|\\mathbb\s+F|F)\s*_\s*\{?\s*([A-Za-z0-9]+)\s*\}?",
-        r" finite_field_\1 ",
-        math_text,
-    )
-    return math_text
-
-
-def _unwrap_math_command_arguments(math_text: str) -> str:
-    replacements = {
-        # Match simple non-nested numerator and denominator groups.
-        r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}": r" \1 over \2 ",
-        # Match simple non-nested binomial arguments.
-        r"\\binom\s*\{([^{}]+)\}\s*\{([^{}]+)\}": r" choose \1 \2 ",
-        # Match a simple square-root argument.
-        r"\\sqrt\s*\{([^{}]+)\}": r" sqrt \1 ",
-        # Unwrap operator/text/font commands while retaining their content.
-        r"\\operatorname\s*\{([^{}]+)\}": r" \1 ",
-        r"\\text\s*\{([^{}]+)\}": r" \1 ",
-        r"\\(?:mathbb|mathcal|mathbf|mathrm|mathsf|mathit)\s*\{([^{}]+)\}": r" \1 ",
-    }
-    previous = None
-    while previous != math_text:
-        previous = math_text
-        for pattern, repl in replacements.items():
-            math_text = re.sub(pattern, repl, math_text)
-    return math_text
-
-
-def _replace_latex_math_symbols(math_text: str) -> str:
-    symbols = sorted(
-        LATEX_MATH_SYMBOLS.items(),
-        key=lambda item: len(item[0]),
-        reverse=True,
-    )
-    for latex, token in symbols:
-        math_text = math_text.replace(latex, f" {token} ")
-    return math_text
-
-
-def _replace_latex_math_operators(math_text: str) -> str:
-    operators = sorted(
-        LATEX_MATH_OPERATORS.items(),
-        key=lambda item: len(item[0]),
-        reverse=True,
-    )
-    for latex, token in operators:
-        math_text = math_text.replace(latex, f" {token} ")
-    return math_text
-
-
-def _normalize_math_syntax(math_text: str) -> str:
-    replacements = {
-        "^": "_",
-        "_": "_",
-        "=": " equals ",
-        "+": " plus ",
-        "-": " minus ",
-        "/": " over ",
-        "<": " lt ",
-        ">": " gt ",
-        "|": " given ",
-        "&": " and ",
-        ",": " ",
-        ";": " ",
-        ":": " ",
-    }
-    for old, new in replacements.items():
-        math_text = math_text.replace(old, new)
-    # Remove any named LaTeX command not handled by the replacement tables.
-    math_text = re.sub(r"\\[a-zA-Z@]+", " ", math_text)
-    return math_text
-
-
-def _compact_math_token(math_text: str) -> str:
-    math_text = math_text.lower()
-    # Convert every run of non-alphanumerics to one token separator.
-    math_text = re.sub(r"[^a-z0-9]+", "_", math_text)
-    # Collapse adjacent separators and trim them from both ends.
-    math_text = re.sub(r"_+", "_", math_text).strip("_")
-    return math_text
 
 
 def _normalize_citation_commands(text: str) -> str:
@@ -1554,7 +1058,7 @@ if __name__ == "__main__":
     with requests.Session() as session:
         # This is a hard example, since it has a lot of .tex files and
         # they are in a different folder than the main.tex
-        # print(get_intro_text(session, "1607.04703v3", coarseness="coarse"))
+        # print(get_intro_text(session, "1607.04703v3"))
         print(get_enrichment_text(session, "2605.28793"))
         print("--------------------------------------------------------")
         print(get_enrichment_text(session, "2404.05864"))
