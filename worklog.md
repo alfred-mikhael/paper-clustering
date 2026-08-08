@@ -336,3 +336,65 @@ Record any choices you made and why.
 
 ## Next step
 I really like the idea of using BM25 to help filter in the enrichment step. I will try that out, and I can also learn about and try out some other cool classical techniques I come across, although it's hard to imagine how anything will be much different from BM25 or TF-IDF.
+
+**Date: August 2, 2026**
+**Time spent: 2 hours**
+**Goal for this session:** Study and implement some information extraction techniques to help with the enrichment step.
+
+## What I worked on
+Apparently there is a whole field called "information extraction" which solves this exact problem. I had GPT generate a survey on the techniques used, which I will read, implement, and test. This probably has a lot more yield than the BM25 idea or improving regex. 
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+
+## Results
+Enrichment keeps getting better, but it is not complete yet. It still catches some sentences that are not important and misses some important ones.
+
+## Decisions made
+
+Record any choices you made and why.
+
+* I realized the BM25 technique actually will not help much with enrichment for a couple of reasons: 
+    * The same word can indicate a technique in one place and a result in another place, but BM25 will not catch the distinction
+    * Sometimes, each word on its own is not meaningful but together they are important, like "polynomial method" .This can, to an extent, be solved by including bigrams and trigrams. 
+
+
+## Issues or questions
+How can I improve the enrichment? I need to keep reading.
+
+## Next step
+Read more about improving the enrichment. I'm spending a lot of time on this, but this is by far the most important part of the project. The output of my embedding can only be as good as the input is.
+
+**Date: August 7, 2026**
+**Time spent: 4 hours**
+**Goal for this session:** Study and implement some information extraction techniques to help with the enrichment step. Start labelling some data
+
+## What I worked on
+Read up a lot about all sorts of ML and IE concepts. I settled on a plan to determine exactly what I'm going to do. I started working on the weak label generation.
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+* slm_labels.py
+* regex_labels.py
+
+## Results
+Finalized plan and started generating weak labels for data.
+
+## Decisions made
+
+Record any choices you made and why.
+
+* Using a weak supervision + active learning framework to train a sentence classifier, which will determine if a sentence contains relevant info about the techniques used or not. This minimizes human labelling and lets me train a model which hopefully captures more implicit information than the regex can capture. For weak labelling, I'm using both the regex and a SLM to generate pseudolabels. The SLM should capture lexical variations that the regex might miss. 
+
+
+## Issues or questions
+* Gemma 3 4B model running terribly slowly on my computer, up to 1 minute per inference. GPU is being used, but it looks like bitsandbytes adds a ton of overhead. 
+
+## Next step
+Finish weak label generation and begin training the technique classifier. 

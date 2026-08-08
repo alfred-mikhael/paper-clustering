@@ -9,3 +9,7 @@ einops
 supabase
 pandas
 matplotlib
+bitsandbytes
+python-dotenv
+huggingface_hub
+accelerate 

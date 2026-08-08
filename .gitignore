@@ -1,4 +1,5 @@
 skipped_papers.txt
 failure.jsonl
 .vscode
+.env
 __pycache__
