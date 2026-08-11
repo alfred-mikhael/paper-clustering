@@ -8,6 +8,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Iterable, Optional
+import logging, time
 
 import requests
 
@@ -37,11 +38,22 @@ class TexSection:
     text: str
 
 
+@dataclass(frozen=True)
+class ArxivSection:
+    """A cleaned paper section returned by :func:`get_sections`."""
+
+    arxiv_id: str
+    section_index: int
+    section_header: str
+    major_section_header: str
+    text: str
+
+
 # Match a LaTeX section command, its level, and its brace-delimited title.
 # One nested pair of braces is supported in titles; arbitrary nesting is not.
 SECTION_RE = re.compile(
     r"""
-    \\(?P<kind>part|chapter|section|subsection|subsubsection|paragraph|subparagraph)
+    \\(?P<kind>part|chapter|section|subsection|subsubsection|paragraph|subparagraph|parhead)
     \*?
     (?:\s*\[[^\]]*\])?
     \s*\{(?P<title>(?:[^{}]|\{[^{}]*\})*)\}
@@ -60,6 +72,14 @@ COMMENT_RE = re.compile(r"(?<!\\)%.*")
 # Match a simple environment whose body contains no nested environment of the
 # same name.  DOTALL allows the body to span lines.
 GENERIC_ENV_RE = re.compile(r"\\begin\{([a-zA-Z*]+)\}(.*?)\\end\{\1\}", re.DOTALL)
+
+# Locate proof environment boundaries. A token-based pass is used instead of
+# one broad expression so nested proof/proof* environments are handled safely.
+PROOF_ENV_TOKEN_RE = re.compile(
+    r"\\(?:(?P<begin>begin)\s*\{proof\*?\}(?:\s*\[[^]]*\])?"
+    r"|(?P<end>end)\s*\{proof\*?\})",
+    re.IGNORECASE,
+)
 
 # Match a command with one non-nested brace argument and optional ``*``/``[]``.
 # This is a fallback after commands needing balanced parsing have been handled.
@@ -225,6 +245,58 @@ def get_intro_text(session: requests.Session, arxiv_id: str) -> str:
         return ""
 
 
+def get_sections(
+    session: requests.Session,
+    arxiv_id: str,
+    section_re: Optional[str] = None,
+    include_proofs: bool = False,
+) -> list[ArxivSection]:
+    """Download and clean the sections of an arXiv paper.
+
+    When ``include_proofs`` is false, proof and proof* environments are removed
+    in their entirety before the remaining LaTeX is converted to plain text.
+    """
+    section_pattern = (
+        re.compile(section_re, re.IGNORECASE) if section_re else re.compile(".")
+    )
+    try:
+        source_bytes = download_source(session, arxiv_id)
+        source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
+        if not source:
+            return []
+        if not include_proofs:
+            source = _drop_proof_environments(source)
+        sections = extract_sections_from_latex(source)
+        results: list[ArxivSection] = []
+        major_section_header = ""
+        for section_index, section in enumerate(sections):
+            section_header = clean_latex_for_embedding(section.title)
+            if section.kind in {"part", "chapter", "section"}:
+                major_section_header = section_header
+            if section_pattern.match(major_section_header):
+                results.append(
+                    ArxivSection(
+                        arxiv_id=arxiv_id,
+                        section_index=section_index,
+                        section_header=section_header,
+                        major_section_header=major_section_header,
+                        text=clean_latex_for_embedding(section.text),
+                    )
+                )
+        return results
+    except (
+        requests.RequestException,
+        tarfile.TarError,
+        zipfile.BadZipFile,
+        OSError,
+        UnicodeError,
+    ) as exc:
+        logging.error(
+            f"{time.localtime()}: Could not download or extract {arxiv_id}: {exc}"
+        )
+        return []
+
+
 def iter_tex_sources(
     source_bytes: bytes, arxiv_id: str = "source"
 ) -> Iterable[TexSource]:
@@ -359,8 +431,34 @@ def clean_latex_for_embedding(text: str) -> str:
     text = _drop_remaining_commands(text)
     text = _normalize_embedding_whitespace(text)
     return text
+
+
 def strip_latex_comments(text: str) -> str:
     return "\n".join(COMMENT_RE.sub("", line) for line in text.splitlines())
+
+
+def _drop_proof_environments(text: str) -> str:
+    """Remove proof/proof* environments, including their complete contents."""
+    text = strip_latex_comments(text)
+    pieces: list[str] = []
+    cursor = 0
+    depth = 0
+
+    for match in PROOF_ENV_TOKEN_RE.finditer(text):
+        if match.group("begin"):
+            if depth == 0:
+                pieces.append(text[cursor : match.start()])
+            depth += 1
+        elif depth:
+            depth -= 1
+            if depth == 0:
+                cursor = match.end()
+
+    # An unmatched opening proof conservatively removes everything following
+    # it; otherwise retain all text after the final complete proof environment.
+    if depth == 0:
+        pieces.append(text[cursor:])
+    return " ".join(pieces)
 
 
 def _is_latex_file(path: str) -> bool:
@@ -694,3 +792,11 @@ def _normalize_embedding_whitespace(text: str) -> str:
     for index, original in enumerate(bracketed):
         text = text.replace(f"CITATIONPLACEHOLDER{index}TOKEN", original)
     return text
+
+
+if __name__ == "__main__":
+    with requests.session() as session:
+        print(get_intro_text(session, "2308.15403"))
+        print(
+            [section.section_header for section in get_sections(session, "2308.15403")]
+        )

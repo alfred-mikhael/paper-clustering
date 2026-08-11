@@ -382,6 +382,7 @@ List any datasets, papers, scripts, notebooks, or output files.
 * extract_intro.py
 * slm_labels.py
 * regex_labels.py
+* generate_weak_labels.py
 
 ## Results
 Finalized plan and started generating weak labels for data.
@@ -391,10 +392,40 @@ Finalized plan and started generating weak labels for data.
 Record any choices you made and why.
 
 * Using a weak supervision + active learning framework to train a sentence classifier, which will determine if a sentence contains relevant info about the techniques used or not. This minimizes human labelling and lets me train a model which hopefully captures more implicit information than the regex can capture. For weak labelling, I'm using both the regex and a SLM to generate pseudolabels. The SLM should capture lexical variations that the regex might miss. 
-
+* Decided to use the Gemma 3 4b-it model with 4 bit quantization. I might try others, but a quick search shows that the Gemma models are relatively good at mathematical reasoning and are small enough to run on my laptop.
 
 ## Issues or questions
-* Gemma 3 4B model running terribly slowly on my computer, up to 1 minute per inference. GPU is being used, but it looks like bitsandbytes adds a ton of overhead. 
+* Gemma 3 is running quite slowly on my laptop. A single paper took over 15 minutes to score each sentence. I did score sentences that are probably not important (i.e. no need to score anything in the proof details), but it is still averaging 3s per inference, with a batch size of 8. I need to think about whether that is too slow or not.
 
 ## Next step
 Finish weak label generation and begin training the technique classifier. 
+
+**Date: August 10, 2026**
+**Time spent: 2 hours**
+**Goal for this session:** Create script to manually label data some data.
+
+## What I worked on
+Created and debugged a script to help me manually label some sentence data for testing. I will need this later to evaluate the classifier, and I need it now in order to optimize the output of Gemma (it is very bad right now).
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+* scripts/label_sentences.py
+* scripts/README.md
+
+## Results
+Created a nice script that will let me label data quite quickly. Each paper has a few hundred sentences to label, which I can probably optimize a lot by only looking at the entire thing if there is no proof overview / technical overview / techniques etc section. I should manually label about 100-200 sentences for debugging Gemma and some more for testing the classifier later.
+
+## Decisions made
+
+Record any choices you made and why.
+
+* Decided to exclude the content of proofs in the labelling (and extraction). I think these sentences will be too technical, and will not convey the main ideas of the proof with only 3 sentences of context. Also, the dense mathematical notation will add a lot of noise into the data, which isn't good. 
+
+## Issues or questions
+* There is a tradeoff between how much time I spend labelling and how much I benefit from the weak supervision technique. I hope I can just label a couple hundred to improve the performance of Gemma, and then spend most of my time labelling in the active learning phase. 
+
+## Next step
+Label some test data and debug Gemma. 

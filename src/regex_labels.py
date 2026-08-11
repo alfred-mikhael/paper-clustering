@@ -1,19 +1,9 @@
 """Select important result, technique, and theorem text from introductions."""
 
 import re
-import tarfile
-import zipfile
 from typing import Iterable
 
-import requests
-
-from .extract_intro import (
-    SECTION_RE,
-    build_intro_tex_source_from_bytes,
-    clean_latex_for_embedding,
-    download_source,
-    extract_intro_from_latex,
-)
+from .extract_intro import SECTION_RE, clean_latex_for_embedding
 
 # Identify subsection titles whose prose deserves a small importance boost.
 IMPORTANT_SECTION_TITLE_RE = re.compile(
@@ -101,6 +91,19 @@ ENRICHMENT_PATTERNS = (
 )
 
 MAX_ENRICHMENT_SENTENCES = 12
+SECTION_TITLE_BONUS_WEIGHT = 2
+MINIMUM_ENRICHMENT_WEIGHT = 3
+
+# Normalization includes every pattern weight and the optional section-title
+# bonus. Consequently, a sentence matching every signal in an important
+# subsection scores exactly 100, while a sentence matching none scores 0.
+MAXIMUM_ENRICHMENT_WEIGHT = (
+    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS)
+    + SECTION_TITLE_BONUS_WEIGHT
+)
+MINIMUM_ENRICHMENT_SCORE = (
+    100 * MINIMUM_ENRICHMENT_WEIGHT / MAXIMUM_ENRICHMENT_WEIGHT
+)
 
 # Match vocabulary that explicitly labels a statement as background or history.
 HISTORICAL_CONTEXT_RE = re.compile(
@@ -215,23 +218,14 @@ SENTENCE_BOUNDARY_RE = re.compile(
 )
 
 
-def get_enrichment_text(session: requests.Session, arxiv_id: str) -> str:
-    """Download an introduction and return its important formatted excerpts."""
-    try:
-        source_bytes = download_source(session, arxiv_id)
-        source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
-        if not source:
-            return ""
-        introduction = extract_intro_from_latex(source)
-        return _extract_enrichment_excerpts(introduction) if introduction else ""
-    except (
-        requests.RequestException,
-        tarfile.TarError,
-        zipfile.BadZipFile,
-        OSError,
-        UnicodeError,
-    ):
-        return ""
+def get_enrichment_text(introduction: str) -> str:
+    """Return important excerpts from an already-extracted introduction.
+
+    Raw LaTeX from ``extract_intro_from_latex`` preserves theorem boundaries
+    and is therefore preferred. Cleaned introduction text from ``get_intro_text``
+    is also accepted, although it no longer contains theorem environment markup.
+    """
+    return _extract_enrichment_excerpts(introduction) if introduction else ""
 
 
 def _extract_enrichment_excerpts(introduction: str) -> str:
@@ -252,7 +246,7 @@ def _extract_enrichment_excerpts(introduction: str) -> str:
         )
     prose_text = "".join(prose)
 
-    candidates: list[tuple[int, int, str]] = []
+    candidates: list[tuple[float, int, str]] = []
     sections = list(SECTION_RE.finditer(prose_text))
     regions: list[tuple[int, int, str]] = []
     if sections:
@@ -269,14 +263,18 @@ def _extract_enrichment_excerpts(introduction: str) -> str:
 
     for start, end, title in regions:
         cleaned = clean_latex_for_embedding(prose_text[start:end])
-        section_bonus = 2 if IMPORTANT_SECTION_TITLE_RE.search(title) else 0
+        section_bonus = (
+            SECTION_TITLE_BONUS_WEIGHT
+            if IMPORTANT_SECTION_TITLE_RE.search(title)
+            else 0
+        )
         for sentence_index, sentence in enumerate(_split_sentences(cleaned)):
             if _should_exclude_sentence(sentence):
                 print(sentence, _enrichment_sentence_score(sentence))
                 continue
-            score = section_bonus + _enrichment_sentence_score(sentence)
+            score = _enrichment_sentence_score(sentence, section_bonus)
             print(sentence, score)
-            if score >= 3:
+            if score >= MINIMUM_ENRICHMENT_SCORE:
                 candidates.append((score, start + sentence_index, sentence))
 
     # Rank first to enforce a useful size bound, then restore document order.
@@ -313,11 +311,13 @@ def _split_sentences(text: str) -> list[str]:
     ]
 
 
-def _enrichment_sentence_score(sentence: str) -> int:
-    """Return the sum of result, technique, and definition signals."""
-    return sum(
+def _enrichment_sentence_score(sentence: str, section_bonus: int = 0) -> float:
+    """Return the sentence's relevance score normalized to the range 0–100."""
+    raw_score = section_bonus + sum(
         weight for pattern, weight in ENRICHMENT_PATTERNS if pattern.search(sentence)
     )
+    bounded_score = min(max(raw_score, 0), MAXIMUM_ENRICHMENT_WEIGHT)
+    return 100 * bounded_score / MAXIMUM_ENRICHMENT_WEIGHT
 
 
 def _should_exclude_sentence(sentence: str) -> bool:
