@@ -535,7 +535,7 @@ def _drop_verbatim_blocks(text: str) -> str:
 
 
 def _normalize_citation_commands(text: str) -> str:
-    """Convert citation and cross-reference commands to visible bracketed text."""
+    """Preserve citations as bracketed text and omit cross-references."""
 
     def preserve(match: re.Match[str]) -> str:
         # Collect optional citation notes (the contents of ``[...]``).
@@ -560,11 +560,13 @@ def _normalize_citation_commands(text: str) -> str:
         re.escape(command)
         for command in sorted(REFERENCE_COMMANDS, key=len, reverse=True)
     )
-    # Cross-references use the same shape but allow only one optional note.
+    # Internal cross-references (including references to theorems and lemmas)
+    # are document-local identifiers that add no useful prose after extraction.
+    # Drop them rather than exposing labels such as ``[thm:main]``.
     return re.sub(
         rf"\\(?:{reference_commands})\*?(?:\s*\[[^]]*\])?"
         rf"\s*\{{(?P<keys>[^{{}}]*)\}}",
-        preserve,
+        " ",
         text,
     )
 

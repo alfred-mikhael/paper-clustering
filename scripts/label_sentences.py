@@ -83,6 +83,8 @@ def samples_from_sections(sections: list[ArxivSection]) -> list[Sample]:
     for section in sections:
         sentences = split_sentences(section.text)
         for sentence_index, sentence in enumerate(sentences):
+            if _should_exclude_sentence(sentence):
+                continue
             samples.append(
                 Sample(
                     arxiv_id=section.arxiv_id,

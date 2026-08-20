@@ -98,18 +98,15 @@ MINIMUM_ENRICHMENT_WEIGHT = 3
 # bonus. Consequently, a sentence matching every signal in an important
 # subsection scores exactly 100, while a sentence matching none scores 0.
 MAXIMUM_ENRICHMENT_WEIGHT = (
-    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS)
-    + SECTION_TITLE_BONUS_WEIGHT
+    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS) + SECTION_TITLE_BONUS_WEIGHT
 )
-MINIMUM_ENRICHMENT_SCORE = (
-    100 * MINIMUM_ENRICHMENT_WEIGHT / MAXIMUM_ENRICHMENT_WEIGHT
-)
+MINIMUM_ENRICHMENT_SCORE = 100 * MINIMUM_ENRICHMENT_WEIGHT / MAXIMUM_ENRICHMENT_WEIGHT
 
 # Match vocabulary that explicitly labels a statement as background or history.
 HISTORICAL_CONTEXT_RE = re.compile(
     r"\b(?:previous(?:ly)?|prior (?:work|result)|earlier (?:work|result)|"
     r"best known|old (?:bound|result)|historical(?:ly)?|for context|history of|"
-    r"discuss the history|their result|the result of which)\b",
+    r"discuss the history|their result|the result of which|recent(?:ly)?)\b",
     re.IGNORECASE,
 )
 
@@ -207,15 +204,12 @@ THEOREM_TITLE_HISTORY_RE = re.compile(
 
 # Remove outer theorem markup and labels while retaining the statement body.
 STATEMENT_MARKUP_RE = re.compile(
-    r"^\s*\\begin\s*\{[^{}]+\}|\\end\s*\{[^{}]+\}\s*$|"
-    r"\\label\s*\{[^{}]*\}",
+    r"^\s*\\begin\s*\{[^{}]+\}|\\end\s*\{[^{}]+\}\s*$|" r"\\label\s*\{[^{}]*\}",
     re.IGNORECASE,
 )
 
 # Split at terminal punctuation followed by a likely sentence-starting token.
-SENTENCE_BOUNDARY_RE = re.compile(
-    r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])"
-)
+SENTENCE_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])")
 
 
 def get_enrichment_text(introduction: str) -> str:
