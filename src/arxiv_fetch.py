@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import requests
 import feedparser
 from typing import Any, Optional
-from .extract_intro import IntroExtractionError, get_intro_text
+from .extract_text import IntroExtractionError, get_intro_text
 from .logger import IngestionLogger
 from tqdm import tqdm
 import logging

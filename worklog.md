@@ -462,3 +462,102 @@ Record any choices you made and why.
 
 ## Next step
 Finish fine tuning and evaluate the Gemma model quantitatively. 
+
+**Date: August 21, 2026**
+**Time spent: 3 hours**
+**Goal for this session:** Label test / validations set for Gemma and get some quantitative measurements of performance.
+
+## What I worked on
+
+Labelled "A Combinatorial Characterization of Constant Mixing Time"(2511.21868), and started a larger test set. 
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+* src/slm_labels.py
+* sentence_labels.tsv
+* labels.tsv
+
+## Results
+Fiddled around with the Gemma prompt a little to try and minimize the MSE with a validation paper. It has a rather concerning issue where it undervalues sentences that should be important and overvalues rather uninformative sentences. I also started labelling a larger test set. 
+
+## Decisions made
+
+Record any choices you made and why.
+
+
+## Issues or questions
+
+* Upon further thought, maybe labelling sentences is not the way to go. Even I had some trouble while labelling sentences, because there is usually not enough context in just 3 sentence blocks to make a good decision. I will try labelling entire paragraphs instead. The issue with that is it might include some irrelevant information just to get 1 good sentence, or worse miss a good sentence because the rest of the paragraph is useless, but I think those will be very rare cases. Probably this will also speed up my weak label generation by a lot.
+
+## Next step
+Experiment with labelling paragraphs instead of sentences.
+
+
+**Date: August 22, 2026**
+**Time spent: 4 hours**
+**Goal for this session:** Experiment with labelling paragraphs instead of labelling sentences.
+
+## What I worked on
+Adjusted APIs and tuned Gemma prompt to label paragraphs instead of sentences. I don't think I can get better results with the SLM labels with anything that can run on 6gb of vram. 
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/label_generation/slm_labels.py
+* src/extract_text.py
+* scripts/label_sentences.py
+
+## Results
+Qualitatively I'm much happier with the results of Gemma now. It looks like I should use a threshold of approximately 0.7 to consider something useful. It mostly doesn't miss anything now, but it does label some things much higher than they need to be. I think that will be offset well by the regex labels though. Labelling paragraphs is also much faster!
+
+## Decisions made
+
+Record any choices you made and why.
+* Labelling paragraphs instead of sentences because this gives more context to work with. It also makes generating labels way faster. 
+* Added a lot of examples in the prompt to improve performance on hard negatives. Changed the rules and scoring critera slightly to improve performance. 
+
+## Issues or questions
+* Label generation is still a little too slow, about 10 minutes for a 30 page paper. I will deal with this via prompt caching, since the (relatively long) prefix of the prompt is fixed between runs. 
+
+## Next step
+Use llama.cpp to do prompt caching and speed up label generation. Then update src/label_generation/regex_labels.py to score on the same scale as Gemma, and to score paragraphs rather than sentences. Start training the classifier and figure out how I am going to do the active learning step.
+
+**Date: August 24, 2026**
+**Time spent: 3 hours**
+**Goal for this session:** Set up llama.cpp and update regex label rules.
+
+## What I worked on
+Set up llama.cpp and got it to work with cuda (was pretty easy, but needed a reboot). Updated regex labelling rules.
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/label_management/slm_labels.py
+* src/label_management/regex_labels.py
+* src/label_management/label_manager.py
+* src/train/*
+
+## Results
+llama.cpp and prompt caching brings me up to 100 tokens/second, and 3 minutes to label an entire 30 page paper. This is a very nice improvement. I updated the regex rules and started working on the training code for the classifier. 
+
+## Decisions made
+
+Record any choices you made and why.
+* I should mention the architecture used for the classifier. The base embedding model is SciBert, which might change if I encounter lots of paragraphs longer than the 512 token context window. I am using a 2 layer MLP where the input is the last hidden state of the \[CLS\] token. This accomplishes two things: 
+1. It lets me train a specific classifier head, rather than using SciBert's pretrained pooling layer (which is not trained for classification)
+2. It lets me compress the hidden layer so that there is less overfitting risk (hidden layer will be roughly size 256 rather than 768).
+I could also use a logistic regression (a single layer MLP) right on the hidden state, but I hope this extra layer will be able to train a good representation of the paragraphs, and since I am using weak labelling I should have enough data to train it. 
+* I renamed the label_generation folder to label_management, since I want a LabelManager class to provide a unified API to generate weak labels and to select which paragraphs to manually label during active learning.
+
+
+## Issues or questions
+I need to figure out how exactly I am going to choose what to relabel during the active learning. I also need to see how to fit the training into my 6gb (more like 5gb) of vram. I read a little about gradient checkpointing, and I will need to see what other methods I can use while sacrificing as little quality as possible.
+
+## Next step
+Figure out my active learning paragraph selection technique (probably best to read a couple papers). Verify the training code written by Codex (important!), read techniques for reducing vram usage, and start training. 
+
+I also read something about offloading memory to ram when using a MoE model. Maybe I can try using the Gemma-4-E2B-it model if that actually works. Maybe that's something to do later on.
+

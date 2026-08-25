@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Interactive sentence labeller for arXiv papers.
+"""Interactive paragraph labeller for arXiv papers.
 
 Downloads arXiv TeX sources, converts their sections to plain text, and shows
-each sentence with its immediate context in a small Tk GUI. Labels are written
-to a TSV file after every change, making an interrupted session resumable.
+one paragraph at a time in a small Tk GUI. Labels are written to a TSV file
+after every change, making an interrupted session resumable.
 """
 
 from __future__ import annotations
@@ -25,12 +25,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from src.extract_intro import ArxivSection, get_sections  # noqa: E402
+from src.extract_text import ArxivSection, get_sections
 
-SENTENCE_BOUNDARY_RE = re.compile(
-    r"(?:(?<=[.!?])|(?<=[.!?][\"'\N{RIGHT DOUBLE QUOTATION MARK}\N{RIGHT SINGLE QUOTATION MARK}]))"
-    r"\s+(?=[A-Z0-9])"
-)
 ARXIV_ID_RE = re.compile(
     r"^(?:https?://(?:export\.)?arxiv\.org/(?:abs|pdf)/)?"
     r"(?P<id>(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(?:v\d+)?)"
@@ -40,27 +36,25 @@ ARXIV_ID_RE = re.compile(
 LABEL_FIELDS = (
     "arxiv_id",
     "section_index",
-    "sentence_index",
+    "paragraph_index",
     "section_header",
-    "target_sentence",
+    "paragraph",
     "label",
 )
-SAMPLE_CACHE_VERSION = 3
+SAMPLE_CACHE_VERSION = 1
 
 
 @dataclass(frozen=True)
-class Sample:
+class ParagraphSample:
     arxiv_id: str
     section_index: int
-    sentence_index: int
+    paragraph_index: int
     section_header: str
-    previous_sentence: str
-    target_sentence: str
-    next_sentence: str
+    paragraph: str
 
     @property
     def key(self) -> tuple[str, int, int]:
-        return self.arxiv_id, self.section_index, self.sentence_index
+        return self.arxiv_id, self.section_index, self.paragraph_index
 
 
 def normalize_arxiv_id(value: str) -> str:
@@ -72,34 +66,21 @@ def normalize_arxiv_id(value: str) -> str:
     return match.group("id")
 
 
-def split_sentences(text: str) -> list[str]:
-    """Split cleaned prose while retaining punctuation in each sentence."""
-    return [part.strip() for part in SENTENCE_BOUNDARY_RE.split(text) if part.strip()]
-
-
-def samples_from_sections(sections: list[ArxivSection]) -> list[Sample]:
-    """Split sections and attach sentence context without crossing boundaries."""
-    samples: list[Sample] = []
+def samples_from_sections(sections: list[ArxivSection]) -> list[ParagraphSample]:
+    """Flatten the paragraphs returned by ``get_sections`` in document order."""
+    samples: list[ParagraphSample] = []
     for section in sections:
-        sentences = split_sentences(section.text)
-        for sentence_index, sentence in enumerate(sentences):
-            if _should_exclude_sentence(sentence):
+        for paragraph_index, paragraph in enumerate(section.text):
+            paragraph = paragraph.strip()
+            if not paragraph:
                 continue
             samples.append(
-                Sample(
+                ParagraphSample(
                     arxiv_id=section.arxiv_id,
                     section_index=section.section_index,
-                    sentence_index=sentence_index,
+                    paragraph_index=paragraph_index,
                     section_header=section.section_header or "(Untitled section)",
-                    previous_sentence=(
-                        sentences[sentence_index - 1] if sentence_index else ""
-                    ),
-                    target_sentence=sentence,
-                    next_sentence=(
-                        sentences[sentence_index + 1]
-                        if sentence_index + 1 < len(sentences)
-                        else ""
-                    ),
+                    paragraph=paragraph,
                 )
             )
     return samples
@@ -107,7 +88,7 @@ def samples_from_sections(sections: list[ArxivSection]) -> list[Sample]:
 
 def fetch_samples(
     arxiv_id: str, cache_dir: Path, refresh: bool = False
-) -> list[Sample]:
+) -> list[ParagraphSample]:
     """Load processed samples from cache or download and process arXiv source."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{arxiv_id.replace('/', '_')}.json"
@@ -119,7 +100,7 @@ def fetch_samples(
                 isinstance(cached, dict)
                 and cached.get("cache_version") == SAMPLE_CACHE_VERSION
             ):
-                return [Sample(**item) for item in cached["samples"]]
+                return [ParagraphSample(**item) for item in cached["samples"]]
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             # Treat a partial or incompatible cache as a miss. The successful
             # download below atomically replaces it with a valid cache.
@@ -134,7 +115,7 @@ def fetch_samples(
     samples = samples_from_sections(sections)
     if not samples:
         raise RuntimeError(
-            "no section sentences could be extracted from the TeX source"
+            "no section paragraphs could be extracted from the TeX source"
         )
 
     temporary_path = cache_path.with_suffix(".json.tmp")
@@ -164,7 +145,7 @@ def _load_label_rows(path: Path) -> dict[tuple[str, int, int], dict[str, str]]:
                 key = (
                     row["arxiv_id"],
                     int(row["section_index"]),
-                    int(row["sentence_index"]),
+                    int(row["paragraph_index"]),
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(f"Malformed label row in {path}: {row}") from exc
@@ -177,7 +158,9 @@ def load_labels(path: Path) -> dict[tuple[str, int, int], int]:
 
 
 def save_labels(
-    path: Path, samples: list[Sample], labels: dict[tuple[str, int, int], int]
+    path: Path,
+    samples: list[ParagraphSample],
+    labels: dict[tuple[str, int, int], int],
 ) -> None:
     """Atomically write labels in document order, one row per labelled sample."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,9 +182,9 @@ def save_labels(
                 {
                     "arxiv_id": sample.arxiv_id,
                     "section_index": sample.section_index,
-                    "sentence_index": sample.sentence_index,
+                    "paragraph_index": sample.paragraph_index,
                     "section_header": sample.section_header,
-                    "target_sentence": sample.target_sentence,
+                    "paragraph": sample.paragraph,
                     "label": labels[sample.key],
                 }
             )
@@ -216,7 +199,7 @@ def parse_id_file(path: Path) -> list[str]:
     return values
 
 
-class SentenceLabelApp:
+class ParagraphLabelApp:
     def __init__(
         self,
         root,
@@ -235,12 +218,12 @@ class SentenceLabelApp:
         self.output_path = output_path
         self.cache_dir = cache_dir
         self.refresh = refresh
-        self.samples: list[Sample] = []
+        self.samples: list[ParagraphSample] = []
         self.labels = load_labels(output_path)
         self.index = 0
         self.loading_queue: queue.Queue = queue.Queue()
 
-        root.title("arXiv Sentence Labeller")
+        root.title("arXiv Paragraph Labeller")
         root.geometry("940x650")
         root.minsize(700, 500)
 
@@ -256,9 +239,8 @@ class SentenceLabelApp:
         )
         tkfont.nametofont("TkDefaultFont").configure(family=interface_family, size=11)
         tkfont.nametofont("TkTextFont").configure(family=interface_family, size=14)
-        self.context_font = tkfont.Font(root=root, family=interface_family, size=14)
-        self.target_font = tkfont.Font(
-            root=root, family=interface_family, size=14, weight="bold"
+        self.paragraph_font = tkfont.Font(
+            root=root, family=interface_family, size=14
         )
 
         outer = ttk.Frame(root, padding=18)
@@ -287,7 +269,7 @@ class SentenceLabelApp:
             justify="left",
         ).pack(fill=X, pady=(2, 14))
 
-        self.context = Text(
+        self.paragraph_text = Text(
             outer,
             # Keep enough requested space for the controls below. ``expand``
             # still lets the reading area consume spare space in larger windows.
@@ -297,16 +279,12 @@ class SentenceLabelApp:
             borderwidth=0,
             padx=10,
             pady=10,
-            font=self.context_font,
+            font=self.paragraph_font,
             background=outer.winfo_toplevel().cget("background"),
             cursor="arrow",
         )
-        self.context.pack(fill=BOTH, expand=True, pady=(2, 11))
-        self.context.tag_configure("context", foreground="#666666")
-        self.context.tag_configure(
-            "target", foreground="#111111", font=self.target_font
-        )
-        self.context.configure(state="disabled")
+        self.paragraph_text.pack(fill=BOTH, expand=True, pady=(2, 11))
+        self.paragraph_text.configure(state="disabled")
 
         controls = Frame(outer)
         controls.pack(fill=X, pady=(18, 0))
@@ -350,7 +328,7 @@ class SentenceLabelApp:
         root.after(100, self._poll_loading_queue)
 
     def _load_papers(self) -> None:
-        all_samples: list[Sample] = []
+        all_samples: list[ParagraphSample] = []
         errors: list[str] = []
         for number, arxiv_id in enumerate(self.arxiv_ids, 1):
             self.loading_queue.put(
@@ -376,14 +354,16 @@ class SentenceLabelApp:
         except queue.Empty:
             self.root.after(100, self._poll_loading_queue)
 
-    def _finish_loading(self, samples: list[Sample], errors: list[str]) -> None:
+    def _finish_loading(
+        self, samples: list[ParagraphSample], errors: list[str]
+    ) -> None:
         from tkinter import messagebox
 
         self.samples = samples
         if errors:
             messagebox.showwarning("Some papers were skipped", "\n".join(errors))
         if not samples:
-            messagebox.showerror("Nothing to label", "No sentences could be loaded.")
+            messagebox.showerror("Nothing to label", "No paragraphs could be loaded.")
             self.root.destroy()
             return
         self._set_controls_enabled(True)
@@ -399,30 +379,21 @@ class SentenceLabelApp:
         for button in self.label_buttons:
             button.configure(state=state)
 
-    def _set_context(self, sample: Sample) -> None:
-        """Render the three sentences in one panel, separated only by newlines."""
-        lines = (
-            (sample.previous_sentence, "context"),
-            (sample.target_sentence, "target"),
-            (sample.next_sentence, "context"),
-        )
-        visible_lines = [(text, tag) for text, tag in lines if text]
-        self.context.configure(state="normal")
-        self.context.delete("1.0", "end")
-        for index, (text, tag) in enumerate(visible_lines):
-            if index:
-                self.context.insert("end", "\n")
-            self.context.insert("end", text, tag)
-        self.context.configure(state="disabled")
+    def _set_paragraph(self, sample: ParagraphSample) -> None:
+        """Render one paragraph in the reading panel."""
+        self.paragraph_text.configure(state="normal")
+        self.paragraph_text.delete("1.0", "end")
+        self.paragraph_text.insert("end", sample.paragraph)
+        self.paragraph_text.configure(state="disabled")
 
     def show_sample(self) -> None:
         sample = self.samples[self.index]
         current_label = self.labels.get(sample.key)
         self.location_var.set(
-            f"{sample.arxiv_id}  •  sample {self.index + 1} of {len(self.samples)}"
+            f"{sample.arxiv_id}  •  paragraph {self.index + 1} of {len(self.samples)}"
         )
         self.section_var.set(sample.section_header)
-        self._set_context(sample)
+        self._set_paragraph(sample)
         for value, button in enumerate(self.label_buttons, 1):
             button.configure(relief="sunken" if value == current_label else "raised")
         labelled = sum(sample.key in self.labels for sample in self.samples)
@@ -438,7 +409,7 @@ class SentenceLabelApp:
         next_index = self._find_unlabelled(start=self.index, wrap=True)
         if next_index is None:
             self.status_var.set(
-                "All samples are labelled. You can still review or change labels."
+                "All paragraphs are labelled. You can still review or change labels."
             )
             self.show_sample()
         else:
@@ -464,9 +435,9 @@ class SentenceLabelApp:
         if next_index is None:
             remaining = sum(sample.key not in self.labels for sample in self.samples)
             self.status_var.set(
-                "All samples are labelled."
+                "All paragraphs are labelled."
                 if remaining == 0
-                else "There are no other unlabelled samples."
+                else "There are no other unlabelled paragraphs."
             )
         else:
             self.index = next_index
@@ -488,7 +459,7 @@ class SentenceLabelApp:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Download arXiv papers and label their sentences from 1 to 5."
+        description="Download arXiv papers and label their paragraphs from 1 to 5."
     )
     parser.add_argument("arxiv_ids", nargs="*", help="arXiv IDs or abs/PDF URLs")
     parser.add_argument(
@@ -499,14 +470,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("sentence_labels.tsv"),
-        help="label TSV path (default: sentence_labels.tsv)",
+        default=Path("paragraph_labels.tsv"),
+        help="label TSV path (default: paragraph_labels.tsv)",
     )
     parser.add_argument(
         "--cache-dir",
         type=Path,
-        default=Path(".sentence_label_cache"),
-        help="processed-paper cache (default: .sentence_label_cache)",
+        default=Path(".paragraph_label_cache"),
+        help="processed-paper cache (default: .paragraph_label_cache)",
     )
     parser.add_argument(
         "--refresh",
@@ -537,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         parser.error("Tkinter is unavailable; install your system's python3-tk package")
     root = tk.Tk()
-    SentenceLabelApp(root, arxiv_ids, args.output, args.cache_dir, args.refresh)
+    ParagraphLabelApp(root, arxiv_ids, args.output, args.cache_dir, args.refresh)
     root.mainloop()
     return 0
 

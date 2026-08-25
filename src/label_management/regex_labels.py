@@ -1,14 +1,14 @@
-"""Select important result, technique, and theorem text from introductions."""
+"""Score paragraphs for useful result and proof-technique information."""
 
 import re
 from typing import Iterable
 
-from .extract_intro import SECTION_RE, clean_latex_for_embedding
+from ..extract_text import SECTION_RE, ArxivSection, clean_latex_for_embedding
 
 # Identify subsection titles whose prose deserves a small importance boost.
 IMPORTANT_SECTION_TITLE_RE = re.compile(
     r"\b(?:results?|contributions?|techniques?|methods?|approach|"
-    r"algorithms?|proof\s+(?:overview|outline|idea)|summary|overview)\b",
+    r"algorithms?|proof\s+(?:overview|outline|idea)|summary|overview|analysis)\b",
     re.IGNORECASE,
 )
 
@@ -33,10 +33,10 @@ ENRICHMENT_PATTERNS = (
             r"\b(?:we|this (?:paper|work)|our work)\s+"
             r"(?:shows?|proves?|establishs?|demonstrates?|obtains?|derives?|gives?|"
             r"present|resolves?|settles?|improves?|characterizes?|achieves?|answers?|"
-            r"confirms?|refutes?|bounds?)\b",
+            r"confirms?|refutes?|bounds?|observes?|leverages?)\b",
             re.IGNORECASE,
         ),
-        5,
+        10,
     ),
     # Require content after a named result/contribution so an anaphoric phrase
     # such as "that is our main contribution" is not selected by itself.
@@ -46,7 +46,7 @@ ENRICHMENT_PATTERNS = (
             r"(?:results?|contributions?|proofs?)..+\b|\bmain theorem\b",
             re.IGNORECASE,
         ),
-        4,
+        8,
     ),
     # First-person descriptions of methods introduced or used by this paper.
     (
@@ -56,7 +56,7 @@ ENRICHMENT_PATTERNS = (
             r"reduce|exploit|invoke|establish|formulate)\b",
             re.IGNORECASE,
         ),
-        4,
+        8,
     ),
     # General method vocabulary is deliberately a weaker signal.
     (
@@ -66,7 +66,7 @@ ENRICHMENT_PATTERNS = (
             r"impl[ies|y]|proof (?:idea|strategy|overview))\b",
             re.IGNORECASE,
         ),
-        2,
+        4,
     ),
     # Phrases that normally introduce the central technical ingredient.
     (
@@ -75,7 +75,7 @@ ENRICHMENT_PATTERNS = (
             r"\bour (?:proof|argument) (?:uses?|proceeds?|relies?)\b",
             re.IGNORECASE,
         ),
-        4,
+        8,
     ),
     # Definitions written in prose instead of a definition environment.
     (
@@ -84,21 +84,31 @@ ENRICHMENT_PATTERNS = (
             r"is called .+ if|by .+ we mean|.+ is the|refer|denote)\b",
             re.IGNORECASE,
         ),
-        3,
+        6,
+    ),
+    # A catch-all category that covers words/phrases that aren't caught by other rules but should give some weight
+    (
+        re.compile(
+            r"\b(?:rel(y|ies)|illustrates?|intuit(ion|ively|ive)|start with|informal|inspired|we first|high(-|\s)?level|)"
+        ),
+        6,
     ),
     # Weak connective phrases matter only alongside another signal.
-    (re.compile(r"\b(?:using|via|based|building)\b", re.IGNORECASE), 2),
+    (re.compile(r"\b(?:using|via|based|building)\b", re.IGNORECASE), 4),
 )
 
 MAX_ENRICHMENT_SENTENCES = 12
-SECTION_TITLE_BONUS_WEIGHT = 2
-MINIMUM_ENRICHMENT_WEIGHT = 3
+SECTION_TITLE_BONUS_WEIGHT = 6
+MINIMUM_ENRICHMENT_WEIGHT = 6
 
-# Normalization includes every pattern weight and the optional section-title
-# bonus. Consequently, a sentence matching every signal in an important
-# subsection scores exactly 100, while a sentence matching none scores 0.
+# Technically, this isn't the maximum possible weight, but very few sentences will
+# actually match all the critera. Here, I make the assumption that the ideal sentence
+# gets about 40% of the enrichment weight. Results are later clamped to 1, so this won't
+# give faulty results, but it will blur the difference between a good sentence and a very
+# good sentence if my assumption is incorrect.
 MAXIMUM_ENRICHMENT_WEIGHT = (
-    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS) + SECTION_TITLE_BONUS_WEIGHT
+    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS) / 2.5
+    + SECTION_TITLE_BONUS_WEIGHT
 )
 MINIMUM_ENRICHMENT_SCORE = 100 * MINIMUM_ENRICHMENT_WEIGHT / MAXIMUM_ENRICHMENT_WEIGHT
 
@@ -212,16 +222,44 @@ STATEMENT_MARKUP_RE = re.compile(
 SENTENCE_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])")
 
 
-def get_enrichment_text(introduction: str) -> str:
-    """Return important excerpts from an already-extracted introduction.
+def label_paper(paper: Iterable[ArxivSection]) -> list[float]:
+    """Return regex weak labels for every paragraph in a paper."""
+    return score_paragraphs(paper)
 
-    Raw LaTeX from ``extract_intro_from_latex`` preserves theorem boundaries
-    and is therefore preferred. Cleaned introduction text from ``get_intro_text``
-    is also accepted, although it no longer contains theorem environment markup.
+
+def score_paragraphs(sections: Iterable[ArxivSection]) -> list[float]:
+    """Return one useful-information probability per paragraph, in input order.
+
+    A paragraph's probability is the maximum score of any sentence it contains.
+    Excluded sentences contribute zero, as do empty paragraphs and paragraphs in
+    which every sentence is excluded. Internal sentence scores use the existing
+    0–100 scale and are converted to probabilities in the range 0–1 here. A
+    section whose header indicates results, techniques, methods, or an overview
+    contributes the existing section-title bonus to its non-excluded sentences.
     """
-    return _extract_enrichment_excerpts(introduction) if introduction else ""
+    scores = []
+    for section in sections:
+        section_bonus = (
+            SECTION_TITLE_BONUS_WEIGHT
+            if IMPORTANT_SECTION_TITLE_RE.search(section.section_header)
+            else 0
+        )
+        for paragraph in section.text:
+            sentence_scores = (
+                (
+                    0.0
+                    if _should_exclude_sentence(sentence)
+                    else min(
+                        1.0, _enrichment_sentence_score(sentence, section_bonus) / 100
+                    )
+                )
+                for sentence in _split_sentences(paragraph)
+            )
+            scores.append(max(sentence_scores, default=0.0))
+    return scores
 
 
+# Deprecated
 def _extract_enrichment_excerpts(introduction: str) -> str:
     """Select current contributions and complete original formal statements."""
     all_statements = list(STATEMENT_ENV_RE.finditer(introduction))
@@ -367,3 +405,23 @@ def _dedupe_preserving_order(items: Iterable[str]) -> list[str]:
         seen.add(item)
         deduped.append(item)
     return deduped
+
+
+if __name__ == "__main__":
+    from ..extract_text import get_sections
+    from pprint import pp
+    import requests
+
+    arxiv_id = "2608.20924v1"
+    with requests.session() as session:
+        paper = get_sections(session, arxiv_id)
+
+    # pp(paper[1])
+
+    paragraph_scores = label_paper(paper)
+    texts = []
+    for section in paper:
+        texts.extend(section.text)
+
+    for s, t in sorted(zip(paragraph_scores, texts)):
+        print(s, t)

@@ -1,14 +1,15 @@
-"""Download arXiv sources and extract introduction text."""
+"""Download arXiv sources and extract cleaned paper sections."""
 
 import gzip
 import io
+import logging
 import re
 import tarfile
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Iterable, Optional
-import logging, time
 
 import requests
 
@@ -16,13 +17,6 @@ ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_INCLUDE_DEPTH = 8
 TEX_SOURCE_SUFFIXES = {".tex", ".ltx"}
-
-
-class IntroExtractionError(Exception):
-    def __init__(self, arxiv_id: str, message: str):
-        self.arxiv_id = arxiv_id
-        self.message = message
-        super().__init__(f"Failed to extract introduction from {arxiv_id}: {message}")
 
 
 @dataclass(frozen=True)
@@ -46,7 +40,7 @@ class ArxivSection:
     section_index: int
     section_header: str
     major_section_header: str
-    text: str
+    text: list[str]
 
 
 # Match a LaTeX section command, its level, and its brace-delimited title.
@@ -59,11 +53,6 @@ SECTION_RE = re.compile(
     \s*\{(?P<title>(?:[^{}]|\{[^{}]*\})*)\}
     """,
     re.IGNORECASE | re.VERBOSE,
-)
-
-# Recognize common names for an introduction section.
-INTRO_TITLE_RE = re.compile(
-    r"\b(?:introduction|intro|overview|background)\b", re.IGNORECASE
 )
 
 # Remove an unescaped percent sign and everything after it on the same line.
@@ -104,12 +93,6 @@ MATH_SPAN_RE = re.compile(
     re.DOTALL | re.VERBOSE,
 )
 
-# Match the body of a standard abstract environment as an introduction fallback.
-ABSTRACT_RE = re.compile(
-    r"\\begin\{abstract\}(.*?)\\end\{abstract\}",
-    re.IGNORECASE | re.DOTALL,
-)
-
 # Match \input{path} and \include{path}; the named group is resolved against
 # the in-memory source archive by ``_expand_inputs``.
 INCLUDE_RE = re.compile(r"\\(?:input|include)\s*\{(?P<path>[^{}]+)\}", re.IGNORECASE)
@@ -145,6 +128,8 @@ DECLARE_COMMAND_RE = re.compile(
     r"\\(?:DeclareMathOperator|DeclarePairedDelimiter)\*?\s*"
     r"\{?\\[a-zA-Z@]+\}?\s*\{[^{}]*\}"
 )
+
+NEW_PARAGRAPH_RE = re.compile(r"(?:\r\n|\n|\r){2}|\\par")
 
 CITATION_COMMANDS = {
     "cite",
@@ -206,6 +191,8 @@ TEXTUAL_ENVS = {
     "quote",
     "quotation",
     "theorem",
+    "mtheorem",
+    "thrm",
     "lemma",
     "proposition",
     "corollary",
@@ -216,6 +203,31 @@ TEXTUAL_ENVS = {
     "proof",
 }
 
+# Preserve the bodies of display-math environments. These are normalized as
+# math rather than wrapped in start/end markers like theorem-like prose.
+MATH_ENVS = {
+    "align",
+    "alignat",
+    "aligned",
+    "alignedat",
+    "array",
+    "bmatrix",
+    "cases",
+    "displaymath",
+    "equation",
+    "eqnarray",
+    "flalign",
+    "gather",
+    "gathered",
+    "math",
+    "matrix",
+    "multline",
+    "pmatrix",
+    "smallmatrix",
+    "split",
+    "vmatrix",
+}
+
 
 def download_source(session: requests.Session, arxiv_id: str) -> bytes:
     """Download the source archive for ``arxiv_id`` using the supplied session."""
@@ -224,25 +236,6 @@ def download_source(session: requests.Session, arxiv_id: str) -> bytes:
     )
     response.raise_for_status()
     return response.content
-
-
-def get_intro_text(session: requests.Session, arxiv_id: str) -> str:
-    """Download and clean the introduction of an arXiv paper."""
-    try:
-        source_bytes = download_source(session, arxiv_id)
-        source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
-        if not source:
-            return ""
-        intro = extract_intro_from_latex(source)
-        return clean_latex_for_embedding(intro)
-    except (
-        requests.RequestException,
-        tarfile.TarError,
-        zipfile.BadZipFile,
-        OSError,
-        UnicodeError,
-    ):
-        return ""
 
 
 def get_sections(
@@ -261,7 +254,7 @@ def get_sections(
     )
     try:
         source_bytes = download_source(session, arxiv_id)
-        source = build_intro_tex_source_from_bytes(source_bytes, arxiv_id)
+        source = build_tex_source_from_bytes(source_bytes, arxiv_id)
         if not source:
             return []
         if not include_proofs:
@@ -280,8 +273,14 @@ def get_sections(
                         section_index=section_index,
                         section_header=section_header,
                         major_section_header=major_section_header,
-                        text=clean_latex_for_embedding(section.text),
-                    )
+                        text=[
+                            _normalize_embedding_whitespace(p)
+                            for p in NEW_PARAGRAPH_RE.split(
+                                clean_latex_for_embedding(section.text)
+                            )
+                            if p.strip()
+                        ],
+                    ),
                 )
         return results
     except (
@@ -342,7 +341,7 @@ def decode_source(raw: bytes) -> str:
     return raw.decode("utf-8", errors="ignore")
 
 
-def build_intro_tex_source(sources: list[TexSource]) -> str:
+def build_tex_source(sources: list[TexSource]) -> str:
     """Select the most likely main TeX file and expand its includes."""
     source_map = {_normalize_path(source.name): source.text for source in sources}
     if not source_map:
@@ -353,42 +352,9 @@ def build_intro_tex_source(sources: list[TexSource]) -> str:
     return _expand_inputs(main_name, source_map)
 
 
-def build_intro_tex_source_from_bytes(source_bytes: bytes, arxiv_id: str) -> str:
+def build_tex_source_from_bytes(source_bytes: bytes, arxiv_id: str) -> str:
     """Read an arXiv source payload and assemble its likely main document."""
-    return build_intro_tex_source(list(iter_tex_sources(source_bytes, arxiv_id)))
-
-
-def extract_intro_from_latex(source_text: str) -> str:
-    """Extract the introduction section, with preface/abstract fallbacks.
-
-    A matched introduction ends at the next top-level section rather than at a
-    subsection, so the entire introduction is retained.
-    """
-    document = _document_body(strip_latex_comments(source_text))
-    sections = list(SECTION_RE.finditer(document))
-
-    for index, match in enumerate(sections):
-        if not INTRO_TITLE_RE.search(match.group("title")):
-            continue
-
-        end = next(
-            (
-                section.start()
-                for section in sections[index + 1 :]
-                if section.group("kind").lower() in {"part", "chapter", "section"}
-            ),
-            len(document),
-        )
-        return document[match.end() : end]
-
-    if sections:
-        first_section_start = sections[0].start()
-        preface = document[:first_section_start]
-        if len(preface.split()) >= 100:
-            return preface
-
-    abstract_match = ABSTRACT_RE.search(document)
-    return abstract_match.group(1) if abstract_match else ""
+    return build_tex_source(list(iter_tex_sources(source_bytes, arxiv_id)))
 
 
 def extract_sections_from_latex(source_text: str) -> list[TexSection]:
@@ -429,7 +395,7 @@ def clean_latex_for_embedding(text: str) -> str:
     text = _normalize_math_spans(text)
     text = _decode_latex_escapes(text)
     text = _drop_remaining_commands(text)
-    text = _normalize_embedding_whitespace(text)
+    # text = _normalize_embedding_whitespace(text)
     return text
 
 
@@ -591,8 +557,22 @@ def _unwrap_environments(text: str) -> str:
 
     def replace(match: re.Match[str]) -> str:
         env_name = match.group(1).rstrip("*")
+        env_key = env_name.lower()
         content = match.group(2)
-        return f" {content} " if env_name in TEXTUAL_ENVS else " "
+        if env_key in TEXTUAL_ENVS:
+            # A theorem-like environment is one semantic block. Preserve outer
+            # paragraph boundaries, but prevent blank lines or \par commands in
+            # its body from separating the start/end markers into malformed
+            # fragments such as ``We let end-of-definition``.
+            content = NEW_PARAGRAPH_RE.sub(" ", content)
+            return f" start-of-{env_key}:{content} end-of-{env_key} "
+        if env_key in MATH_ENVS:
+            # Displayed formulas often carry the entire conclusion of a lemma.
+            # Treat their bodies exactly like delimiter-based math instead of
+            # dropping them as unknown non-prose environments.
+            content = NEW_PARAGRAPH_RE.sub(" ", content)
+            return f" {_normalize_math_body(content)} "
+        return " "
 
     previous = None
     while previous != text:
@@ -688,6 +668,16 @@ def _read_balanced_group(text: str, idx: int) -> Optional[tuple[str, int]]:
     return None
 
 
+def _normalize_math_body(body: str) -> str:
+    """Render the contents of a math span as readable plain text."""
+    # Strip nested math-environment wrappers before normalizing their contents.
+    body = re.sub(r"\\(?:begin|end)\s*\{[^{}]+\}", " ", body)
+    body = body.replace(r"\{", "(").replace(r"\}", ")")
+    body = body.replace("{", "(").replace("}", ")")
+    # Retain readable command names such as ``rightarrow``, ``in``, and ``leq``.
+    return re.sub(r"\\([A-Za-z@]+)\*?", r"\1", body)
+
+
 def _normalize_math_spans(text: str) -> str:
     """Remove math delimiters and render mathematical braces as parentheses.
 
@@ -699,13 +689,7 @@ def _normalize_math_spans(text: str) -> str:
 
     def normalize(match: re.Match[str]) -> str:
         body = next(group for group in match.groups() if group is not None)
-        body = body.replace(r"\{", "(").replace(r"\}", ")")
-        body = body.replace("{", "(").replace("}", ")")
-        # Retain the readable name of every named math command.  Doing this for
-        # the recognized math body avoids a growing command-specific allowlist
-        # and preserves operators such as ``\rightarrow``, ``\in``, and ``\to``.
-        body = re.sub(r"\\([A-Za-z@]+)\*?", r"\1", body)
-        return f" {body} "
+        return f" {_normalize_math_body(body)} "
 
     text = MATH_SPAN_RE.sub(normalize, text)
     return text.replace(r"\$", "").replace("$", "")
@@ -797,8 +781,7 @@ def _normalize_embedding_whitespace(text: str) -> str:
 
 
 if __name__ == "__main__":
+    from pprint import pp
+
     with requests.session() as session:
-        print(get_intro_text(session, "2308.15403"))
-        print(
-            [section.section_header for section in get_sections(session, "2308.15403")]
-        )
+        pp(get_sections(session, "2308.15403"))
