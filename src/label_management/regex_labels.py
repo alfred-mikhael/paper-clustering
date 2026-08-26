@@ -1,9 +1,9 @@
-"""Score paragraphs for useful result and proof-technique information."""
+"""Extract binary regex features from paper paragraphs."""
 
 import re
 from typing import Iterable
 
-from ..extract_text import SECTION_RE, ArxivSection, clean_latex_for_embedding
+from ..extract_text import ArxivSection
 
 # Identify subsection titles whose prose deserves a small importance boost.
 IMPORTANT_SECTION_TITLE_RE = re.compile(
@@ -12,111 +12,63 @@ IMPORTANT_SECTION_TITLE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Match complete theorem-like environments. The environment name may have a
-# custom prefix, but must end in a standard theorem or definition suffix.
-STATEMENT_ENV_RE = re.compile(
-    r"""
-    \\begin\s*\{(?P<env>
-        [a-zA-Z@]*(?:theorem|thm|lemma|proposition|prop|corollary|cor|conjecture|
-        claim|definition|defn|def)
-    )\*?\}
-    .*?
-    \\end\s*\{(?P=env)\*?\}
-    """,
-    re.IGNORECASE | re.DOTALL | re.VERBOSE,
-)
-
 ENRICHMENT_PATTERNS = (
-    # Direct first-person claims of a result receive the strongest score.
-    (
-        re.compile(
-            r"\b(?:we|this (?:paper|work)|our work)\s+"
-            r"(?:shows?|proves?|establishs?|demonstrates?|obtains?|derives?|gives?|"
-            r"present|resolves?|settles?|improves?|characterizes?|achieves?|answers?|"
-            r"confirms?|refutes?|bounds?|observes?|leverages?)\b",
-            re.IGNORECASE,
-        ),
-        10,
+    # Direct first-person claims of a result.
+    re.compile(
+        r"\b(?:we|this (?:paper|work)|our work)\s+"
+        r"(?:shows?|proves?|establishs?|demonstrates?|obtains?|derives?|gives?|"
+        r"present|resolves?|settles?|improves?|characterizes?|achieves?|answers?|"
+        r"confirms?|refutes?|bounds?|observes?|leverages?)\b",
+        re.IGNORECASE,
     ),
     # Require content after a named result/contribution so an anaphoric phrase
     # such as "that is our main contribution" is not selected by itself.
-    (
-        re.compile(
-            r"\b(?:our|the) (?:main |principal |key |new )?"
-            r"(?:results?|contributions?|proofs?)..+\b|\bmain theorem\b",
-            re.IGNORECASE,
-        ),
-        8,
+    re.compile(
+        r"\b(?:our|the) (?:main |principal |key |new )?"
+        r"(?:results?|contributions?|proofs?)..+\b|\bmain theorem\b",
+        re.IGNORECASE,
     ),
     # First-person descriptions of methods introduced or used by this paper.
-    (
-        re.compile(
-            r"\b(?:we|this (?:paper|work))\s+"
-            r"(?:use|develop|introduce|design|construct|apply|combine|analy[sz]e|"
-            r"reduce|exploit|invoke|establish|formulate)\b",
-            re.IGNORECASE,
-        ),
-        8,
+    re.compile(
+        r"\b(?:we|this (?:paper|work))\s+"
+        r"(?:use|develop|introduce|design|construct|apply|combine|analy[sz]e|"
+        r"reduce|exploit|invoke|establish|formulate)\b",
+        re.IGNORECASE,
     ),
     # General method vocabulary is deliberately a weaker signal.
-    (
-        re.compile(
-            r"\b(?:techniques?|argument|characteri[sz](?:e|ation)|methodology|"
-            r"methods?|approach|algorithms?|constructions?|formulation|idea|strategy|"
-            r"impl[ies|y]|proof (?:idea|strategy|overview))\b",
-            re.IGNORECASE,
-        ),
-        4,
+    re.compile(
+        r"\b(?:techniques?|argument|characteri[sz](?:e|ation)|methodology|"
+        r"methods?|approach|algorithms?|constructions?|formulation|idea|strategy|"
+        r"impl[ies|y]|proof (?:idea|strategy|overview))\b",
+        re.IGNORECASE,
     ),
     # Phrases that normally introduce the central technical ingredient.
-    (
-        re.compile(
-            r"\b(?:main|key|crucial|technical) (?:idea|ingredient|tool)\b|"
-            r"\bour (?:proof|argument) (?:uses?|proceeds?|relies?)\b",
-            re.IGNORECASE,
-        ),
-        8,
+    re.compile(
+        r"\b(?:main|key|crucial|technical) (?:idea|ingredient|tool)\b|"
+        r"\bour (?:proof|argument) (?:uses?|proceeds?|relies?)\b",
+        re.IGNORECASE,
     ),
     # Definitions written in prose instead of a definition environment.
-    (
-        re.compile(
-            r"\b(?:we (?:define|call|say)|is defined as|means that|definition of|"
-            r"is called .+ if|by .+ we mean|.+ is the|refer|denote)\b",
-            re.IGNORECASE,
-        ),
-        6,
+    re.compile(
+        r"\b(?:we (?:define|call|say)|is defined as|means that|definition of|"
+        r"is called .+ if|by .+ we mean|.+ is the|refer|denote)\b",
+        re.IGNORECASE,
     ),
-    # A catch-all category that covers words/phrases that aren't caught by other rules but should give some weight
-    (
-        re.compile(
-            r"\b(?:rel(y|ies)|illustrates?|intuit(ion|ively|ive)|start with|informal|inspired|we first|high(-|\s)?level|)"
-        ),
-        6,
+    # A catch-all category for useful words not covered by the other rules.
+    re.compile(
+        r"\b(?:rel(?:y|ies)|illustrates?|intuit(?:ion|ively|ive)|start with|"
+        r"informal|inspired|we first|high(?:-|\s)?level)\b",
+        re.IGNORECASE,
     ),
-    # Weak connective phrases matter only alongside another signal.
-    (re.compile(r"\b(?:using|via|based|building)\b", re.IGNORECASE), 4),
+    # Weak connective phrases.
+    re.compile(r"\b(?:using|via|based|building)\b", re.IGNORECASE),
 )
-
-MAX_ENRICHMENT_SENTENCES = 12
-SECTION_TITLE_BONUS_WEIGHT = 6
-MINIMUM_ENRICHMENT_WEIGHT = 6
-
-# Technically, this isn't the maximum possible weight, but very few sentences will
-# actually match all the critera. Here, I make the assumption that the ideal sentence
-# gets about 40% of the enrichment weight. Results are later clamped to 1, so this won't
-# give faulty results, but it will blur the difference between a good sentence and a very
-# good sentence if my assumption is incorrect.
-MAXIMUM_ENRICHMENT_WEIGHT = (
-    sum(weight for _pattern, weight in ENRICHMENT_PATTERNS) / 2.5
-    + SECTION_TITLE_BONUS_WEIGHT
-)
-MINIMUM_ENRICHMENT_SCORE = 100 * MINIMUM_ENRICHMENT_WEIGHT / MAXIMUM_ENRICHMENT_WEIGHT
 
 # Match vocabulary that explicitly labels a statement as background or history.
 HISTORICAL_CONTEXT_RE = re.compile(
     r"\b(?:previous(?:ly)?|prior (?:work|result)|earlier (?:work|result)|"
     r"best known|old (?:bound|result)|historical(?:ly)?|for context|history of|"
-    r"discuss the history|their result|the result of which|recent(?:ly)?)\b",
+    r"discuss the history|their result|the result of which|recent(?:ly)?|introduced)\b",
     re.IGNORECASE,
 )
 
@@ -207,131 +159,61 @@ CURRENT_WORK_RE = re.compile(
     r"\b(?:we|our|this (?:paper|work)|present)\b", re.IGNORECASE
 )
 
-THEOREM_TITLE_CITATION_RE = re.compile(r"\\cite\w*\b")
-THEOREM_TITLE_HISTORY_RE = re.compile(
-    r"\b(?:known|classical|previous|earlier|due to)\b", re.IGNORECASE
-)
-
-# Remove outer theorem markup and labels while retaining the statement body.
-STATEMENT_MARKUP_RE = re.compile(
-    r"^\s*\\begin\s*\{[^{}]+\}|\\end\s*\{[^{}]+\}\s*$|" r"\\label\s*\{[^{}]*\}",
-    re.IGNORECASE,
+# The feature-vector API deliberately exposes only aggregate regex evidence.
+# Enrichment counts distinct positive patterns, while negative counts distinct
+# exclusion rules that matched somewhere in the paragraph.
+FEATURE_NAMES = (
+    "important_section_title",
+    "enrichment_pattern_hits",
+    "negative_pattern_hits",
 )
 
 # Split at terminal punctuation followed by a likely sentence-starting token.
 SENTENCE_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"'”’]))\s+(?=[A-Z0-9])")
 
 
-def label_paper(paper: Iterable[ArxivSection]) -> list[float]:
-    """Return regex weak labels for every paragraph in a paper."""
-    return score_paragraphs(paper)
+def label_paper(paper: Iterable[ArxivSection]) -> list[list[int]]:
+    """Return one three-value regex-feature vector per paragraph in a paper."""
+    return extract_paragraph_features(paper)
 
 
-def score_paragraphs(sections: Iterable[ArxivSection]) -> list[float]:
-    """Return one useful-information probability per paragraph, in input order.
+def extract_paragraph_features(
+    sections: Iterable[ArxivSection],
+) -> list[list[int]]:
+    """Return aggregate regex features for each paragraph, in document order.
 
-    A paragraph's probability is the maximum score of any sentence it contains.
-    Excluded sentences contribute zero, as do empty paragraphs and paragraphs in
-    which every sentence is excluded. Internal sentence scores use the existing
-    0–100 scale and are converted to probabilities in the range 0–1 here. A
-    section whose header indicates results, techniques, methods, or an overview
-    contributes the existing section-title bonus to its non-excluded sentences.
+    Each output position is described by :data:`FEATURE_NAMES`. Enrichment
+    counts the distinct positive patterns matched by non-excluded sentences.
+    Negative evidence counts the distinct exclusion rules matched by any
+    sentence. The section-header feature is binary and independent of the
+    paragraph's sentence-level evidence.
     """
-    scores = []
+    paragraph_features: list[list[int]] = []
     for section in sections:
-        section_bonus = (
-            SECTION_TITLE_BONUS_WEIGHT
-            if IMPORTANT_SECTION_TITLE_RE.search(section.section_header)
-            else 0
+        important_section = bool(
+            IMPORTANT_SECTION_TITLE_RE.search(section.section_header)
         )
         for paragraph in section.text:
-            sentence_scores = (
-                (
-                    0.0
-                    if _should_exclude_sentence(sentence)
-                    else min(
-                        1.0, _enrichment_sentence_score(sentence, section_bonus) / 100
-                    )
-                )
-                for sentence in _split_sentences(paragraph)
+            matched_enrichment_patterns = set()
+            matched_negative_patterns = set()
+            for sentence in _split_sentences(paragraph):
+                sentence_negative_hits = _negative_pattern_hits(sentence)
+                matched_negative_patterns.update(sentence_negative_hits)
+                if sentence_negative_hits:
+                    continue
+                for index, pattern in enumerate(ENRICHMENT_PATTERNS):
+                    if pattern.search(sentence):
+                        matched_enrichment_patterns.add(index)
+
+            paragraph_features.append(
+                [
+                    int(important_section),
+                    len(matched_enrichment_patterns),
+                    len(matched_negative_patterns),
+                ]
             )
-            scores.append(max(sentence_scores, default=0.0))
-    return scores
 
-
-# Deprecated
-def _extract_enrichment_excerpts(introduction: str) -> str:
-    """Select current contributions and complete original formal statements."""
-    all_statements = list(STATEMENT_ENV_RE.finditer(introduction))
-    statements = [
-        statement
-        for statement in all_statements
-        if not _is_historical_statement(statement)
-    ]
-
-    # Blanking keeps source offsets meaningful and prevents theorem text from
-    # being selected a second time as ordinary prose.
-    prose = list(introduction)
-    for statement in all_statements:
-        prose[statement.start() : statement.end()] = " " * (
-            statement.end() - statement.start()
-        )
-    prose_text = "".join(prose)
-
-    candidates: list[tuple[float, int, str]] = []
-    sections = list(SECTION_RE.finditer(prose_text))
-    regions: list[tuple[int, int, str]] = []
-    if sections:
-        regions.append((0, sections[0].start(), ""))
-        for index, section in enumerate(sections):
-            end = (
-                sections[index + 1].start()
-                if index + 1 < len(sections)
-                else len(prose_text)
-            )
-            regions.append((section.end(), end, section.group("title")))
-    else:
-        regions.append((0, len(prose_text), ""))
-
-    for start, end, title in regions:
-        cleaned = clean_latex_for_embedding(prose_text[start:end])
-        section_bonus = (
-            SECTION_TITLE_BONUS_WEIGHT
-            if IMPORTANT_SECTION_TITLE_RE.search(title)
-            else 0
-        )
-        for sentence_index, sentence in enumerate(_split_sentences(cleaned)):
-            if _should_exclude_sentence(sentence):
-                print(sentence, _enrichment_sentence_score(sentence))
-                continue
-            score = _enrichment_sentence_score(sentence, section_bonus)
-            print(sentence, score)
-            if score >= MINIMUM_ENRICHMENT_SCORE:
-                candidates.append((score, start + sentence_index, sentence))
-
-    # Rank first to enforce a useful size bound, then restore document order.
-    selected = sorted(
-        sorted(candidates, key=lambda item: (-item[0], item[1]))[
-            :MAX_ENRICHMENT_SENTENCES
-        ],
-        key=lambda item: item[1],
-    )
-
-    techniques = _dedupe_preserving_order(text for _, _, text in selected)
-    theorems = _dedupe_preserving_order(
-        _strip_statement_environment(match.group(0)) for match in statements
-    )
-    return (
-        "Techniques:\n"
-        + "\n\n".join(techniques)
-        + "\n\nTheorems:\n"
-        + "\n\n".join(theorems)
-    )
-
-
-def _strip_statement_environment(statement: str) -> str:
-    """Remove the outer environment and internal label metadata."""
-    return STATEMENT_MARKUP_RE.sub("", statement).strip()
+    return paragraph_features
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -343,85 +225,58 @@ def _split_sentences(text: str) -> list[str]:
     ]
 
 
-def _enrichment_sentence_score(sentence: str, section_bonus: int = 0) -> float:
-    """Return the sentence's relevance score normalized to the range 0–100."""
-    raw_score = section_bonus + sum(
-        weight for pattern, weight in ENRICHMENT_PATTERNS if pattern.search(sentence)
-    )
-    bounded_score = min(max(raw_score, 0), MAXIMUM_ENRICHMENT_WEIGHT)
-    return 100 * bounded_score / MAXIMUM_ENRICHMENT_WEIGHT
-
-
 def _should_exclude_sentence(sentence: str) -> bool:
     """Return whether prose is historical, organizational, or uninformative."""
+    return bool(_negative_pattern_hits(sentence))
+
+
+def _negative_pattern_hits(sentence: str) -> set[str]:
+    """Return the distinct exclusion rules matched by one sentence."""
+    hits = set()
     if HISTORICAL_CONTEXT_RE.search(sentence):
-        return True
+        hits.add("historical_context")
     if PASSIVE_ATTRIBUTION_RE.search(sentence):
-        return True
-    if ATTRIBUTED_RESULT_RE.search(sentence) or CITED_WORK_RE.search(sentence):
-        return True
+        hits.add("passive_attribution")
+    if ATTRIBUTED_RESULT_RE.search(sentence):
+        hits.add("attributed_result")
+    if CITED_WORK_RE.search(sentence):
+        hits.add("cited_work")
     if ANAPHORIC_RESULT_RE.search(sentence):
-        return True
+        hits.add("anaphoric_result")
     if PRIOR_CITATION_RE.search(sentence):
-        return True
+        hits.add("prior_citation")
     if IMPROVEMENT_RE.search(sentence) and MODAL_RE.search(sentence):
-        return True
+        hits.add("hypothetical_improvement")
     if IMPROVEMENT_RE.search(sentence) and not CURRENT_WORK_RE.search(sentence):
-        return True
-    if SECTION_POINTER_RE.search(sentence) or STATEMENT_LEAD_IN_RE.search(sentence):
-        return True
-    if FUTURE_OVERVIEW_RE.search(sentence) or NOTATION_SETUP_RE.search(sentence):
-        return True
+        hits.add("non_current_improvement")
+    if SECTION_POINTER_RE.search(sentence):
+        hits.add("section_pointer")
+    if STATEMENT_LEAD_IN_RE.search(sentence):
+        hits.add("statement_lead_in")
+    if FUTURE_OVERVIEW_RE.search(sentence):
+        hits.add("future_overview")
+    if NOTATION_SETUP_RE.search(sentence):
+        hits.add("notation_setup")
     if CITATION_LED_ORGANIZATION_RE.search(sentence):
-        return True
-    return bool(
-        DOCUMENT_LOCATION_RE.search(sentence) and ORGANIZATION_VERB_RE.search(sentence)
-    )
-
-
-def _is_historical_statement(statement: re.Match[str]) -> bool:
-    """Identify theorem environments explicitly attributed to earlier work."""
-    environment = statement.group("env").lower()
-    if environment == "def" or environment.endswith(("definition", "defn")):
-        return False
-
-    opening = statement.group(0).split("}", 1)[1].lstrip()
-    if not opening.startswith("["):
-        return False
-    title = opening[1 : opening.find("]")]
-    return bool(
-        THEOREM_TITLE_CITATION_RE.search(title)
-        or THEOREM_TITLE_HISTORY_RE.search(title)
-    )
-
-
-def _dedupe_preserving_order(items: Iterable[str]) -> list[str]:
-    """Return unique strings in their first-occurrence order."""
-    seen = set()
-    deduped = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        deduped.append(item)
-    return deduped
+        hits.add("citation_led_organization")
+    if DOCUMENT_LOCATION_RE.search(sentence) and ORGANIZATION_VERB_RE.search(sentence):
+        hits.add("document_organization")
+    return hits
 
 
 if __name__ == "__main__":
     from ..extract_text import get_sections
-    from pprint import pp
     import requests
 
     arxiv_id = "2608.20924v1"
     with requests.session() as session:
         paper = get_sections(session, arxiv_id)
 
-    # pp(paper[1])
-
-    paragraph_scores = label_paper(paper)
+    feature_vectors = label_paper(paper)
     texts = []
     for section in paper:
         texts.extend(section.text)
 
-    for s, t in sorted(zip(paragraph_scores, texts)):
-        print(s, t)
+    print(FEATURE_NAMES)
+    for features, text in zip(feature_vectors, texts):
+        print(features, text)

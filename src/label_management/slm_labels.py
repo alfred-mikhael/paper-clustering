@@ -1,8 +1,12 @@
 """Generate sentence-level weak labels through a llama.cpp server."""
 
 import logging
+import hashlib
+import json
 import math
 import os
+import pickle
+from pathlib import Path
 import time
 
 import requests
@@ -15,6 +19,7 @@ from ..extract_text import ArxivSection
 LABELS = ("A", "B", "C", "D", "E")
 MODEL_ID = "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M"
 LABEL_GRAMMAR = 'root ::= "A" | "B" | "C" | "D" | "E"'
+CACHE_VERSION = 1
 
 PROMPT_1 = """Classify a paragraph from a mathematical paper by how much it says about a proof technique used by the current paper's authors.
 
@@ -103,6 +108,66 @@ Section: {}
 Text: {}
 Label:"""
 
+PROMPT_2 = """Classify a paragraph from a mathematical paper by how useful it would be for retrieving other papers that use a similar proof technique.
+
+Focus on techniques used by the current paper's authors. The goal is not merely to detect proof-related content, but to identify paragraphs whose mathematical content is specific enough to characterize how the proof works.
+
+A: No useful current-author proof-technique information. This includes theorem statements, results, motivation, definitions, notation, organization, implications, applications, and descriptions of prior work.
+B: Indicates that the authors prove something or use an argument, but gives little information that would help identify the technique. Broad descriptions such as "spectral methods," "probabilistic arguments," or "a combinatorial argument" usually belong here.
+C: Identifies a concrete proof tool, construction, reduction, or inference that would provide some useful signal for retrieving papers using a similar technique.
+D: Gives a substantive and reasonably specific description of a proof mechanism: what is constructed, measured, transformed, bounded, coupled, reduced, iterated, or otherwise done, and possibly why this step is useful. A paragraph at this level should provide strong retrieval information even if some notation depends on surrounding context.
+E: Gives an unusually informative and discriminative description of a central proof technique. The paragraph captures enough of the mechanism that papers using a genuinely similar argument should plausibly have semantically similar descriptions. Reserve E for especially valuable technique representations, not merely detailed mathematics.
+
+Important rules:
+* Judge retrieval value, not mathematical importance.
+* A theorem statement can be very important and still be A.
+* A paragraph can deserve D or E without explicitly naming a standard technique if it clearly explains the mechanism.
+* Do not reward technical detail that does not help distinguish the proof technique.
+* Do not require complete self-containment. A paragraph may use notation defined elsewhere as long as the proof mechanism itself is identifiable.
+* Descriptions of methods used only by previous work are always A.
+* If it is unclear whether the current authors use the method, choose A.
+* When uncertain between two labels, choose the lower one.
+* Most paragraphs should receive A or B.
+
+Examples:
+Section: Proof Overview
+Text: Our proof combines spectral and probabilistic techniques.
+Label: B
+Reason: It says that techniques are used, but does not identify a specific mechanism useful for retrieval.
+
+Section: Proof Overview
+Text: We use expansion properties of the graph to prove the claim.
+Label: B
+Reason: "Expansion properties" is too broad to identify what kind of expansion argument is being used.
+
+Section: Proof Overview
+Text: The main idea is to measure the mixing progress by the l2 norm of the random-walk distribution. Since this norm is minimized by the stationary distribution, we show that it decreases toward its stationary value at every stage.
+Label: D
+Reason: It explains a specific mechanism for proving mixing and is highly useful for recognizing similar arguments.
+
+Section: Our Results
+Text: Let us begin with our approximate Cauchy-Schwarz inequality. For any functions f, g of x = (x1, x2, . . . , xn) and any distribution D over x, E_(x sim D)[f(x)g(x)] leq E[f(x)^2]^(1/2) E[g(x)^2]^(1/2). The proof crucially relies on the positive semidefiniteness of the moment matrix of the pseudo-distribution. It provably does not hold for Sherali-Adams pseudo-distributions that only satisfy local positive semidefiniteness. Indeed, in Section 2.1, we observe the following seemingly drastic failure of the Cauchy-Schwarz inequality.
+Label: C
+Reason: The paragraph identifies a concrete ingredient of the authors' proof—the positive semidefiniteness of the pseudo-distribution's moment matrix—and distinguishes it from the weaker local PSD property. This gives useful retrieval signal, but it only briefly states the mechanism rather than substantially explaining how the PSD property drives the argument.
+
+Section: Main Results
+Text: Theorem 4.3 shows that every graph in the family has expansion at least 0.1.
+Label: A
+Reason: This is a result, not a description of how it is proved.
+
+Section: This paper: A new lower bound via two reductions
+Text: The first reduction relates the maximum load under modular linear hashing (Problem 1) to the maximum load of a continuous version of the problem, real linear hashing (Problem 2). We define the hash functions hreal_a(x) parameterized by a random real number a in [0, 1) as hreal_a(x) = lfloor n (ax) rfloor, where (ax) denotes the fractional part of ax. We show that any lower bound in the real-valued setting that holds for all a in [0, 1) implies the same lower bound in the modular-valued setting that holds for all s, t in Z _p. This reduction allows us to reinterpret known results in combinatorial number theory [konyagin-ruzsa-schlag2000] to immediately obtain a lower bound of exp(Omega(log n / (log log n)^2))
+Label: D
+Reason: Identifies a reduction between two specific problems and explains what purpose it is used for.
+
+Return only the letter A, B, C, D, or E.
+Section: {}
+Text: {}
+Label: 
+"""
+
+USE_PROMPT_1 = False
+
 
 class SLMWeakLabelGen:
     """Score paragraphs with the model hosted by a llama.cpp server.
@@ -116,6 +181,7 @@ class SLMWeakLabelGen:
         self,
         server_url: str | None = None,
         request_timeout: float = 300.0,
+        cache_dir: str | os.PathLike[str] | None = None,
     ):
         load_dotenv()
         self.server_url = (
@@ -125,6 +191,9 @@ class SLMWeakLabelGen:
             raise ValueError("request_timeout must be positive")
         self.request_timeout = request_timeout
         self.session = requests.Session()
+        self.cache_dir = Path(
+            cache_dir or os.getenv("SLM_LABEL_CACHE_DIR") or ".slm_label_cache"
+        )
 
     @staticmethod
     def _probabilities_from_response(response: dict) -> torch.Tensor:
@@ -168,9 +237,95 @@ class SLMWeakLabelGen:
         return [
             {
                 "role": "user",
-                "content": (PROMPT_1.format(section, target)),
+                "content": (
+                    PROMPT_1.format(section, target)
+                    if USE_PROMPT_1
+                    else PROMPT_2.format(section, target)
+                ),
             }
         ]
+
+    def _cache_details(self, sections: list[ArxivSection]) -> tuple[Path, str]:
+        """Return the stable per-paper cache path and its content fingerprint."""
+        paper_ids = {section.arxiv_id for section in sections}
+        if len(paper_ids) > 1:
+            raise ValueError(
+                "label_paper expects sections from exactly one arXiv paper"
+            )
+        paper_id = next(iter(paper_ids), "empty")
+        fingerprint_input = json.dumps(
+            {
+                "cache_version": CACHE_VERSION,
+                "model": MODEL_ID,
+                "grammar": LABEL_GRAMMAR,
+                "prompt": PROMPT_1 if USE_PROMPT_1 else PROMPT_2,
+                "sections": [
+                    (section.section_index, section.section_header, section.text)
+                    for section in sections
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        fingerprint = hashlib.sha256(fingerprint_input.encode("utf-8")).hexdigest()
+        filename = paper_id.replace("/", "_")
+        return self.cache_dir / f"{filename}.pt", fingerprint
+
+    def _load_cached_labels(
+        self, cache_path: Path, fingerprint: str, expected_count: int
+    ) -> list[torch.Tensor] | None:
+        """Return a valid cached result, or ``None`` if it is stale or corrupt."""
+        if not cache_path.exists():
+            return None
+        try:
+            cached = torch.load(cache_path, map_location="cpu", weights_only=True)
+            labels = cached["labels"]
+            if (
+                cached.get("cache_version") != CACHE_VERSION
+                or cached.get("fingerprint") != fingerprint
+                or not isinstance(labels, torch.Tensor)
+                or labels.shape != (expected_count, len(LABELS))
+                or not torch.isfinite(labels).all()
+            ):
+                return None
+        except (
+            KeyError,
+            IndexError,
+            TypeError,
+            RuntimeError,
+            ValueError,
+            OSError,
+            EOFError,
+            pickle.UnpicklingError,
+        ):
+            logging.warning("Ignoring unreadable SLM label cache at %s", cache_path)
+            return None
+        logging.info(
+            "Loaded %d cached paragraph labels from %s", expected_count, cache_path
+        )
+        return list(labels.unbind())
+
+    def _save_cached_labels(
+        self, cache_path: Path, fingerprint: str, labels: list[torch.Tensor]
+    ) -> None:
+        """Atomically replace the cache entry after all paragraph requests succeed."""
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        label_tensor = (
+            torch.stack(labels).cpu()
+            if labels
+            else torch.empty((0, len(LABELS)), dtype=torch.float32)
+        )
+        temporary_path = cache_path.with_suffix(".tmp")
+        torch.save(
+            {
+                "cache_version": CACHE_VERSION,
+                "fingerprint": fingerprint,
+                "labels": label_tensor,
+            },
+            temporary_path,
+        )
+        temporary_path.replace(cache_path)
+        logging.info("Cached %d paragraph labels at %s", len(labels), cache_path)
 
     def label_paper(self, sections: list[ArxivSection]) -> list[torch.Tensor]:
         """Return an A-E probability vector for every paragraph, in paper order."""
@@ -179,8 +334,10 @@ class SLMWeakLabelGen:
             for target in section.text:
                 messages.append(self._structure_message(section.section_header, target))
 
-        if not messages:
-            return []
+        cache_path, fingerprint = self._cache_details(sections)
+        cached = self._load_cached_labels(cache_path, fingerprint, len(messages))
+        if cached is not None:
+            return cached
 
         results = []
         for message in tqdm(messages, desc="Labeling paragraphs"):
@@ -227,49 +384,19 @@ class SLMWeakLabelGen:
                 time.perf_counter() - start,
             )
 
+        self._save_cached_labels(cache_path, fingerprint, results)
         return results
 
 
 if __name__ == "__main__":
-    import hashlib
-    from pathlib import Path
-
     from ..extract_text import get_sections
 
-    arxiv_id = "2308.15403"
+    arxiv_id = "2608.24866v1"
     with requests.session() as session:
         paper = get_sections(session, arxiv_id)
 
-    active_prompt = PROMPT_1
-    cache_input = "\0".join(
-        [
-            arxiv_id,
-            MODEL_ID,
-            active_prompt,
-            *(f"{section.section_header}\0{section.text}" for section in paper),
-        ]
-    )
-    cache_key = hashlib.sha256(cache_input.encode("utf-8")).hexdigest()
-    cache_dir = Path(".slm_label_cache")
-    cache_path = cache_dir / f"{arxiv_id.replace('/', '_')}-{cache_key}.pt"
-
-    if cache_path.exists():
-        cached_labels = torch.load(cache_path, map_location="cpu", weights_only=True)
-        labels = list(cached_labels.unbind())
-        print(f"Loaded {len(labels)} cached labels from {cache_path}")
-    else:
-        label_gen = SLMWeakLabelGen()
-        labels = label_gen.label_paper(paper)
-        cached_labels = (
-            torch.stack(labels)
-            if labels
-            else torch.empty((0, len(LABELS)), dtype=torch.float32)
-        )
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        temporary_path = cache_path.with_suffix(".pt.tmp")
-        torch.save(cached_labels, temporary_path)
-        temporary_path.replace(cache_path)
-        print(f"Cached {len(labels)} labels at {cache_path}")
+    label_gen = SLMWeakLabelGen()
+    labels = label_gen.label_paper(paper)
 
     probs = [0.0, 0.25, 0.5, 0.75, 1.0]
     sentence_scores = []
@@ -280,7 +407,7 @@ if __name__ == "__main__":
     for section in paper:
         texts.extend(section.text)
 
-    for s, t in zip(sentence_scores, texts):
+    for s, t in sorted(zip(sentence_scores, texts)):
         print(s, t)
     # ground_truths = []
     # texts = []

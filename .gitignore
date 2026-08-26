@@ -8,6 +8,5 @@ __pycache__
 .paragraph_label_cache
 .sentence_label_cache
 .slm_label_cache
-labels.tsv
-paragraph_labels.tsv 
-sentence_labels.tsv
+*.tsv 
+weights/*

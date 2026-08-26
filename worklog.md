@@ -561,3 +561,37 @@ Figure out my active learning paragraph selection technique (probably best to re
 
 I also read something about offloading memory to ram when using a MoE model. Maybe I can try using the Gemma-4-E2B-it model if that actually works. Maybe that's something to do later on.
 
+**Date: August 25-26, 2026**
+**Time spent: 12 hours**
+**Goal for this session:** Review the training code, read about and implement techniques for selecting samples to label duing active learning, and start training the classifier. I'll also need to read about how to reduce memory footprint during training and see what I can do.
+
+## What I worked on
+I worked on training a calibration model to take in the gemma scores and the regex scores and convert it into a single pseudolabel. This involved labelling about 500 paragraphs across 6 papers, some learning about training on class imbalances, which evaluation metrics to use, and review of writing code for logistic regression.
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/train/*
+* scripts/inspect_regression_weight.py
+
+## Results
+To reduce memory footprint, there is this article on hugging face (https://huggingface.co/docs/transformers/main/perf_train_gpu_one?) which discusses memory managment during training. Most relevant are: 
+1. Gradient accumulation
+2. Gradient checkpointing
+3. Mixed precision training
+4. torch compile
+For selecting samples for active learning, I looked through a survey by Burr (https://burrsettles.com/pub/settles.activelearning.pdf) and a paper on fine-tuning BERT (https://aclanthology.org/2020.emnlp-main.638.pdf). It seems that the core-set method (https://arxiv.org/pdf/1708.00489) gives the best tradeoff between computation time and quality, however the least confidence / max entropy method is not far behind (and much simpler). I might implement the core-set anyway, because it looks cooler (and it is slightly better).
+
+I tried to train a (multiclass) logistic regression calibration model to take in the Gemma probabilities and some regex features (important section, number positive hits, number negative hits) and output a single pseudolabel. I also tried an ordinal regression model. In both cases, paragraphs labelled D/E were consistently rated too low, so I absolutely do not want to train SciBERT on this miscalibrated labels. 
+## Decisions made
+
+Record any choices you made and why.
+* Gemma has an opposite issue, where it ranks irrelevant things too highly. In light of that, I'm going to completely abandon training a calibration model, and abandon the regex features, and just use Gemma as a teacher. 
+
+## Issues or questions
+
+
+## Next step
+
+
+0.2447 ± 0.0944
