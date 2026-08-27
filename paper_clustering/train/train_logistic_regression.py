@@ -23,12 +23,12 @@ from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.extract_text import get_sections
-from src.label_management.regex_labels import (
+from paper_clustering.extract_text import get_paper
+from paper_clustering.train.label_management.regex_labels import (
     FEATURE_NAMES,
     label_paper as regex_features,
 )
-from src.label_management.slm_labels import LABELS, SLMWeakLabelGen
+from paper_clustering.train.label_management.slm_labels import LABELS, SLMWeakLabelGen
 
 ARXIV_IDS = [
     "0910.1649",
@@ -87,7 +87,7 @@ def collect_data(ids: list[str], targets: dict[tuple[str, int, int], np.ndarray]
     with requests.Session() as session:
         slm = SLMWeakLabelGen()
         for arxiv_id in ids:
-            sections = get_sections(session, arxiv_id)
+            sections = get_paper(session, arxiv_id)
             slm_labels = slm.label_paper(sections)
             features = regex_features(sections)
             result_index = 0

@@ -13,6 +13,9 @@ from typing import Iterable, Optional
 
 import requests
 
+from paper_clustering.data_models import ArxivSection, Paper
+from paper_clustering.extract_metadata import get_metadata
+
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_INCLUDE_DEPTH = 8
@@ -30,17 +33,6 @@ class TexSection:
     kind: str
     title: str
     text: str
-
-
-@dataclass(frozen=True)
-class ArxivSection:
-    """A cleaned paper section returned by :func:`get_sections`."""
-
-    arxiv_id: str
-    section_index: int
-    section_header: str
-    major_section_header: str
-    text: list[str]
 
 
 # Match a LaTeX section command, its level, and its brace-delimited title.
@@ -238,25 +230,22 @@ def download_source(session: requests.Session, arxiv_id: str) -> bytes:
     return response.content
 
 
-def get_sections(
+def get_paper(
     session: requests.Session,
     arxiv_id: str,
-    section_re: Optional[str] = None,
     include_proofs: bool = False,
-) -> list[ArxivSection]:
+) -> Paper:
     """Download and clean the sections of an arXiv paper.
 
     When ``include_proofs`` is false, proof and proof* environments are removed
     in their entirety before the remaining LaTeX is converted to plain text.
     """
-    section_pattern = (
-        re.compile(section_re, re.IGNORECASE) if section_re else re.compile(".")
-    )
+    metadata = get_metadata(session, arxiv_id)
     try:
         source_bytes = download_source(session, arxiv_id)
         source = build_tex_source_from_bytes(source_bytes, arxiv_id)
         if not source:
-            return []
+            return Paper(metadata=metadata, sections=())
         if not include_proofs:
             source = _drop_proof_environments(source)
         sections = extract_sections_from_latex(source)
@@ -266,23 +255,22 @@ def get_sections(
             section_header = clean_latex_for_embedding(section.title)
             if section.kind in {"part", "chapter", "section"}:
                 major_section_header = section_header
-            if section_pattern.match(major_section_header):
-                results.append(
-                    ArxivSection(
-                        arxiv_id=arxiv_id,
-                        section_index=section_index,
-                        section_header=section_header,
-                        major_section_header=major_section_header,
-                        text=[
-                            _normalize_embedding_whitespace(p)
-                            for p in NEW_PARAGRAPH_RE.split(
-                                clean_latex_for_embedding(section.text)
-                            )
-                            if p.strip()
-                        ],
+            results.append(
+                ArxivSection(
+                    arxiv_id=metadata.arxiv_id,
+                    section_index=section_index,
+                    section_header=section_header,
+                    major_section_header=major_section_header,
+                    text=tuple(
+                        _normalize_embedding_whitespace(p)
+                        for p in NEW_PARAGRAPH_RE.split(
+                            clean_latex_for_embedding(section.text)
+                        )
+                        if p.strip()
                     ),
-                )
-        return results
+                ),
+            )
+        return Paper(metadata=metadata, sections=tuple(results))
     except (
         requests.RequestException,
         tarfile.TarError,
@@ -293,7 +281,7 @@ def get_sections(
         logging.error(
             f"{time.localtime()}: Could not download or extract {arxiv_id}: {exc}"
         )
-        return []
+        return Paper(metadata=metadata, sections=())
 
 
 def iter_tex_sources(
@@ -784,4 +772,4 @@ if __name__ == "__main__":
     from pprint import pp
 
     with requests.session() as session:
-        pp(get_sections(session, "2308.15403"))
+        pp(get_paper(session, "2308.15403"))

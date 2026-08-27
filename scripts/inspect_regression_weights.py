@@ -4,7 +4,7 @@ from pathlib import Path
 
 import joblib
 
-from src.label_management.regex_labels import FEATURE_NAMES
+from paper_clustering.label_management.regex_labels import FEATURE_NAMES
 
 WEIGHTS = Path("weights/regression.pt")
 

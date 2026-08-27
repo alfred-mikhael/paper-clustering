@@ -3,7 +3,7 @@
 import re
 from typing import Iterable
 
-from ..extract_text import ArxivSection
+from paper_clustering.data_models import ArxivSection
 
 # Identify subsection titles whose prose deserves a small importance boost.
 IMPORTANT_SECTION_TITLE_RE = re.compile(
@@ -265,12 +265,12 @@ def _negative_pattern_hits(sentence: str) -> set[str]:
 
 
 if __name__ == "__main__":
-    from ..extract_text import get_sections
+    from ..extract_text import get_paper
     import requests
 
     arxiv_id = "2608.20924v1"
     with requests.session() as session:
-        paper = get_sections(session, arxiv_id)
+        paper = get_paper(session, arxiv_id)
 
     feature_vectors = label_paper(paper)
     texts = []

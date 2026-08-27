@@ -14,7 +14,7 @@ import torch
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from ..extract_text import ArxivSection
+from paper_clustering.data_models import ArxivSection, Paper
 
 LABELS = ("A", "B", "C", "D", "E")
 MODEL_ID = "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M"
@@ -327,8 +327,9 @@ class SLMWeakLabelGen:
         temporary_path.replace(cache_path)
         logging.info("Cached %d paragraph labels at %s", len(labels), cache_path)
 
-    def label_paper(self, sections: list[ArxivSection]) -> list[torch.Tensor]:
+    def label_paper(self, paper: Paper) -> list[torch.Tensor]:
         """Return an A-E probability vector for every paragraph, in paper order."""
+        sections = paper.sections
         messages = []
         for section in sections:
             for target in section.text:
@@ -389,11 +390,11 @@ class SLMWeakLabelGen:
 
 
 if __name__ == "__main__":
-    from ..extract_text import get_sections
+    from ..extract_text import get_paper
 
     arxiv_id = "2608.24866v1"
     with requests.session() as session:
-        paper = get_sections(session, arxiv_id)
+        paper = get_paper(session, arxiv_id)
 
     label_gen = SLMWeakLabelGen()
     labels = label_gen.label_paper(paper)
@@ -404,7 +405,7 @@ if __name__ == "__main__":
         sentence_scores.append(torch.dot(torch.tensor(probs), label))
 
     texts = []
-    for section in paper:
+    for section in paper.sections:
         texts.extend(section.text)
 
     for s, t in sorted(zip(sentence_scores, texts)):

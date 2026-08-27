@@ -22,7 +22,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset, random_split
 from transformers import AutoTokenizer
 
-from .technique_classifier import TechniqueClassifier
+from ..technique_classifier import TechniqueClassifier
 
 
 class TokenizedParagraphDataset(Dataset):
@@ -309,7 +309,9 @@ def train_classifier(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Fine-tune SciBERT on paragraph labels")
+    parser = argparse.ArgumentParser(
+        description="Fine-tune SciBERT on paragraph labels"
+    )
     parser.add_argument("labels", type=Path, help="TSV produced by label_sentences.py")
     parser.add_argument(
         "--checkpoint",

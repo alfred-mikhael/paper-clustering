@@ -25,7 +25,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from src.extract_text import ArxivSection, get_sections
+from paper_clustering.extract_text import ArxivSection, get_paper
 
 ARXIV_ID_RE = re.compile(
     r"^(?:https?://(?:export\.)?arxiv\.org/(?:abs|pdf)/)?"
@@ -107,7 +107,7 @@ def fetch_samples(
             pass
 
     with requests.Session() as session:
-        sections = get_sections(
+        sections = get_paper(
             session,
             arxiv_id,
             # r"(Overview|Outline|Introduction|Review|Survey|Conclu.*|Discussion|Tech.*)",
@@ -239,9 +239,7 @@ class ParagraphLabelApp:
         )
         tkfont.nametofont("TkDefaultFont").configure(family=interface_family, size=11)
         tkfont.nametofont("TkTextFont").configure(family=interface_family, size=14)
-        self.paragraph_font = tkfont.Font(
-            root=root, family=interface_family, size=14
-        )
+        self.paragraph_font = tkfont.Font(root=root, family=interface_family, size=14)
 
         outer = ttk.Frame(root, padding=18)
         outer.pack(fill=BOTH, expand=True)
