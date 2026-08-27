@@ -13,4 +13,4 @@ bitsandbytes
 python-dotenv
 huggingface_hub
 accelerate 
-spacy
+requests

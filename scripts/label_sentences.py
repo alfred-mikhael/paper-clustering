@@ -111,7 +111,7 @@ def fetch_samples(
             session,
             arxiv_id,
             # r"(Overview|Outline|Introduction|Review|Survey|Conclu.*|Discussion|Tech.*)",
-        )
+        ).sections
     samples = samples_from_sections(sections)
     if not samples:
         raise RuntimeError(

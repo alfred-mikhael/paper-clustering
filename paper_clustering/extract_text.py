@@ -17,6 +17,7 @@ from paper_clustering.data_models import ArxivSection, Paper
 from paper_clustering.extract_metadata import get_metadata
 
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
+ARXIV_REQUEST_WAIT_TIME = 3
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_INCLUDE_DEPTH = 8
 TEX_SOURCE_SUFFIXES = {".tex", ".ltx"}
@@ -241,6 +242,7 @@ def get_paper(
     in their entirety before the remaining LaTeX is converted to plain text.
     """
     metadata = get_metadata(session, arxiv_id)
+    time.sleep(ARXIV_REQUEST_WAIT_TIME)
     try:
         source_bytes = download_source(session, arxiv_id)
         source = build_tex_source_from_bytes(source_bytes, arxiv_id)

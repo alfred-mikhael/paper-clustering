@@ -562,7 +562,7 @@ Figure out my active learning paragraph selection technique (probably best to re
 I also read something about offloading memory to ram when using a MoE model. Maybe I can try using the Gemma-4-E2B-it model if that actually works. Maybe that's something to do later on.
 
 **Date: August 25-26, 2026**
-**Time spent: 12 hours**
+**Time spent: 16 hours**
 **Goal for this session:** Review the training code, read about and implement techniques for selecting samples to label duing active learning, and start training the classifier. I'll also need to read about how to reduce memory footprint during training and see what I can do.
 
 ## What I worked on
@@ -571,8 +571,8 @@ I worked on training a calibration model to take in the gemma scores and the reg
 ## Files or data used
 
 List any datasets, papers, scripts, notebooks, or output files.
-* src/train/*
-* scripts/inspect_regression_weight.py
+
+Almost all of them. I made a major refactor to make the code cleaner. I should've done that way earlier.
 
 ## Results
 To reduce memory footprint, there is this article on hugging face (https://huggingface.co/docs/transformers/main/perf_train_gpu_one?) which discusses memory managment during training. Most relevant are: 
@@ -592,6 +592,49 @@ Record any choices you made and why.
 
 
 ## Next step
+Start labelling with Gemma, begin fine-tuning and active learning.
 
 
-0.2447 ± 0.0944
+**Date: August 27, 2026**
+**Time spent: 6 hours**
+**Goal for this session:** Fine-tune SciBERT and do some evaluations.
+
+## What I worked on
+Fine-tuned the SciBERT classifier on about 8.5k paragraphs across 60 influential papers. Unfortunately, the results leave a lot to be desired...
+
+## Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/train/active_learning.py
+* src/train/evaluate_model.py
+* src/train/train_classifier.py
+
+## Results
+I fine-tuned SciBERT on about 8.5k labelled section+paragraph pairs. It trained for 2 epochs, and each epoch took about 15-18 mins to train. I trained for a third epoch, but it increased validation loss so I discarded those results. Only gradient checkpointing was needed to fit everything into VRAM with a batch size of 64, and `export PYTORCH_ALLOC_CONF=expandable_segments:true` (or something along those lines) in order to make better use of VRAM. 
+
+Here are the evaluation metrics that the fine-tuned SciBERT got before active learning. It has a very serious issue in that it underranks the most important paragraphs. I hope that active learning can fix that. 
+    Accuracy: 0.2936
+    Macro F1: 0.1480
+    Macro precision: 0.2176
+    Cross-entropy: 2.3494
+    D/E labels classified as D/E (%): 36.2069
+    Mean Precision@10: 0.2000
+    F1 (A): 0.4014
+    F1 (B): 0.2835
+    F1 (C): 0.0000
+    F1 (D): 0.0553
+    F1 (E): 0.0000
+
+## Decisions made
+
+Record any choices you made and why.
+* In order to correct the underranking, it is especially important during active learning to select the right samples. I want to select samples which are labelled higher than they should be to bring them lower. It is even more important to select samples which 
+* Trained SciBERT on the distribution output by Gemma rather than just the argmax labels. This helps SciBERT learn from the entropy in the distribution, and is what is recommended in the knowledge distillation paper by Hinton.
+
+## Issues or questions
+* There is a serious systematic issue in the results of the SciBERT classifier. I probably want to revise the Gemma model to bias towards recall over precision, since it will be easier to improve precision than recall during active learning (since I can easily sample bad paragraphs that the model ranked highly, but it is difficult to sample good paragraphs that the model ranked low.)
+* I also notice that SciBERT (and therefore Gemma) is ranking paragraphs higher when they have a lot of technical notation. Since notation differs a lot from paper to paper, notation heavy paragraphs are very poor for retreival, and therefore I also want to correct this.
+* I can also see that SciBERT almost never produces Cs or Es. A little inspection of the labels shows that Gemma also doesn't produce any Cs or Es, which is really bad, especially the missing distinction between C and D. 
+
+## Next step
+Revise the Gemma rubric with hard examples to distinguish between C, D, E, and downweight notation heavy paragraphs. 
