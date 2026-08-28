@@ -1,17 +1,12 @@
-"""Fine-tune :class:`SciBERTClassifier` on labelled paragraphs.
-
-Run from the repository root with::
-
-    python -m paper_clustering.train.train_classifier paragraph_labels.tsv
-"""
+#!/usr/bin/env python3
+"""Fine-tune :class:`SciBERTClassifier` on labelled paragraphs."""
 
 from __future__ import annotations
 
 import argparse
-import csv
-import math
 from collections.abc import Sequence
 from pathlib import Path
+import sys
 
 import torch
 from torch import nn
@@ -19,92 +14,16 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
-from ..technique_classifier import SciBERTClassifier
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
-LABEL_FIELDS = tuple(f"probability_{label}" for label in "ABCDE")
-
-
-def _normalize_distribution(values: Sequence[float]) -> list[float]:
-    distribution = [float(value) for value in values]
-    if (
-        len(distribution) != 5
-        or any(not math.isfinite(value) or value < 0 for value in distribution)
-        or sum(distribution) <= 0
-    ):
-        raise ValueError("labels must be length-5 probability distributions")
-    total = sum(distribution)
-    return [value / total for value in distribution]
-
-
-def load_labelled_paragraphs(
-    path: str | Path,
-) -> tuple[list[str], list[list[float]]]:
-    """Load human one-hot labels or Gemma probability distributions."""
-    with Path(path).open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        fields = set(reader.fieldnames or ())
-        if not {"section_header", "paragraph", "label"}.issubset(fields):
-            raise ValueError(f"{path} must contain paragraph and label columns")
-        probability_fields = fields.intersection(LABEL_FIELDS)
-        if probability_fields and probability_fields != set(LABEL_FIELDS):
-            raise ValueError(f"{path} must contain all five probability_A-E columns")
-        has_probabilities = bool(probability_fields)
-
-        paragraphs = []
-        labels = []
-        for line_number, row in enumerate(reader, start=2):
-            section = row["section_header"].strip()
-            paragraph = row["paragraph"].strip()
-            if not paragraph:
-                continue
-            try:
-                if has_probabilities:
-                    distribution = _normalize_distribution(
-                        [row[field] for field in LABEL_FIELDS]
-                    )
-                else:
-                    human_label = float(row["label"])
-                    if not human_label.is_integer() or not 1 <= human_label <= 5:
-                        raise ValueError
-                    distribution = [0.0] * 5
-                    distribution[int(human_label) - 1] = 1.0
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Invalid label on line {line_number}") from exc
-            paragraphs.append(f"Section: {section} Text: {paragraph}")
-            labels.append(distribution)
-
-    if not paragraphs:
-        raise ValueError(f"No labelled paragraphs found in {path}")
-    return paragraphs, labels
-
-
-def print_dataset_statistics(
-    paragraphs: Sequence[str],
-    labels: Sequence[Sequence[float]],
-    tokenizer,
-) -> None:
-    """Print token-length and label-distribution summary statistics."""
-    tokenized = tokenizer(
-        list(paragraphs),
-        add_special_tokens=True,
-        padding=False,
-        truncation=False,
-        verbose=False,
-    )
-    lengths = [len(input_ids) for input_ids in tokenized["input_ids"]]
-    expected_scores = [
-        sum(score * probability for score, probability in enumerate(label, start=1))
-        for label in labels
-    ]
-
-    average_length = sum(lengths) / len(lengths)
-    over_limit = 100 * sum(length > 512 for length in lengths) / len(lengths)
-    at_least_c = 100 * sum(score >= 3 for score in expected_scores) / len(labels)
-    print("Dataset statistics:")
-    print(f"  {len(paragraphs)} training paragraphs")
-    print(f"  Average paragraph length: {average_length:.1f} tokens")
-    print(f"  Paragraphs exceeding 512 tokens: {over_limit:.1f}%")
-    print(f"  Labels with expected score >= C: {at_least_c:.1f}%")
+from paper_clustering.technique_classifier import SciBERTClassifier
+from paper_clustering.train.load_data import (
+    load_labelled_paragraphs,
+    normalize_distribution,
+    print_dataset_statistics,
+)
 
 
 def _collate(tokenizer, max_length: int):
@@ -175,7 +94,7 @@ def train_classifier(
     if not 0 <= validation_fraction < 1:
         raise ValueError("validation_fraction must be in [0, 1)")
 
-    normalized_labels = [_normalize_distribution(label) for label in labels]
+    normalized_labels = [normalize_distribution(label) for label in labels]
     torch.manual_seed(seed)
     selected_device = _choose_device(device)
     checkpoint_path = Path(checkpoint_path)
@@ -273,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    paragraphs, labels = load_labelled_paragraphs(args.labels)
+    _, paragraphs, labels = load_labelled_paragraphs(args.labels)
     train_classifier(
         paragraphs,
         labels,

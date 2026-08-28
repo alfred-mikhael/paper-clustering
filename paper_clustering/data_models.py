@@ -56,3 +56,17 @@ class Paper:
 class EmbeddedPaper:
     paper: Paper
     embeddings: EmbeddingInfo
+
+
+@dataclass(frozen=True)
+class ModelMetrics:
+    k: int
+    eval_ids: list[str]
+    mean_precision_at_k: float
+    brier_score: float
+    bce: float
+    macro_f1: float
+    classwise_accuracy: tuple[float, ...]
+    classwise_recall: tuple[float, ...]
+    classwise_precision: tuple[float, ...]
+    classwise_f1: tuple[float, ...]

@@ -8,11 +8,16 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 
 class TechniqueClassifier(ABC):
     """Interface for models that score proof-technique passages."""
+
+    @abstractmethod
+    def predict_logits(self, texts: list[str], batch_size: int = 32) -> torch.Tensor:
+        """Return one five-class logit vector for each supplied passage."""
 
     @abstractmethod
     def predict(self, texts: list[str]) -> torch.Tensor:
@@ -122,20 +127,22 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         cls_representation = encoder_output.last_hidden_state[:, 0, :]
         return self.classifier(cls_representation).squeeze(-1)
 
-    def predict(self, passages: list[str]) -> torch.Tensor:
-        """Predict an ordinal score from 0 to 4 for every passage."""
+    def predict_logits(self, passages: list[str], batch_size: int = 32) -> torch.Tensor:
+        """Run batched inference and return CPU logits for every passage."""
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
         if not passages:
-            return torch.empty(0, dtype=torch.long)
+            return torch.empty((0, 5), dtype=torch.float32)
 
         device = next(self.parameters()).device
-        batches = DataLoader(passages, batch_size=16, shuffle=False)
-        predictions: list[torch.Tensor] = []
+        batches = DataLoader(passages, batch_size=batch_size, shuffle=False)
+        logits: list[torch.Tensor] = []
         was_training = self.training
 
         self.eval()
         try:
             with torch.inference_mode():
-                for batch in batches:
+                for batch in tqdm(batches, desc="Evaluating"):
                     inputs = self.tokenizer(
                         list(batch),
                         padding=True,
@@ -148,9 +155,12 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
                         for key, value in inputs.items()
                         if key in {"input_ids", "attention_mask", "token_type_ids"}
                     }
-                    logits = self(**model_inputs)
-                    predictions.append(logits.argmax(dim=-1).cpu())
+                    logits.append(self(**model_inputs).cpu())
         finally:
             self.train(was_training)
 
-        return torch.cat(predictions)
+        return torch.cat(logits)
+
+    def predict(self, passages: list[str]) -> torch.Tensor:
+        """Predict an ordinal score from 0 to 4 for every passage."""
+        return self.predict_logits(passages).argmax(dim=-1)

@@ -9,6 +9,7 @@ import logging
 import math
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -29,6 +30,8 @@ OUTPUT_FIELDS = (
     "label",
     *(f"probability_{label}" for label in LABELS),
 )
+
+ARXIV_API_WAIT_TIME = 3
 
 
 def base_arxiv_id(arxiv_id: str) -> str:
@@ -72,9 +75,7 @@ def load_existing_rows(path: Path) -> dict[tuple[str, int, int], dict[str, str]]
     return rows
 
 
-def save_rows(
-    path: Path, rows: dict[tuple[str, int, int], dict[str, str]]
-) -> None:
+def save_rows(path: Path, rows: dict[tuple[str, int, int], dict[str, str]]) -> None:
     """Atomically save every generated paragraph label."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_name(path.name + ".tmp")
@@ -99,9 +100,7 @@ def rows_for_paper(paper, labels) -> list[dict[str, str]]:
         )
 
     rows = []
-    for (section, paragraph_index, paragraph), probabilities in zip(
-        paragraphs, labels
-    ):
+    for (section, paragraph_index, paragraph), probabilities in zip(paragraphs, labels):
         if hasattr(probabilities, "detach"):
             probabilities = probabilities.detach().cpu().tolist()
         else:
@@ -203,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                         arxiv_id,
                     )
                     continue
+                time.sleep(ARXIV_API_WAIT_TIME)
                 logging.info("[%d/%d] Labeling %s", index, len(arxiv_ids), arxiv_id)
                 try:
                     paper = get_paper(session, arxiv_id)
@@ -223,11 +223,18 @@ def main(argv: list[str] | None = None) -> int:
                         len(paper_rows),
                         paper.metadata.arxiv_id,
                     )
-                except (OSError, RuntimeError, ValueError, requests.RequestException) as exc:
+                except (
+                    OSError,
+                    RuntimeError,
+                    ValueError,
+                    requests.RequestException,
+                ) as exc:
                     failures += 1
                     logging.error("Failed to label %s: %s", arxiv_id, exc)
     except KeyboardInterrupt:
-        logging.warning("Interrupted; completed papers are saved in %s", args.output_path)
+        logging.warning(
+            "Interrupted; completed papers are saved in %s", args.output_path
+        )
         return 130
     finally:
         slm.session.close()

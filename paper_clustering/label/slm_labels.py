@@ -17,7 +17,7 @@ from tqdm import tqdm
 from paper_clustering.data_models import ArxivSection, Paper
 
 LABELS = ("A", "B", "C", "D", "E")
-MODEL_ID = "ggml-org/gemma-3-4b-it-GGUF:Q4_K_M"
+MODEL_ID = "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M"
 LABEL_GRAMMAR = 'root ::= "A" | "B" | "C" | "D" | "E"'
 CACHE_VERSION = 1
 
@@ -110,19 +110,20 @@ Label:"""
 
 PROMPT_2 = """Classify a paragraph from a mathematical paper by how useful it would be for retrieving other papers that use a similar proof technique.
 
-Focus on techniques used by the current paper's authors. The goal is not merely to detect proof-related content, but to identify paragraphs whose mathematical content is specific enough to characterize how the proof works.
+Focus on techniques used by the current paper's authors. The goal is not merely to detect proof-related content, but to identify paragraphs which summarize a proof technique in a clear way.
 
 A: No useful current-author proof-technique information. This includes theorem statements, results, motivation, definitions, notation, organization, implications, applications, and descriptions of prior work.
 B: Indicates that the authors prove something or use an argument, but gives little information that would help identify the technique. Broad descriptions such as "spectral methods," "probabilistic arguments," or "a combinatorial argument" usually belong here.
-C: Identifies a concrete proof tool, construction, reduction, or inference that would provide some useful signal for retrieving papers using a similar technique.
-D: Gives a substantive and reasonably specific description of a proof mechanism: what is constructed, measured, transformed, bounded, coupled, reduced, iterated, or otherwise done, and possibly why this step is useful. A paragraph at this level should provide strong retrieval information even if some notation depends on surrounding context.
-E: Gives an unusually informative and discriminative description of a central proof technique. The paragraph captures enough of the mechanism that papers using a genuinely similar argument should plausibly have semantically similar descriptions. Reserve E for especially valuable technique representations, not merely detailed mathematics.
+C: Identifies a local proof tool, construction, reduction, or inference that would provide some useful signal for retrieving papers using a similar technique. At this level, paragraphs do not give a good overview of the whole proof and carry little intuition, but are more descriptive than class B.
+D: Gives a substantive and reasonably specific description of a proof mechanism or connection to papers/techniques introduced by prior authors. Distinguishes itself from a C by giving a high-level overview of part of a whole proof, or by giving explaining why a particular technique is used.
+E: Gives an informative and discriminative description of a central proof technique used by the authors. Differs from D in that it must be mostly prose, and it must describe the essential proof components for a novel result of the current authors. 
 
 Important rules:
 * Judge retrieval value, not mathematical importance.
+* Paragraphs full of dense mathematical notation are not helpful in semantic retrieval. Strongly prefer prose over notation.
+* Specificity does not necessarily equate with usefulness. A paragraph can be very detailed and not give a high-level overview of the proof.
 * A theorem statement can be very important and still be A.
 * A paragraph can deserve D or E without explicitly naming a standard technique if it clearly explains the mechanism.
-* Do not reward technical detail that does not help distinguish the proof technique.
 * Do not require complete self-containment. A paragraph may use notation defined elsewhere as long as the proof mechanism itself is identifiable.
 * Descriptions of methods used only by previous work are always A.
 * If it is unclear whether the current authors use the method, choose A.
@@ -130,35 +131,47 @@ Important rules:
 * Most paragraphs should receive A or B.
 
 Examples:
-Section: Proof Overview
-Text: Our proof combines spectral and probabilistic techniques.
-Label: B
-Reason: It says that techniques are used, but does not identify a specific mechanism useful for retrieval.
+
+Section: Introduction
+Text: We overcome this obstruction with a simultaneous boundary pull. Starting from a minimal
+generating antichain supported on [s], an exact boundary-trace decomposition records every
+contribution involving the last support coordinate. The boundary ranks are organized into
+complementary orbits: from each off-diagonal pair we select a profitable rank, while the diagonal
+rank requires a separate common-omission selection. All selected shadows are then pulled at once,
+which both preserves t-intersection and compensates for every discarded boundary layer. At the
+same time, Perron tail symmetrization redistributes the ell_k-mass of x_s, x_{{s+1}},..., x_n uniformly
+over the new tail. The resulting global polynomial ledger proves that the generated family on
+[s - 1] has no smaller spectral radius. Iterating this support reduction converts the comparison
+among the Frankl families into a bound for every t-intersecting family. Its strict form also yields
+the uniqueness assertion in Theorem 1.1.
+Label: E
+Reason: Gives a descriptive overview of the main technical contribution of the paper. Very clearly written, describing what is done and why.
 
 Section: Proof Overview
-Text: We use expansion properties of the graph to prove the claim.
-Label: B
-Reason: "Expansion properties" is too broad to identify what kind of expansion argument is being used.
+Text: The final modification to obtain Theorem 1.1 is a slightly different product construction using the graphs G(t, q),
+where, as before, we start by defining a directed graph. Crucially, we may take t = s - 1 and ultimately produce
+a Ks-free graph, that is, we save one in the size of the largest clique compared to the approach described above.
+So, let t = s-1, G = G(t, q) and let D* = D*(t, q) be the digraph with V (D*) = {{(a, b) | ab in E(G)}} and a
+directed edge from (a, b) to (a', b') if and only if ab' in E(G), but a'b notin E(G). Crucially, D* does not contain a
+copy of the transitive tournament of size s. See Figure 1 for a comparison of the configurations in G(t, q) that
+would yield a clique in the former and latter constructions. Denote n = |V(G)| sim q^{{s-1}} and observe that D* has
+n_2 sim n^2/q sim q^{{2s-3}} vertices and is d_2-regular, where d_2 sim n_2/q sim n_2^{{1-1/(2s-3)}}, which, unsurprisingly, matches the
+maximum possible density of an optimally pseudorandom Ks-free graph. As before, taking a random permutation
+of the vertices of D* and keeping all forward edges, we obtain a Ks-free graph Gamma*. While Gamma* is not spectrally
+pseudorandom, we can count its independent sets, or rather, forward independent tuples in the digraph D* from
+which Gamma* arises, using the container method. The analysis here is somewhat more involved but based on the same core ideas
+Label: C
+Reason: Mentions local tools like the container method and describes the construction, but is heavy in mathematical notation and does not provide much information about the main proof technique without significant external context.
 
 Section: Proof Overview
 Text: The main idea is to measure the mixing progress by the l2 norm of the random-walk distribution. Since this norm is minimized by the stationary distribution, we show that it decreases toward its stationary value at every stage.
-Label: D
+Label: E
 Reason: It explains a specific mechanism for proving mixing and is highly useful for recognizing similar arguments.
-
-Section: Our Results
-Text: Let us begin with our approximate Cauchy-Schwarz inequality. For any functions f, g of x = (x1, x2, . . . , xn) and any distribution D over x, E_(x sim D)[f(x)g(x)] leq E[f(x)^2]^(1/2) E[g(x)^2]^(1/2). The proof crucially relies on the positive semidefiniteness of the moment matrix of the pseudo-distribution. It provably does not hold for Sherali-Adams pseudo-distributions that only satisfy local positive semidefiniteness. Indeed, in Section 2.1, we observe the following seemingly drastic failure of the Cauchy-Schwarz inequality.
-Label: C
-Reason: The paragraph identifies a concrete ingredient of the authors' proof—the positive semidefiniteness of the pseudo-distribution's moment matrix—and distinguishes it from the weaker local PSD property. This gives useful retrieval signal, but it only briefly states the mechanism rather than substantially explaining how the PSD property drives the argument.
-
-Section: Main Results
-Text: Theorem 4.3 shows that every graph in the family has expansion at least 0.1.
-Label: A
-Reason: This is a result, not a description of how it is proved.
 
 Section: This paper: A new lower bound via two reductions
 Text: The first reduction relates the maximum load under modular linear hashing (Problem 1) to the maximum load of a continuous version of the problem, real linear hashing (Problem 2). We define the hash functions hreal_a(x) parameterized by a random real number a in [0, 1) as hreal_a(x) = lfloor n (ax) rfloor, where (ax) denotes the fractional part of ax. We show that any lower bound in the real-valued setting that holds for all a in [0, 1) implies the same lower bound in the modular-valued setting that holds for all s, t in Z _p. This reduction allows us to reinterpret known results in combinatorial number theory [konyagin-ruzsa-schlag2000] to immediately obtain a lower bound of exp(Omega(log n / (log log n)^2))
 Label: D
-Reason: Identifies a reduction between two specific problems and explains what purpose it is used for.
+Reason: Identifies a reduction between two specific problems and explains what purpose it is used for, but it is missing information about the second reduction, nor does it describe the reduction itself. If it did not state the two problems, it would be a C. 
 
 Return only the letter A, B, C, D, or E.
 Section: {}
