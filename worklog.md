@@ -562,7 +562,7 @@ Figure out my active learning paragraph selection technique (probably best to re
 I also read something about offloading memory to ram when using a MoE model. Maybe I can try using the Gemma-4-E2B-it model if that actually works. Maybe that's something to do later on.
 
 ## Date: August 25-26, 2026
-### Time spent: 16 hours
+### Time spent: 20 hours
 **Goal for this session:** Review the training code, read about and implement techniques for selecting samples to label duing active learning, and start training the classifier. I'll also need to read about how to reduce memory footprint during training and see what I can do.
 
 ### What I worked on
@@ -645,17 +645,23 @@ Record any choices you made and why.
 Retrain and re-evaluate the SciBERT classifier, and do active learning if it looks good. 
 
 
-## Date: August 28, 2026
-### Time spent: ... hours
+## Date: August 28-29, 2026
+### Time spent: 14 hours
 **Goal for this session:** Fine-tune SciBERT and do some evaluations. Start active learning
 
 ### What I worked on
-I relabelled the training data using the new prompt and using the (much stronger) Gemma 4 E4B-it model which somehow fit into my VRAM. It is a little slower in labelling (~60 tokens / second compared to ~100 tokens/second), but results are much better. I fine-tuned the SciBERT classifier, evaluated, and started active learning. 
+I relabelled the training data using the new prompt and using the (much stronger) Gemma 4 E4B-it model which somehow fit into my VRAM. It is a little slower in labelling (~60 tokens / second compared to ~100 tokens/second), but results are much better. I fine-tuned the SciBERT classifier, evaluated, did the active learning rounds, and began implementing the rest of the pipeline. 
 
 ### Files or data used
 
 List any datasets, papers, scripts, notebooks, or output files.
-* weights/technique_classifier_checkpoint.pt
+* weights/*
+* scripts/label_active_learning.py
+* scripts/select_active_learning.py
+* paper_clustering/train/active_learning.py
+* paper_clustering/label/paragraph_label_gui.py
+* paper_clustering/embedding.py
+* paper_clustering/extract_techniques.py
 
 ### Results
 Here is the output of `python -m paper_clustering.train.evaluate_model`. The new model is a little worse at labelling D/E paragraphs, but has a much higher mean precision@10, and doesn't have the class collapse issue from before. It still favours labelling A, C, D, but at least it does put a lot of B and E labels. I think active learning can help with this a lot, though I do want to come up with a way to sample good paragraphs that are mislabelled. A good heuristic idea is to randomly sample from "proof overview" sections or similar. 
@@ -673,8 +679,94 @@ Here is the output of `python -m paper_clustering.train.evaluate_model`. The new
     F1 (D): 0.2069
     F1 (E): 0.1176
 
+After one round of active learning on 200 total samples (40 samples entropy, 20 disagreement, 60 topk random, 60 regex random, 20 random), the metrics look like 
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4696
+    Binary cross-entropy: 0.3698
+    Macro F1: 0.3367
+    A: accuracy=0.7587, recall=0.9364, precision=0.7620, F1=0.8402
+    B: accuracy=0.7967, recall=0.1279, precision=0.3143, F1=0.1818
+    C: accuracy=0.9014, recall=0.2857, precision=0.4000, F1=0.3333
+    D: accuracy=0.9538, recall=0.2000, precision=0.2222, F1=0.2105
+    E: accuracy=0.9692, recall=0.0714, precision=0.3333, F1=0.1176
+
+I'm still not happy with the recall, especially for class D, E. I found that the entropy sampling was by far the most useful, so for the next round I will increase the amount of entropy samples (100 entropy, 20 disagreement, 50 topk, 15 regex, 15 random) for a total of 195 (deduplicated) samples.
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4598
+    Binary cross-entropy: 0.3484
+    Macro F1: 0.3536
+    A: accuracy=0.7608, recall=0.9227, precision=0.7699, F1=0.8394
+    B: accuracy=0.7803, recall=0.1686, precision=0.2900, F1=0.2132
+    C: accuracy=0.9066, recall=0.2619, precision=0.4314, F1=0.3259
+    D: accuracy=0.9559, recall=0.2000, precision=0.2400, F1=0.2182
+    E: accuracy=0.9702, recall=0.1071, precision=0.4286, F1=0.1714
+
+And when trained with a weighted loss function (weights are heuristic [1.0, 1.0, 1.2, 2.0, 3.0], not inverse class frequency).
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4000
+    Brier score: 0.4587
+    Binary cross-entropy: 0.3472
+    Macro F1: 0.3598
+    A: accuracy=0.7608, recall=0.9227, precision=0.7699, F1=0.8394
+    B: accuracy=0.7854, recall=0.1686, precision=0.3053, F1=0.2172
+    C: accuracy=0.9055, recall=0.2262, precision=0.4130, F1=0.2923
+    D: accuracy=0.9507, recall=0.2000, precision=0.2000, F1=0.2000
+    E: accuracy=0.9692, recall=0.1786, precision=0.4167, F1=0.2500
+
+When trained with weights that are inverse class frequencies: 
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4619
+    Binary cross-entropy: 0.3358
+    Macro F1: 0.3608
+    A: accuracy=0.7618, recall=0.9106, precision=0.7765, F1=0.8382
+    B: accuracy=0.7906, recall=0.1686, precision=0.3222, F1=0.2214
+    C: accuracy=0.8963, recall=0.2738, precision=0.3651, F1=0.3129
+    D: accuracy=0.9466, recall=0.2000, precision=0.1765, F1=0.1875
+    E: accuracy=0.9682, recall=0.1786, precision=0.3846, F1=0.2439
+
+I will keep training with inverse class frequencies I believe. Here is the result after the 3rd (and final) round of AL.
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4595
+    Binary cross-entropy: 0.3255
+    Macro F1: 0.3433
+    A: accuracy=0.7690, recall=0.8970, precision=0.7904, F1=0.8403
+    B: accuracy=0.7844, recall=0.1570, precision=0.2935, F1=0.2045
+    C: accuracy=0.8881, recall=0.2738, precision=0.3239, F1=0.2968
+    D: accuracy=0.9384, recall=0.2000, precision=0.1429, F1=0.1667
+    E: accuracy=0.9610, recall=0.1786, precision=0.2500, F1=0.2083
+
+And here is the result of training with `dropout=0.2` and `lr=1e-4`, and using inverse class frequencies as weights.
+
+    Mean Precision@10: 0.4250
+    Brier score: 0.4554
+    Binary cross-entropy: 0.3225
+    Macro F1: 0.3438
+    A: accuracy=0.7690, recall=0.8924, precision=0.7927, F1=0.8396
+    B: accuracy=0.7669, recall=0.2151, precision=0.2868, F1=0.2458
+    C: accuracy=0.9025, recall=0.1190, precision=0.3226, F1=0.1739
+    D: accuracy=0.9343, recall=0.2000, precision=0.1304, F1=0.1579
+    E: accuracy=0.9620, recall=0.2857, precision=0.3200, F1=0.3019
+
+I also implemented `extract_techniques.py` and `embedding.py`. Technique extraction first gets the top20 (adjustable) passages from each paper according to the TechniqueClassifier scores, then does a semantic similarity merging step to hopefully merge all mentions of similar techniques, then uses a DPP to select a diverse set of passages. This is probably overkill unless a paper has a lot of techniques, but it was cool to learn about. The embedding step is rather straightforwards, with `sentence_transformers` doing all the heavy lifting.
+
 ### Decisions made
+* Training with the loss weighted to inverse class frequency really helps increase recall for the important classes (D, E). It's also a common way of dealing with imbalanced classes. 
+* Most of the active learning I did with no validation set! It's because I didn't want my very limited D/E examples to be randomly selected for validation rather than training, and a validation set with no D/E samples would be useless. I essentially ended up using the test set as the validation set, which I know is not a good idea, but I don't have much of a choice. I will do more heuristic testing later. 
+* For technique extraction, there is a semantic similarity merging step, so that the <= 3 technique vectors which are chosen should all be about distinct techniques. I might need to tune the threshold for merging, it is currently at 0.85. 
+* Also for technique extraction, after merging of candidates I am using a DPP to select a diverse set of technique vectors. Because I am already doing this, I probably want to increase the threshold for merging up from 0.85, since it is quite unlikely that too similar techniques will pass this step.
 
 ### Issues or questions
+* Using the test set in place of the validation set is sure to bias my metrics slightly. Time-permitting, I should label a different test set and compare models in an unbiased way. 
+* I need to figure out how exactly I'm going to string everything together with the website, and compute t-SNE or UMAP embeddings also, as well as title+abstract embeddings. Most of the ML work is done though, and all that's left are software engineering problems
 
 ### Next step
+* Finally start computing embeddings and uploading to Supabase. I want to add hybrid keyword search and an RRF reranking function, so I need to see how to implement that either in Supabase or Javascript. I also need to start thinking about how everything is going to fit together. 

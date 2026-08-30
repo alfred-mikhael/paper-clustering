@@ -77,7 +77,7 @@ def train_classifier(
     checkpoint_path: str | Path = SciBERTClassifier.DEFAULT_WEIGHTS_PATH,
     model_name: str = SciBERTClassifier.DEFAULT_MODEL_NAME,
     mlp_hidden_size: int = 256,
-    dropout: float = 0.1,
+    dropout: float = 0.3,
     epochs: int = 3,
     batch_size: int = 8,
     learning_rate: float = 2e-5,
@@ -85,8 +85,13 @@ def train_classifier(
     validation_fraction: float = 0.2,
     seed: int = 42,
     device: str | None = None,
+    freeze_scibert: bool = False,
+    use_class_weights: bool = False,
 ) -> SciBERTClassifier:
-    """Train the classifier with five-way cross-entropy."""
+    """Train the classifier with five-way cross-entropy.
+
+    When ``freeze_scibert`` is set, only the classification head is trained.
+    """
     if len(paragraphs) != len(labels) or not paragraphs:
         raise ValueError("paragraphs and labels must be nonempty and equally sized")
     if epochs < 1 or batch_size < 1 or max_length < 1 or learning_rate <= 0:
@@ -104,7 +109,10 @@ def train_classifier(
         dropout=dropout,
         weights_path=checkpoint_path,
     ).to(selected_device)
-    model.scibert.gradient_checkpointing_enable()
+    if freeze_scibert:
+        model.scibert.requires_grad_(False)
+    else:
+        model.scibert.gradient_checkpointing_enable()
     print_dataset_statistics(paragraphs, normalized_labels, model.tokenizer)
 
     dataset = list(zip(paragraphs, normalized_labels))
@@ -123,9 +131,33 @@ def train_classifier(
         if validation_size
         else None
     )
+    # Labels may be soft distributions, so each example contributes its
+    # probability mass to every class rather than only to its argmax class.
+    # Compute this from the training split only, keeping validation information
+    # out of the weighting decision.
+    class_frequencies = torch.as_tensor(
+        [label for _, label in training_data], dtype=torch.float32
+    ).mean(dim=0)
+    observed_classes = class_frequencies > 0
+    inverse_class_frequencies = torch.zeros_like(class_frequencies)
+    inverse_class_frequencies[observed_classes] = class_frequencies[
+        observed_classes
+    ].reciprocal()
+    # Keep the average nonzero weight at one, so --weighted changes relative
+    # class importance without unexpectedly changing the overall loss scale.
+    inverse_class_frequencies[observed_classes] /= inverse_class_frequencies[
+        observed_classes
+    ].mean()
 
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
-    loss_function = nn.CrossEntropyLoss()
+    optimizer = AdamW(
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=learning_rate,
+    )
+    loss_function = nn.CrossEntropyLoss(
+        weight=(
+            inverse_class_frequencies.to(selected_device) if use_class_weights else None
+        )
+    )
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
     best_validation_loss = float("inf")
@@ -137,6 +169,10 @@ def train_classifier(
 
     for epoch in range(epochs):
         model.train()
+        if freeze_scibert:
+            # Keep the frozen encoder deterministic while the head retains its
+            # training-mode dropout behavior.
+            model.scibert.eval()
         losses = []
         for batch in tqdm(training_loader):
             labels_for_batch = batch.pop("labels").to(selected_device)
@@ -187,6 +223,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--validation-fraction", type=float, default=0.15)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", help="for example: cuda, cpu, or mps")
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--weighted", action="store_true")
+    parser.add_argument(
+        "--freeze-scibert",
+        action="store_true",
+        help="freeze the SciBERT encoder and train only the classification head",
+    )
     return parser
 
 
@@ -204,6 +247,9 @@ def main(argv: list[str] | None = None) -> int:
         validation_fraction=args.validation_fraction,
         seed=args.seed,
         device=args.device,
+        freeze_scibert=args.freeze_scibert,
+        dropout=args.dropout,
+        use_class_weights=args.weighted,
     )
     return 0
 

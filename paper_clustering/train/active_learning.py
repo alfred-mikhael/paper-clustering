@@ -7,7 +7,8 @@ import random
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from ..data_models import Paper
+from ..data_models import ArxivSection, Paper
+from ..label.regex_labels import extract_paragraph_features
 
 BOUNDARY_WEIGHTS = (0.25, 1.25, 0.75, 0.25)
 
@@ -109,6 +110,56 @@ def get_random(
     return generator.sample(samples, k=min(n, len(samples)))
 
 
+def get_regex_features(samples: Sequence[Sample]) -> list[tuple[int, int, int]]:
+    """Generate important-section, enrichment, and negative regex features."""
+    sections = [
+        ArxivSection(
+            arxiv_id=sample.arxiv_id,
+            section_index=sample.section_id,
+            section_header=sample.section_header,
+            major_section_header="",
+            text=(sample.text,),
+        )
+        for sample in samples
+    ]
+    return [tuple(features) for features in extract_paragraph_features(sections)]
+
+
+def get_regex_weighted_random(
+    samples: list[Sample], n: int, *, rng: random.Random | None = None
+) -> list[Sample]:
+    """Sample without replacement, weighted by regex evidence and section type.
+
+    Each paragraph's weight is ``enrichment_pattern_hits + 3 *
+    important_section_title``. If no paragraph has positive weight, the
+    remaining selections fall back to uniform sampling.
+    """
+    _validate_selection_count(n)
+    generator = rng or random.Random()
+    candidates = list(zip(samples, get_regex_features(samples)))
+    selected = []
+    while candidates and len(selected) < n:
+        weights = [
+            enrichment_hits + 3 * important_section
+            for _, (important_section, enrichment_hits, _) in candidates
+        ]
+        total_weight = sum(weights)
+        if total_weight == 0:
+            index = generator.randrange(len(candidates))
+        else:
+            threshold = generator.random() * total_weight
+            cumulative_weight = 0.0
+            index = len(candidates) - 1
+            for candidate_index, weight in enumerate(weights):
+                cumulative_weight += weight
+                if threshold < cumulative_weight:
+                    index = candidate_index
+                    break
+        sample, _ = candidates.pop(index)
+        selected.append(sample)
+    return selected
+
+
 def calculate_weighted_emd(dist1: tuple[float, ...], dist2: tuple[float, ...]) -> float:
     """Return weighted one-dimensional EMD across the ordered A-E boundaries."""
     first = _normalize_distribution(dist1, name="first distribution")
@@ -146,6 +197,7 @@ def select_samples(
     topk_random_count: int = 0,
     topk_per_paper: int = 5,
     random_count: int = 0,
+    regex_weighted_random_count: int = 0,
     seed: int = 42,
 ) -> list[tuple[str, Sample]]:
     """Combine strategies in order while preventing duplicate selections."""
@@ -155,6 +207,7 @@ def select_samples(
         topk_random_count,
         topk_per_paper,
         random_count,
+        regex_weighted_random_count,
     ):
         _validate_selection_count(count)
 
@@ -177,6 +230,12 @@ def select_samples(
         "topk_random",
         get_random_from_topk(available(), topk_per_paper, topk_random_count, rng=rng),
     )
+    add(
+        "regex_weighted_random",
+        get_regex_weighted_random(
+            available(), regex_weighted_random_count, rng=rng
+        ),
+    )
     add("random", get_random(available(), random_count, rng=rng))
     return selected
 
@@ -191,6 +250,7 @@ def select_samples_from_paper(
     topk_random_count: int = 0,
     topk_per_paper: int = 5,
     random_count: int = 0,
+    regex_weighted_random_count: int = 0,
     seed: int = 42,
 ) -> list[tuple[str, Sample]]:
     """Select a paper's paragraphs from document-order model distributions.
@@ -249,5 +309,6 @@ def select_samples_from_paper(
         topk_random_count=topk_random_count,
         topk_per_paper=topk_per_paper,
         random_count=random_count,
+        regex_weighted_random_count=regex_weighted_random_count,
         seed=seed,
     )

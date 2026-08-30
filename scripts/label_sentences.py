@@ -11,10 +11,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import queue
 import re
 import sys
-import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -26,6 +24,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from paper_clustering.extract_text import ArxivSection, get_paper
+from paper_clustering.label.paragraph_label_gui import ParagraphLabelApp
 
 ARXIV_ID_RE = re.compile(
     r"^(?:https?://(?:export\.)?arxiv\.org/(?:abs|pdf)/)?"
@@ -199,262 +198,6 @@ def parse_id_file(path: Path) -> list[str]:
     return values
 
 
-class ParagraphLabelApp:
-    def __init__(
-        self,
-        root,
-        arxiv_ids: list[str],
-        output_path: Path,
-        cache_dir: Path,
-        refresh: bool,
-    ) -> None:
-        # Tk is imported lazily so extraction helpers can be tested headlessly.
-        from tkinter import BOTH, LEFT, RIGHT, X, Button, Frame, Label, StringVar, Text
-        from tkinter import font as tkfont
-        from tkinter import ttk
-
-        self.root = root
-        self.arxiv_ids = arxiv_ids
-        self.output_path = output_path
-        self.cache_dir = cache_dir
-        self.refresh = refresh
-        self.samples: list[ParagraphSample] = []
-        self.labels = load_labels(output_path)
-        self.index = 0
-        self.loading_queue: queue.Queue = queue.Queue()
-
-        root.title("arXiv Paragraph Labeller")
-        root.geometry("940x650")
-        root.minsize(700, 500)
-
-        available_fonts = set(tkfont.families(root))
-        interface_family = (
-            "Arial"
-            if "Arial" in available_fonts
-            else (
-                "Liberation Sans"
-                if "Liberation Sans" in available_fonts
-                else "Helvetica"
-            )
-        )
-        tkfont.nametofont("TkDefaultFont").configure(family=interface_family, size=11)
-        tkfont.nametofont("TkTextFont").configure(family=interface_family, size=14)
-        self.paragraph_font = tkfont.Font(root=root, family=interface_family, size=14)
-
-        outer = ttk.Frame(root, padding=18)
-        outer.pack(fill=BOTH, expand=True)
-        self.location_var = StringVar(value="Preparing papers...")
-        self.progress_var = StringVar(value="")
-        ttk.Label(
-            outer, textvariable=self.location_var, font=("TkDefaultFont", 11, "bold")
-        ).pack(anchor="w")
-
-        progress_row = ttk.Frame(outer)
-        progress_row.pack(fill=X, pady=(8, 18))
-        self.progress = ttk.Progressbar(progress_row, mode="determinate")
-        self.progress.pack(side=LEFT, fill=X, expand=True)
-        ttk.Label(
-            progress_row, textvariable=self.progress_var, width=28, anchor="e"
-        ).pack(side=RIGHT, padx=(10, 0))
-
-        self.section_var = StringVar(value="")
-        ttk.Label(outer, text="Section", foreground="#555555").pack(anchor="w")
-        ttk.Label(
-            outer,
-            textvariable=self.section_var,
-            font=("TkDefaultFont", 13, "bold"),
-            wraplength=880,
-            justify="left",
-        ).pack(fill=X, pady=(2, 14))
-
-        self.paragraph_text = Text(
-            outer,
-            # Keep enough requested space for the controls below. ``expand``
-            # still lets the reading area consume spare space in larger windows.
-            height=10,
-            wrap="word",
-            relief="flat",
-            borderwidth=0,
-            padx=10,
-            pady=10,
-            font=self.paragraph_font,
-            background=outer.winfo_toplevel().cget("background"),
-            cursor="arrow",
-        )
-        self.paragraph_text.pack(fill=BOTH, expand=True, pady=(2, 11))
-        self.paragraph_text.configure(state="disabled")
-
-        controls = Frame(outer)
-        controls.pack(fill=X, pady=(18, 0))
-        Label(controls, text="Label:").pack(side=LEFT, padx=(0, 8))
-        self.label_buttons = []
-        for value in range(1, 6):
-            button = Button(
-                controls,
-                text=str(value),
-                width=4,
-                command=lambda selected=value: self.set_label(selected),
-            )
-            button.pack(side=LEFT, padx=3)
-            self.label_buttons.append(button)
-        ttk.Button(
-            controls, text="Next unlabelled (Enter)", command=self.next_unlabelled
-        ).pack(side=RIGHT)
-        ttk.Button(controls, text="Next  →", command=self.go_next).pack(
-            side=RIGHT, padx=5
-        )
-        ttk.Button(controls, text="←  Previous", command=self.go_previous).pack(
-            side=RIGHT, padx=5
-        )
-
-        self.status_var = StringVar(value="Downloading and extracting papers...")
-        ttk.Label(outer, textvariable=self.status_var, foreground="#555555").pack(
-            anchor="w", pady=(14, 0)
-        )
-
-        root.bind("<Left>", self.go_previous)
-        root.bind("<Right>", self.go_next)
-        root.bind("<Return>", self.next_unlabelled)
-        root.bind("<KP_Enter>", self.next_unlabelled)
-        for value in range(1, 6):
-            root.bind(
-                str(value), lambda _event, selected=value: self.set_label(selected)
-            )
-
-        self._set_controls_enabled(False)
-        threading.Thread(target=self._load_papers, daemon=True).start()
-        root.after(100, self._poll_loading_queue)
-
-    def _load_papers(self) -> None:
-        all_samples: list[ParagraphSample] = []
-        errors: list[str] = []
-        for number, arxiv_id in enumerate(self.arxiv_ids, 1):
-            self.loading_queue.put(
-                ("status", f"Loading {arxiv_id} ({number}/{len(self.arxiv_ids)})...")
-            )
-            try:
-                all_samples.extend(
-                    fetch_samples(arxiv_id, self.cache_dir, self.refresh)
-                )
-            except Exception as exc:  # keep usable papers even if one fails
-                errors.append(f"{arxiv_id}: {exc}")
-        self.loading_queue.put(("done", all_samples, errors))
-
-    def _poll_loading_queue(self) -> None:
-        try:
-            while True:
-                message = self.loading_queue.get_nowait()
-                if message[0] == "status":
-                    self.status_var.set(message[1])
-                else:
-                    self._finish_loading(message[1], message[2])
-                    return
-        except queue.Empty:
-            self.root.after(100, self._poll_loading_queue)
-
-    def _finish_loading(
-        self, samples: list[ParagraphSample], errors: list[str]
-    ) -> None:
-        from tkinter import messagebox
-
-        self.samples = samples
-        if errors:
-            messagebox.showwarning("Some papers were skipped", "\n".join(errors))
-        if not samples:
-            messagebox.showerror("Nothing to label", "No paragraphs could be loaded.")
-            self.root.destroy()
-            return
-        self._set_controls_enabled(True)
-        first_unlabelled = self._find_unlabelled(start=-1, wrap=True)
-        self.index = first_unlabelled if first_unlabelled is not None else 0
-        self.status_var.set(
-            f"Labels are saved after every choice to {self.output_path}"
-        )
-        self.show_sample()
-
-    def _set_controls_enabled(self, enabled: bool) -> None:
-        state = "normal" if enabled else "disabled"
-        for button in self.label_buttons:
-            button.configure(state=state)
-
-    def _set_paragraph(self, sample: ParagraphSample) -> None:
-        """Render one paragraph in the reading panel."""
-        self.paragraph_text.configure(state="normal")
-        self.paragraph_text.delete("1.0", "end")
-        self.paragraph_text.insert("end", sample.paragraph)
-        self.paragraph_text.configure(state="disabled")
-
-    def show_sample(self) -> None:
-        sample = self.samples[self.index]
-        current_label = self.labels.get(sample.key)
-        self.location_var.set(
-            f"{sample.arxiv_id}  •  paragraph {self.index + 1} of {len(self.samples)}"
-        )
-        self.section_var.set(sample.section_header)
-        self._set_paragraph(sample)
-        for value, button in enumerate(self.label_buttons, 1):
-            button.configure(relief="sunken" if value == current_label else "raised")
-        labelled = sum(sample.key in self.labels for sample in self.samples)
-        remaining = len(self.samples) - labelled
-        self.progress.configure(maximum=len(self.samples), value=labelled)
-        self.progress_var.set(f"{labelled} labelled • {remaining} remaining")
-
-    def set_label(self, value: int):
-        if not self.samples:
-            return "break"
-        self.labels[self.samples[self.index].key] = value
-        save_labels(self.output_path, self.samples, self.labels)
-        next_index = self._find_unlabelled(start=self.index, wrap=True)
-        if next_index is None:
-            self.status_var.set(
-                "All paragraphs are labelled. You can still review or change labels."
-            )
-            self.show_sample()
-        else:
-            self.index = next_index
-            self.show_sample()
-        return "break"
-
-    def _find_unlabelled(self, start: int, wrap: bool) -> int | None:
-        if not self.samples:
-            return None
-        indices = list(range(start + 1, len(self.samples)))
-        if wrap and start > 0:
-            # Do not select the current sample again when wrapping.
-            indices += list(range(0, start))
-        return next(
-            (i for i in indices if self.samples[i].key not in self.labels), None
-        )
-
-    def next_unlabelled(self, _event=None):
-        if not self.samples:
-            return "break"
-        next_index = self._find_unlabelled(start=self.index, wrap=True)
-        if next_index is None:
-            remaining = sum(sample.key not in self.labels for sample in self.samples)
-            self.status_var.set(
-                "All paragraphs are labelled."
-                if remaining == 0
-                else "There are no other unlabelled paragraphs."
-            )
-        else:
-            self.index = next_index
-            self.show_sample()
-        return "break"
-
-    def go_previous(self, _event=None):
-        if self.samples:
-            self.index = max(0, self.index - 1)
-            self.show_sample()
-        return "break"
-
-    def go_next(self, _event=None):
-        if self.samples:
-            self.index = min(len(self.samples) - 1, self.index + 1)
-            self.show_sample()
-        return "break"
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Download arXiv papers and label their paragraphs from 1 to 5."
@@ -501,12 +244,33 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    samples: list[ParagraphSample] = []
+    errors: list[str] = []
+    for number, arxiv_id in enumerate(arxiv_ids, start=1):
+        print(f"Loading {arxiv_id} ({number}/{len(arxiv_ids)})...", file=sys.stderr)
+        try:
+            samples.extend(fetch_samples(arxiv_id, args.cache_dir, args.refresh))
+        except Exception as exc:  # Keep usable papers even if one fails.
+            errors.append(f"{arxiv_id}: {exc}")
+    if not samples:
+        parser.error("No paragraphs could be loaded.\n" + "\n".join(errors))
+
     try:
         import tkinter as tk
+        from tkinter import messagebox
     except ImportError:
         parser.error("Tkinter is unavailable; install your system's python3-tk package")
     root = tk.Tk()
-    ParagraphLabelApp(root, arxiv_ids, args.output, args.cache_dir, args.refresh)
+    if errors:
+        messagebox.showwarning("Some papers were skipped", "\n".join(errors))
+    ParagraphLabelApp(
+        root,
+        samples,
+        load_labels(args.output),
+        lambda labels: save_labels(args.output, samples, labels),
+        title="arXiv Paragraph Labeller",
+        status=f"Labels are saved after every choice to {args.output}",
+    )
     root.mainloop()
     return 0
 

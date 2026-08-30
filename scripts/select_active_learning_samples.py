@@ -10,6 +10,8 @@ from collections import defaultdict
 from pathlib import Path
 import sys
 
+import torch
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
@@ -21,12 +23,14 @@ from paper_clustering.train.active_learning import (
     expected_score,
     select_samples,
 )
+from paper_clustering.technique_classifier import SciBERTClassifier
+from paper_clustering.train.load_data import load_labelled_paragraphs
 
 LABELS = ("A", "B", "C", "D", "E")
-PREDICTED_FIELDS = tuple(f"label_prob_{label}" for label in LABELS)
 GEMMA_FIELD_OPTIONS = (
     tuple(f"gemma_prob_{label}" for label in LABELS),
     tuple(f"gemma_probability_{label}" for label in LABELS),
+    tuple(f"probability_{label}" for label in LABELS),
 )
 OUTPUT_FIELDS = (
     "strategy",
@@ -105,11 +109,27 @@ def load_cached_gemma_distributions(
     ]
 
 
+def _choose_device(requested: str | None) -> torch.device:
+    if requested:
+        return torch.device(requested)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def load_samples(
     input_path: Path,
+    classifier: SciBERTClassifier,
+    *,
+    batch_size: int,
     cache_dir: Path = Path(".slm_label_cache"),
 ) -> list[Sample]:
-    """Read model predictions and their matching Gemma distributions from a TSV."""
+    """Run SciBERT over TSV paragraphs and pair predictions with Gemma labels."""
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    _, passages, _ = load_labelled_paragraphs(input_path)
     with input_path.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
         fieldnames = set(reader.fieldnames or ())
@@ -117,8 +137,8 @@ def load_samples(
             "arxiv_id",
             "section_index",
             "paragraph_index",
+            "section_header",
             "paragraph",
-            *PREDICTED_FIELDS,
         }
         missing = sorted(required - fieldnames)
         if missing:
@@ -128,6 +148,8 @@ def load_samples(
     parsed_rows = []
     seen_keys = set()
     for line_number, row in enumerate(rows, start=2):
+        if not row["paragraph"].strip():
+            continue
         key = row_key(row, line_number)
         if not key[0]:
             raise ValueError(f"Empty arXiv ID on TSV line {line_number}")
@@ -136,16 +158,7 @@ def load_samples(
                 f"Duplicate paragraph key on TSV line {line_number}: {key}"
             )
         seen_keys.add(key)
-        try:
-            predicted = normalize_distribution(
-                [row[field] for field in PREDICTED_FIELDS],
-                name=f"predicted distribution on TSV line {line_number}",
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Invalid predicted probabilities on line {line_number}"
-            ) from exc
-        parsed_rows.append((key, row, predicted))
+        parsed_rows.append((key, row))
 
     gemma_fields = next(
         (fields for fields in GEMMA_FIELD_OPTIONS if set(fields).issubset(fieldnames)),
@@ -153,7 +166,7 @@ def load_samples(
     )
     gemma_by_key: dict[tuple[str, int, int], tuple[float, ...]] = {}
     if gemma_fields is not None:
-        for line_number, (key, row, _) in enumerate(parsed_rows, start=2):
+        for line_number, (key, row) in enumerate(parsed_rows, start=2):
             try:
                 gemma_by_key[key] = normalize_distribution(
                     [row[field] for field in gemma_fields],
@@ -165,12 +178,24 @@ def load_samples(
                 ) from exc
     else:
         rows_by_paper: dict[str, list[tuple[str, int, int]]] = defaultdict(list)
-        for key, _, _ in parsed_rows:
+        for key, _ in parsed_rows:
             rows_by_paper[key[0]].append(key)
         for arxiv_id, keys in rows_by_paper.items():
             keys.sort(key=lambda key: (key[1], key[2]))
             cached = load_cached_gemma_distributions(cache_dir, arxiv_id, len(keys))
             gemma_by_key.update(zip(keys, cached))
+
+    if len(passages) != len(parsed_rows):
+        raise RuntimeError("shared loader returned a different number of paragraphs")
+    probabilities = classifier.predict_logits(passages, batch_size).softmax(dim=1)
+    if probabilities.shape != (len(passages), len(LABELS)):
+        raise RuntimeError("SciBERT returned an unexpected probability shape")
+    predicted_distributions = [
+        normalize_distribution(
+            values, name=f"SciBERT distribution for paragraph {index}"
+        )
+        for index, values in enumerate(probabilities.tolist(), start=1)
+    ]
 
     return [
         Sample(
@@ -182,7 +207,7 @@ def load_samples(
             predicted_dist=predicted,
             gemma_dist=gemma_by_key[key],
         )
-        for key, row, predicted in parsed_rows
+        for (key, row), predicted in zip(parsed_rows, predicted_distributions)
     ]
 
 
@@ -222,14 +247,20 @@ def save_selected(path: Path, selected: list[tuple[str, Sample]]) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, help="TSV containing model predictions")
+    parser.add_argument("input", type=Path, help="TSV containing paragraphs")
     parser.add_argument("output", type=Path, help="selected paragraph TSV")
+    parser.add_argument(
+        "--checkpoint", type=Path, default=SciBERTClassifier.DEFAULT_WEIGHTS_PATH
+    )
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--device", help="for example: cuda, cpu, or mps")
     parser.add_argument("--slm-cache-dir", type=Path, default=Path(".slm_label_cache"))
     parser.add_argument("--entropy-count", type=int, default=0)
     parser.add_argument("--disagreement-count", type=int, default=0)
     parser.add_argument("--topk-random-count", type=int, default=0)
     parser.add_argument("--topk-per-paper", type=int, default=5)
     parser.add_argument("--random-count", type=int, default=0)
+    parser.add_argument("--regex-weighted-random-count", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
     return parser
 
@@ -242,11 +273,24 @@ def main(argv: list[str] | None = None) -> int:
         args.disagreement_count,
         args.topk_random_count,
         args.random_count,
+        args.regex_weighted_random_count,
     )
     if all(count == 0 for count in counts):
         parser.error("request at least one sample with a --*-count option")
     try:
-        samples = load_samples(args.input, args.slm_cache_dir)
+        if not args.checkpoint.is_file():
+            raise FileNotFoundError(
+                f"Classifier checkpoint not found: {args.checkpoint}"
+            )
+        classifier = SciBERTClassifier(weights_path=args.checkpoint).to(
+            _choose_device(args.device)
+        )
+        samples = load_samples(
+            args.input,
+            classifier,
+            batch_size=args.batch_size,
+            cache_dir=args.slm_cache_dir,
+        )
         selected = select_samples(
             samples,
             entropy_count=args.entropy_count,
@@ -254,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             topk_random_count=args.topk_random_count,
             topk_per_paper=args.topk_per_paper,
             random_count=args.random_count,
+            regex_weighted_random_count=args.regex_weighted_random_count,
             seed=args.seed,
         )
         save_selected(args.output, selected)

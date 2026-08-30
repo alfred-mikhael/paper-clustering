@@ -42,7 +42,6 @@ class EmbeddingInfo:
     model_name: str
     arxiv_id: str
     passages: tuple[str, ...]
-    scores: tuple[float, ...]
     vectors: tuple[np.ndarray]
 
 

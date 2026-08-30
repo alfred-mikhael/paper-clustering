@@ -14,3 +14,4 @@ python-dotenv
 huggingface_hub
 accelerate 
 requests
+DPPy
