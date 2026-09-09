@@ -13,7 +13,7 @@ from typing import Iterable, Optional
 
 import requests
 
-from paper_clustering.data_models import ArxivSection, Paper
+from paper_clustering.data_models import ArxivSection, Paper, PaperMetadata
 from paper_clustering.extract_metadata import get_metadata
 
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
@@ -234,6 +234,7 @@ def download_source(session: requests.Session, arxiv_id: str) -> bytes:
 def get_paper(
     session: requests.Session,
     arxiv_id: str,
+    metadata: PaperMetadata | None = None,
     include_proofs: bool = False,
 ) -> Paper:
     """Download and clean the sections of an arXiv paper.
@@ -241,7 +242,8 @@ def get_paper(
     When ``include_proofs`` is false, proof and proof* environments are removed
     in their entirety before the remaining LaTeX is converted to plain text.
     """
-    metadata = get_metadata(session, arxiv_id)
+    if not metadata:
+        metadata = get_metadata(session, arxiv_id)
     time.sleep(ARXIV_REQUEST_WAIT_TIME)
     try:
         source_bytes = download_source(session, arxiv_id)
@@ -281,7 +283,7 @@ def get_paper(
         UnicodeError,
     ) as exc:
         logging.error(
-            f"{time.localtime()}: Could not download or extract {arxiv_id}: {exc}"
+            f"{time.asctime()}: Could not download or extract {arxiv_id}: {exc}"
         )
         return Paper(metadata=metadata, sections=())
 

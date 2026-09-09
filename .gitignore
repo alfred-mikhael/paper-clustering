@@ -10,3 +10,4 @@ __pycache__
 .slm_label_cache
 *.tsv 
 weights/*
+data/*

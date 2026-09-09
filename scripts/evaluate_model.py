@@ -23,7 +23,7 @@ from paper_clustering.technique_classifier import SciBERTClassifier
 from paper_clustering.train.load_data import load_labelled_paragraphs
 
 CLASS_LABELS = "ABCDE"
-DEFAULT_TEST_DATASET = Path("test_dataset.tsv")
+DEFAULT_TEST_DATASET = Path("data/test_dataset.tsv")
 
 
 def _choose_device(requested: str | None) -> torch.device:
@@ -189,6 +189,46 @@ def print_de_false_positives(
         print(passages[index])
 
 
+def print_top_passages_by_expected_score(
+    paper_ids: list[str],
+    passages: list[str],
+    truth: torch.Tensor,
+    logits: torch.Tensor,
+    k: int = 5,
+) -> None:
+    """Print each paper's top passages and D/E expected-score rate."""
+    probabilities = logits.softmax(dim=1)
+    class_scores = torch.arange(
+        1, 6, dtype=probabilities.dtype, device=probabilities.device
+    )
+    expected_scores = probabilities @ class_scores
+    indices_by_paper: dict[str, list[int]] = defaultdict(list)
+    for index, paper_id in enumerate(paper_ids):
+        indices_by_paper[paper_id].append(index)
+
+    print(f"\nTop {k} passages by expected score for each paper:")
+    for paper_id, indices in indices_by_paper.items():
+        top_indices = sorted(
+            indices, key=lambda index: (-expected_scores[index].item(), index)
+        )[:k]
+        print(f"\nPaper: {paper_id}")
+        de_indices = [index for index in indices if truth[index].item() >= 3]
+        if de_indices:
+            above_threshold = sum(
+                expected_scores[index].item() > 3 for index in de_indices
+            )
+            percentage = 100 * above_threshold / len(de_indices)
+            print(
+                f"D/E passages with expected score > 3: {percentage:.1f}% "
+                f"({above_threshold}/{len(de_indices)})"
+            )
+        else:
+            print("D/E passages with expected score > 3: n/a (no D/E passages)")
+        for rank, index in enumerate(top_indices, start=1):
+            print(f"\n{rank}. Expected score: {expected_scores[index].item():.3f}")
+            print(passages[index])
+
+
 def evaluate(
     dataset_path: str | Path = DEFAULT_TEST_DATASET,
     checkpoint_path: str | Path = SciBERTClassifier.DEFAULT_WEIGHTS_PATH,
@@ -211,7 +251,10 @@ def evaluate(
     if any(not paper_id for paper_id in paper_ids):
         raise ValueError(f"{dataset_path} must contain an arxiv_id for every paragraph")
     truth = torch.tensor(
-        [max(range(5), key=distribution.__getitem__) for distribution in label_distributions],
+        [
+            max(range(5), key=distribution.__getitem__)
+            for distribution in label_distributions
+        ],
         dtype=torch.long,
     )
     if model_type == "gemma":
@@ -254,6 +297,7 @@ def evaluate(
             f"{label}: accuracy={accuracy:.4f}, recall={recall:.4f}, "
             f"precision={precision:.4f}, F1={f1:.4f}"
         )
+    print_top_passages_by_expected_score(paper_ids, passages, truth, logits)
     if k:
         print_de_false_negatives(paper_ids, passages, truth, logits, k)
         print_de_false_positives(paper_ids, passages, truth, logits, k)
@@ -263,9 +307,7 @@ def evaluate(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset", type=Path, nargs="?", default=DEFAULT_TEST_DATASET)
-    parser.add_argument(
-        "--model", choices=("scibert", "gemma"), default="scibert"
-    )
+    parser.add_argument("--model", choices=("scibert", "gemma"), default="scibert")
     parser.add_argument(
         "--checkpoint", type=Path, default=SciBERTClassifier.DEFAULT_WEIGHTS_PATH
     )

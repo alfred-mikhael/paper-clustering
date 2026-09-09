@@ -770,3 +770,71 @@ I also implemented `extract_techniques.py` and `embedding.py`. Technique extract
 
 ### Next step
 * Finally start computing embeddings and uploading to Supabase. I want to add hybrid keyword search and an RRF reranking function, so I need to see how to implement that either in Supabase or Javascript. I also need to start thinking about how everything is going to fit together. 
+
+
+## Date: September 1, 2026
+### Time spent: 4 hours
+**Goal for this session:** Finish up pipeline functionality.
+
+### What I worked on
+Finished up main pipeline functionality and ran a small test.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/cluster.py
+* paper_clustering/generate_coords.py
+* paper_clustering/query.py
+* paper_clustering/upload.py
+* scripts/filter_math_cs_metadata.py
+* notebooks/pipeline_test_500.py
+* data/math_cs_metadata.zip
+
+### Results
+The basic pipeline is working now, although the technique similarity is iffy at best. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* I downloaded the arxiv metadata and am reading from a file rather than making a network request, since each request takes a long time. In general, I should not make a request for a single paper's metadata at a time when I have the option to do a batch request. 
+
+### Issues or questions
+* Need to make a batch interface for extract_techniques.py, as the current interface is painfully slow at about 5s/paper. 
+* Decide whether or not to make a citation graph, and if so how? Read co-regularized spectral embedding paper.
+* I don't understand the code written in the pipeline test notebook under technique similarity queries. I need to review that and understand it.
+* I probably need to download the arxiv data from S3 (and pay for it...), since 3s per paper for 1.5 million math papers means the program will be running for 34 days straight and hammering the arxiv servers. I can start with a much smaller sample size as a PoC, since that many papers will never fit into the free tier of Supabase either. 
+
+### Next step
+Make sure that everything is using the appropriate batch API and get a small PoC working with a frontend. After that, I can think about how to make the ML stuff higher quality and more efficient. Decide on the citation graph quickly and implement if wanted.
+
+## Date: September 2-8, 2026
+### Time spent: 6 hours
+**Goal for this session:** Refactor codebase and plan out next steps. Tune pipeline.
+
+### What I worked on
+Refactored the codebase to something I'm happier with. I'm still using codex, but I'm being much more judicious with the usage. This better matches my database design as well. Installed postgreSQL on the server. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/data_models.py
+* paper_clustering/extract_techniques.py
+
+### Results
+Lots of refactoring in terms of data models. I created a batch API for extracting techniques, and was able to test the pipeline end-to-end much faster. It seems like optimizing for diversity is causing pretty bad choices of techniques, so I am getting rid of that step entirely for the time being.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Got rid of ClusteredPaper, TechniqueInfo, EmbeddingInfo. These classes were kind of contrived and the need for EmbeddingInfo to contain an area vector forced extract_techniques to compute an area vector or return a default all 0s value, neither of which is good. I replaced with a Technique class, and now an embedded paper contains a list of techniques. The Technique contains its own embedding. This matches the database schema much more closely, and allows for better separation of responsibilities. Also I adjusted the classes a little so there is less nesting.  
+* Removed the DPP from the technique extraction. As cool as it is mathematically, it is not suited here because missing techniques with high importance score is a lot more harmful than slightly less diversity. The merging step already (hopefully) prevents multiple passages about the same technique which are all rated highly dominating the top 10.  
+
+### Issues or questions
+* How to set up the API to talk to PostgreSQL?
+* I should probably move away from this flat file structure not that things are getting a little more complicated
+* Need to do dependency injection in upload.py, because I am no longer using supabase (but I should have the option to change back if needed).
+
+### Next step
+Set up the API and the postgreSQL server. Finish refactoring the codebase to work with the new data models. Work on front-end :(.
