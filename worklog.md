@@ -838,3 +838,43 @@ Record any choices you made and why.
 
 ### Next step
 Set up the API and the postgreSQL server. Finish refactoring the codebase to work with the new data models. Work on front-end :(.
+
+## Date: September 9-13, 2026
+### Time spent: 6.5 hours
+**Goal for this session:** Finish refactoring, get basic front-end working and set up API
+
+### What I worked on
+Added a paper visualization page to my portfolio website and tested with some mock data. Deck.gl looks nice and functions great, although my styling surely needs some review (as does the styling of the entire website). Started configuring Apache to serve static files and the API. Created functions to connect the pipeline to postgres using psycopg3.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/cluster.py
+* paper_clustering/upload.py
+* paper_clustering/postgres.py
+* paper_clustering/utils.py
+* paper_clustering/data_models.py
+* paper_clustering/generate_coords.py
+* paper_clustering/query.py
+* requirements.txt (added psycopg, pgvector, and hdbscan)
+* alfred-mikhael.github.io/src/paperVisualizationScreen.js
+* alfred-mikhael.github.io/src/paperVisualizationScreen.css
+* config files in apache2s
+
+### Results
+Apache is serving static files locally (haven't added a DNS record yet). With mock data, the front end looks pretty nice. On hovering, it displays the arxiv id and title of the paper. When clicking a paper, it zooms in on it, inputs its title and arxiv_id into the search bar, and runs the API request to get other papers with similar techniques. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Added a title column to the clusters table, since I want to essentially gzip that entire thing and serve it from apache. I could match every arxiv_id to its title when I'm preparing the gzip, but that seems like a lot of unncessary work (at least a large database join every time I want to update the clusters) for very little space savings. Also, I want an easy-to-understand identifier of the paper in the cluster info, rather than just its arxiv id; that should probalby help with debugging.
+* I removed the navbar from the paperVisualization page, since I don't want it to distract. 
+
+### Issues or questions
+* I am a little over-reliant on codex for the front-end. I still did a lot of things myself, but I should be careful not to lean to heavily on it. 
+* I tested gpt5.6-luna on light thinking, it is decent at writing code, but not good at debugging. For example, I wondered why my website kept scrolling even when there was nothing there. It suggested a number of hacky fixes, even though the change was simply changing the .App-header::min-height in a css file. Medium or high thinking does much better.
+* I saw a reddit comment [here](https://www.reddit.com/r/math/comments/1g1nfx8/comment/lrutzol/?context=3) which suggests using word2vec embeddings rather than sentence transformers, since UMAP compression will already lose some of that nuance and it is much more efficient. That seems like a very interesting idea, and one that would save me tons of time if it works. I will think about it and see if its worth it or not. 
+
+### Next step
+Set up Uvicorn, FastAPI, and finish setting up Apache. Then do a small test on maybe 500 sample data points before doing some stylistic finishing touches and testing with a larget dataset of maybe 10k points. Also need to finish the clustering logic and generate the labels, which I haven't done yet.

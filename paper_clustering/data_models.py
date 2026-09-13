@@ -4,7 +4,7 @@ import numpy as np
 
 
 # For later use
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CitationRecord:
     authors: tuple[str, ...]
     doi: str | None
@@ -12,7 +12,7 @@ class CitationRecord:
     title: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PaperMetadata:
     authors: tuple[str, ...]
     publication_date: datetime
@@ -25,7 +25,7 @@ class PaperMetadata:
     # cites: list[str]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ArxivSection:
     """A cleaned paper section returned by :func:`get_sections`."""
 
@@ -36,7 +36,7 @@ class ArxivSection:
     text: tuple[str, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Technique:
     """An important technique in a paper"""
 
@@ -46,13 +46,13 @@ class Technique:
     score: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Paper:
     metadata: PaperMetadata
     sections: tuple[ArxivSection, ...]
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, slots=True)
 class EmbeddedPaper(Paper):
     """A paper which has an embedded area vector and a list of embedded techniques"""
 
@@ -62,7 +62,20 @@ class EmbeddedPaper(Paper):
     area_vector: np.ndarray
     techniques: list[Technique]
     coords: tuple[float, float]
-    cluster_label: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterRecord:
+    cluster_id: int
+    arxiv_id: str
+    certainty: float
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterMetadata:
+    label: str
+    size: int
+    parent_cluster_id: int
 
 
 @dataclass(frozen=True)

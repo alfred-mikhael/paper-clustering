@@ -1,6 +1,6 @@
 import numpy as np
-from supabase import Client
 from dataclasses import dataclass
+from utils import DatabaseClient
 
 
 @dataclass(frozen=True)
@@ -13,15 +13,21 @@ class SearchResult:
 
 
 def find_similar(
-    arxiv_id: str, client: Client, k: int = 10
+    arxiv_id: str, client: DatabaseClient, k: int = 10
 ) -> dict[str, list[SearchResult]]:
     """Returns a list of the arxiv ids, technique ids, and similarity scores of the top k most similar papers by technique."""
-    resp = (
-        client.table("techniques")
-        .select("embedding", "passage", "arxiv_id")
-        .eq("arxiv_id", arxiv_id)
-        .execute()
+    resp = client.select(
+        "techniques",
+        cols=["embedding", "passage", "arxiv_id"],
+        where=[("eq", "arxiv_id", arxiv_id)],
     )
+    # supabase implementation
+    # resp = (
+    #     client.table("techniques")
+    #     .select("embedding", "passage", "arxiv_id")
+    #     .eq("arxiv_id", arxiv_id)
+    #     .execute()
+    # )
     candidates = []
     for row in resp:
         candidates += [
@@ -36,6 +42,8 @@ def find_similar(
                 row["embedding"], client
             )
         ]
+    # This does deduplication, but my current postgres implementation already does that
+    # I am keeping it only because it has minimal performance impact and for safety.
     topk_ids = _find_topk(candidates)
     return _aggregate_results(
         [c for c in candidates if c.target_arxiv_id in topk_ids], topk_ids
@@ -52,16 +60,17 @@ def _find_topk(candidates: list[SearchResult]) -> set[str]:
 
 
 def _find_similar_vectors(
-    query: np.ndarray, client: Client, k: int = 10
+    query: np.ndarray, client: DatabaseClient, k: int = 10
 ) -> list[tuple[str, str, float]]:
-    res = client.rpc(
+    """Returns a list of (arxiv_id, passage, similarity) of most similar passages, deduplicated by paper"""
+    res = client.execute_rpc(
         "ANN",
         {
             "query_embedding": query.to_list(),
             "match_count": k,
         },
-    ).execute()
-    return [(row[1], row[2], row[3]) for row in res.data]
+    )
+    return [(row["arxiv_id"], row["passage"], row["similarity"]) for row in res.data]
 
 
 def _aggregate_results(

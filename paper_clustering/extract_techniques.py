@@ -6,7 +6,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from paper_clustering.data_models import ArxivSection, Paper, Technique
-from paper_clustering.embedding import embed
+from paper_clustering.embedding import embed, embed_techniques
 from paper_clustering.technique_classifier import TechniqueClassifier
 
 logger = logging.getLogger(__name__)
