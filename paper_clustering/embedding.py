@@ -6,6 +6,9 @@ import torch
 from paper_clustering.data_models import Technique
 
 
+EMBEDDING_MAX_SEQ_LENGTH = 2048
+
+
 def _choose_device(requested: str | None) -> str:
     if requested:
         return requested
@@ -26,6 +29,7 @@ def embed_techniques(
     prompt: str | None = None,
     device: str | None = None,
 ) -> Technique | list[Technique]:
+    embedding_model.max_seq_length = EMBEDDING_MAX_SEQ_LENGTH
     # split data into batches
     if not isinstance(techniques, list):
         encoded = embedding_model.encode(
@@ -70,9 +74,10 @@ def embed(
     embedding_model: SentenceTransformer,
     *,
     batch_size: int = 8,
-    prompt: str | None = None,
+    prompt: str | None = "search_document: ",
     device: str | None = None,
 ) -> list[np.ndarray]:
+    embedding_model.max_seq_length = EMBEDDING_MAX_SEQ_LENGTH
     return embedding_model.encode(
         passages,
         prompt=prompt,

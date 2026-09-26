@@ -15,6 +15,7 @@ huggingface_hub
 accelerate 
 requests
 DPPy
-psycopg[binary]
+psycopg[binary,pool]
 pgvector
 hdbscan
+fastapi

@@ -1,4 +1,5 @@
 from typing import Any
+from contextlib import AbstractContextManager
 
 import psycopg
 from pgvector.psycopg import register_vector
@@ -14,6 +15,10 @@ class PostgresClient:
         self.conn = conn
         # If this is not included, need to manually commit and rollback.
         self.conn.autocommit = True
+
+    def transaction(self) -> AbstractContextManager[psycopg.Transaction]:
+        """Group operations atomically, even with autocommit enabled."""
+        return self.conn.transaction()
 
     def insert(self, table: str, records: list[dict[str, Any]]) -> bool:
         if not records:
@@ -81,6 +86,7 @@ class PostgresClient:
             logger.info(
                 f"Retrieved {len(res)} records from table {table} with query {query}"
             )
+            return res
 
     def execute_rpc(self, rpc_name: str, args: dict[str, Any]) -> list[dict[str, Any]]:
         arguments = sql.SQL(", ").join(

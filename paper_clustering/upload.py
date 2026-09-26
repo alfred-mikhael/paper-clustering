@@ -9,12 +9,10 @@ from paper_clustering.utils import DatabaseClient
 def upload(
     papers: list[EmbeddedPaper], client: DatabaseClient
 ) -> tuple[bool, bool] | None:
-    """Insert embedded papers into the ``papers`` database table.
+    """Insert papers and their techniques together in one transaction.
 
-    Supabase's JSON encoder cannot serialize NumPy arrays, so vectors are
-    converted to ordinary lists before insertion.  The table has three fixed
-    technique columns; papers with fewer selected passages leave the remaining
-    columns empty.
+    Convert NumPy vectors to ordinary lists before insertion. An insert error
+    rolls back both tables; a client reporting failure also triggers rollback.
     """
     if not papers:
         return None
@@ -49,7 +47,9 @@ def upload(
         }
         records.append(record)
 
-    return (
-        client.insert(table="papers", records=records),
-        client.insert(table="techniques", records=techniques),
-    )
+    with client.transaction():
+        if not client.insert(table="papers", records=records):
+            raise RuntimeError("Paper insertion failed; rolling back upload")
+        if not client.insert(table="techniques", records=techniques):
+            raise RuntimeError("Technique insertion failed; rolling back upload")
+    return True, True

@@ -878,3 +878,31 @@ Record any choices you made and why.
 
 ### Next step
 Set up Uvicorn, FastAPI, and finish setting up Apache. Then do a small test on maybe 500 sample data points before doing some stylistic finishing touches and testing with a larget dataset of maybe 10k points. Also need to finish the clustering logic and generate the labels, which I haven't done yet.
+
+## Date: September 21-25, 2026
+### Time spent: 6 hours
+**Goal for this session:** Improve retrieval quality
+
+### What I worked on
+I am not satisfied with the quality of retrieval at all. I added an OpenJEV reranker, which made some improvements, but also has some strange issues. I compared reranking with a few different models, Qwen 0.6b, Qwen 3.5b with 4-bit quantization, Zerank2 4B with 4-bit quantization, and the OpenJev reranker. I tested with 100 papers published past 2010, with the keywords "locally decodable", "LDC", or "LCC". I looked at papers 85-90, and looked at the top 5 reranked papers for each. The important test in this case were the papers "an exponential lower bound for 3-query locally correctable codes" and "Small even covers, locally decodable codes and restricted subgraphs of edge-colored Kikuchi graphs", as these are the papers that I'm sure have matches in the candidate pool. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/reranker.py
+* notebooks/pipeline_test_500.ipynb
+
+### Results
+The results from my testing were roughly Qwen 0.6B = Zerank2 > Qwen 3.5B >> OpenJev. Qwen performs slightly better on the small even covers paper, while zerank misses the ideal match. Neither catch the other papers using the Kikuchi method (unfortunately). Both Qwen and Zerank get the right matches in the top5 for the exponential lower bound paper, but the ordering by Zerank is better. However, it does take much longer to run, at over a minute per paper which is unacceptable. 
+
+I can accept this retrieval quality for now. It is easy enough to switch out the rerankers later. 
+### Decisions made
+
+Record any choices you made and why.
+
+* The reranker is needed in the first place to improve retrieval quality. Using just nearest neighbour search, there is very strange behaviour where two entirely dissimilar paragraphs are embedded close to each other, perhaps because they share some superficial notation or vocabulary. I don't have time to train a custom embedding model, so a reranker is a good way to significantly improve retrieval quality. 
+* For passages which are too 
+
+### Issues or questions
+
+### Next step

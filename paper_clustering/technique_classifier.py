@@ -163,4 +163,7 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
 
     def predict(self, passages: list[str]) -> torch.Tensor:
         """Predict an ordinal score from 0 to 4 for every passage."""
-        return self.predict_logits(passages).argmax(dim=-1)
+        logits = self.predict_logits(passages)
+        probabilities = logits.softmax(dim=-1)
+        classes = torch.arange(5, dtype=logits.dtype, device=logits.device)
+        return probabilities @ classes

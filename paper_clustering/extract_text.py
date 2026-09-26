@@ -58,8 +58,8 @@ GENERIC_ENV_RE = re.compile(r"\\begin\{([a-zA-Z*]+)\}(.*?)\\end\{\1\}", re.DOTAL
 # Locate proof environment boundaries. A token-based pass is used instead of
 # one broad expression so nested proof/proof* environments are handled safely.
 PROOF_ENV_TOKEN_RE = re.compile(
-    r"\\(?:(?P<begin>begin)\s*\{proof\*?\}(?:\s*\[[^]]*\])?"
-    r"|(?P<end>end)\s*\{proof\*?\})",
+    r"\\(?:(?P<begin>begin)\s*\{proof[^}]*\}(?:\s*\[[^]]*\])?"
+    r"|(?P<end>end)\s*\{proof[^}]*\})",
     re.IGNORECASE,
 )
 

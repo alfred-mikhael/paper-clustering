@@ -68,6 +68,7 @@ class EmbeddedPaper(Paper):
 class ClusterRecord:
     cluster_id: int
     arxiv_id: str
+    title: str
     certainty: float
 
 

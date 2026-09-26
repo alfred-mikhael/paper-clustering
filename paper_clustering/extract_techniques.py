@@ -52,32 +52,54 @@ def merge_similar(
     if embeddings.ndim != 2 or embeddings.shape[0] != len(techniques):
         raise ValueError("techniques must contain one embedding vector each")
 
-    # ``embed`` requests normalized vectors, so their dot product is cosine
-    # similarity. Connected components make merging independent of input order:
-    # a passage joins a group when it is similar to any member of that group.
-    similarities = embeddings @ embeddings.T
-    parents = list(range(len(techniques)))
+    # Compare only passages from the same paper. Keep original indices so the
+    # length-limited union order and final output order remain unchanged.
+    indices_by_paper: dict[str, list[int]] = {}
+    for index, technique in enumerate(techniques):
+        indices_by_paper.setdefault(technique.arxiv_id, []).append(index)
+    parents = list((i, len(t.text)) for i, t in enumerate(techniques))
 
-    def find(index: int) -> int:
-        while parents[index] != index:
-            parents[index] = parents[parents[index]]
-            index = parents[index]
-        return index
+    def find(index: int) -> tuple[int, int]:
+        root = index
+        while parents[root][0] != root:
+            root = parents[root][0]
+
+        # Only the root's length is authoritative; compress the entire path.
+        while index != root:
+            parent = parents[index][0]
+            parents[index] = parents[root]
+            index = parent
+        return parents[root]
 
     def union(left: int, right: int) -> None:
-        left_root, right_root = find(left), find(right)
-        if left_root != right_root:
-            parents[right_root] = left_root
+        left_root, left_length = find(left)
+        right_root, right_length = find(right)
+        if left_root == right_root:
+            return
 
-    row_indices, column_indices = np.triu_indices(len(techniques), k=1)
-    for left, right in zip(row_indices, column_indices, strict=True):
-        if (
-            techniques[left].arxiv_id == techniques[right].arxiv_id
-            and similarities[left, right] >= threshold
-        ):
-            union(int(left), int(right))
+        merged_length = left_length + right_length + len("\n\n")
+        if merged_length > 2048:
+            return
 
-    groups: dict[int, list[Technique]] = {}
+        parents[left_root] = (left_root, merged_length)
+        parents[right_root] = parents[left_root]
+
+    for indices in indices_by_paper.values():
+        if len(indices) < 2:
+            continue
+        paper_embeddings = embeddings[indices]
+        # Embeddings are normalized, so dot products give cosine similarities.
+        similarities = paper_embeddings @ paper_embeddings.T
+        for row, left in enumerate(indices):
+            for column in range(row + 1, len(indices)):
+                right = indices[column]
+                if (
+                    similarities[row, column] >= threshold
+                    and find(left)[1] + find(right)[1] <= 2048
+                ):
+                    union(left, right)
+
+    groups: dict[tuple[int, int], list[Technique]] = {}
     for index, technique in enumerate(techniques):
         groups.setdefault(find(index), []).append(technique)
 
@@ -182,7 +204,7 @@ def extract_techniques_and_embed_batch(
         )
         selected = ranked[:1]
         for index, technique in enumerate(ranked[1:], start=1):
-            if technique.score < k + index / 3.0:
+            if technique.score < min(k + index / 4.0, 3.9):
                 break
             selected.append(technique)
         selected_by_paper.append(selected)
