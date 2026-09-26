@@ -84,6 +84,8 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         self.weights_path = Path(weights_path) if weights_path is not None else None
         if self.weights_path is not None and self.weights_path.exists():
             self.load_weights(self.weights_path)
+        elif self.weights_path is not None and not self.weights_path.exists():
+            raise FileNotFoundError(f"Cannot find {self.weights_path}")
 
     def _initialize_head_weights(self, module: nn.Module) -> None:
         """Initialize MLP linear layers consistently with the BERT checkpoint."""
