@@ -15,6 +15,7 @@ import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from threading import Lock
+from time import perf_counter
 from typing import Annotated
 
 import psycopg
@@ -27,12 +28,14 @@ from paper_clustering.query import SearchResult, rank_candidates, retrieve_candi
 from paper_clustering.reranker import SLMReranker
 from paper_clustering.utils import DatabaseClient
 
-logger = logging.getLogger(__name__)
+# Inherit Uvicorn's configured INFO handler when running the documented command.
+logger = logging.getLogger("uvicorn.error").getChild(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Create shared resources at startup and release them at shutdown."""
+    startup_started = perf_counter()
     pool = ConnectionPool(
         conninfo=os.environ.get("DATABASE_URL", ""),
         min_size=2,
@@ -46,28 +49,53 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     try:
         # Fail startup if the database is unavailable, before loading the model.
+        stage_started = perf_counter()
         pool.open(wait=True, timeout=10)
+        logger.info("Database pool startup took %.3fs", perf_counter() - stage_started)
         app.state.database_pool = pool
+        stage_started = perf_counter()
         app.state.reranker = SLMReranker(model_name="Qwen/Qwen3-Reranker-0.6B")
+        logger.info("Reranker loading took %.3fs", perf_counter() - stage_started)
         app.state.reranker_lock = Lock()
+        logger.info("API startup took %.3fs", perf_counter() - startup_started)
         yield
     finally:
+        stage_started = perf_counter()
         pool.close()
         # Drop the application's model reference on shutdown.
         if hasattr(app.state, "reranker"):
             del app.state.reranker
+        logger.info("API shutdown took %.3fs", perf_counter() - stage_started)
 
 
 app = FastAPI(title="Paper Technique Search", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    """Include routing, endpoint work, and response preparation in request timing."""
+    started = perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        logger.info(
+            "%s %s status=%d took %.3fs",
+            request.method, request.url.path, status_code, perf_counter() - started,
+        )
+
+
 @contextmanager
 def get_database_client(request: Request) -> Iterator[DatabaseClient]:
     """Lend a pooled connection only for the caller's database operations."""
+    started = perf_counter()
     try:
         # The client is lightweight and request-local; its physical connection
         # is reused. The context returns it even if retrieval raises an error.
         with request.app.state.database_pool.connection() as connection:
+            logger.info("Database connection wait took %.3fs", perf_counter() - started)
             yield PostgresClient(connection)
     except (
         psycopg.OperationalError,
@@ -101,14 +129,31 @@ def query_papers(
     # A synchronous endpoint runs in a worker thread so blocking database calls
     # do not block the async event loop. Dataclasses are serialized to JSON using
     # the response_model above, which also documents the result fields in /docs.
-    with get_database_client(request) as client:
-        candidates = retrieve_candidates(arxiv_id.strip(), client, k=k)
-    # The connection is back in the pool before waiting for the GPU. Preserve
-    # the full candidate pool: selecting top k before reranking loses matches.
-    if not candidates:
-        return {}
-    # Only ranking is serialized; database retrieval can run concurrently.
-    with request.app.state.reranker_lock:
-        return rank_candidates(
-            candidates, k=k, reranker=request.app.state.reranker
-        )
+    total_started = perf_counter()
+    try:
+        with get_database_client(request) as client:
+            stage_started = perf_counter()
+            try:
+                candidates = retrieve_candidates(arxiv_id.strip(), client, k=k)
+            finally:
+                logger.info(
+                    "Query %s retrieval took %.3fs", arxiv_id, perf_counter() - stage_started
+                )
+        # Return the connection before waiting for the GPU; only ranking is serialized.
+        if not candidates:
+            return {}
+        stage_started = perf_counter()
+        with request.app.state.reranker_lock:
+            logger.info(
+                "Query %s reranker lock wait took %.3fs",
+                arxiv_id, perf_counter() - stage_started,
+            )
+            stage_started = perf_counter()
+            try:
+                return rank_candidates(candidates, k=k, reranker=request.app.state.reranker)
+            finally:
+                logger.info(
+                    "Query %s reranking took %.3fs", arxiv_id, perf_counter() - stage_started
+                )
+    finally:
+        logger.info("Query %s total took %.3fs", arxiv_id, perf_counter() - total_started)

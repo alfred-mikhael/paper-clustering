@@ -408,13 +408,13 @@ class SLMReranker(Reranker):
     def score_pairs(
         self, pairs: Sequence[tuple[str, str]], *, batch_size: int = 8
     ) -> list[float]:
-        """Return scores in [0, 1] in input order, processing bounded batches."""
+        """Return scores in [0, 1] in input order, batching by prompt token length."""
         if batch_size < 1:
             raise ValueError("batch_size must be positive")
         if not pairs:
             return []
         self.model.eval()
-        scores = []
+        tokenized_pairs = []
         for start in range(0, len(pairs), batch_size):
             texts = [
                 self._format_pair(query, candidate)
@@ -428,7 +428,6 @@ class SLMReranker(Reranker):
                 return_attention_mask=False,
                 return_token_type_ids=False,
             )
-            token_batches = []
             for offset, tokens in enumerate(encoded["input_ids"]):
                 if len(tokens) > self.max_length:
                     raise ValueError(
@@ -436,7 +435,15 @@ class SLMReranker(Reranker):
                         f"exceeding max_length={self.max_length}. Shorten the "
                         "passages or explicitly increase max_length."
                     )
-                token_batches.append(tokens)
+                tokenized_pairs.append(tokens)
+
+        sorted_indices = sorted(
+            range(len(pairs)), key=lambda index: len(tokenized_pairs[index])
+        )
+        scores = [0.0] * len(pairs)
+        for start in range(0, len(pairs), batch_size):
+            batch_indices = sorted_indices[start : start + batch_size]
+            token_batches = [tokenized_pairs[index] for index in batch_indices]
             inputs = self.tokenizer.pad(
                 {"input_ids": token_batches},
                 padding=True,
@@ -446,13 +453,14 @@ class SLMReranker(Reranker):
             # Left padding puts the answer position last for every pair.
             logits = self.model(**inputs, use_cache=False, logits_to_keep=1).logits
             batch_scores = self.scoring_function(logits[:, -1, :], self.tokenizer)
-            if batch_scores.shape != (len(texts),):
+            if batch_scores.shape != (len(batch_indices),):
                 raise ValueError("scoring_function must return one score per pair")
             if not torch.all(
                 torch.isfinite(batch_scores) & (batch_scores >= 0) & (batch_scores <= 1)
             ):
                 raise ValueError("scoring_function must return finite scores in [0, 1]")
-            scores.extend(batch_scores.cpu().tolist())
+            for index, score in zip(batch_indices, batch_scores.cpu().tolist()):
+                scores[index] = score
         return scores
 
     def rerank(

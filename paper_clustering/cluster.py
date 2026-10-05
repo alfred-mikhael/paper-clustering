@@ -18,6 +18,48 @@ from paper_clustering.data_models import (
 )
 
 
+def validate_clustering_options(
+    min_cluster_size: int = 5,
+    min_samples: int | None = None,
+    umap_dim: int | None = None,
+) -> None:
+    if min_cluster_size < 2:
+        raise ValueError("min_cluster_size must be at least 2")
+    if min_samples is not None and min_samples < 1:
+        raise ValueError("min_samples must be positive")
+    if umap_dim is not None and umap_dim < 1:
+        raise ValueError("umap_dim must be positive")
+
+
+def validate_labelling_options(num_samples: int = 10, request_timeout: float = 120) -> None:
+    if num_samples < 1:
+        raise ValueError("num_samples must be positive")
+    if not np.isfinite(request_timeout) or request_timeout <= 0:
+        raise ValueError("request_timeout must be finite and positive")
+
+
+def validate_cluster_papers(papers: Sequence[EmbeddedPaper]) -> None:
+    """Validate paper identities, labelling metadata, and compatible vectors."""
+    seen_ids = set()
+    embedding_config = None
+    for paper in papers:
+        arxiv_id = paper.metadata.arxiv_id
+        if not arxiv_id or arxiv_id in seen_ids:
+            raise ValueError(f"Missing or duplicate arxiv_id: {arxiv_id!r}")
+        seen_ids.add(arxiv_id)
+        if not paper.metadata.title or not paper.metadata.abstract:
+            raise ValueError(f"Paper {arxiv_id} requires a title and abstract")
+        vector = np.asarray(paper.area_vector)
+        if vector.ndim != 1 or not vector.size or not np.isfinite(vector).all():
+            raise ValueError(f"Paper {arxiv_id} has an invalid area vector")
+        if paper.embedding_dim != len(vector):
+            raise ValueError(f"Paper {arxiv_id} has an incorrect embedding_dim")
+        config = (len(vector), paper.model_name)
+        if embedding_config is not None and config != embedding_config:
+            raise ValueError("Papers have inconsistent embedding dimensions or models")
+        embedding_config = config
+
+
 def generate_clusters(
     papers: Sequence[EmbeddedPaper],
     *,
@@ -37,6 +79,8 @@ def generate_clusters(
     cosine distance before clustering. ``metric`` applies to HDBSCAN;
     ``umap_dim=None`` clusters the original vectors.
     """
+    validate_clustering_options(min_cluster_size, min_samples, umap_dim)
+    validate_cluster_papers(papers)
     if len(papers) < min_cluster_size:
         return [], {}
 
@@ -118,6 +162,7 @@ def label_clusters(
     Alternatively, ``generate(prompt)`` can call any LLM and must return a
     JSON object mapping string cluster IDs to labels.
     """
+    validate_labelling_options(num_samples, request_timeout)
     if not clusters:
         return {}
     rng = random.Random(random_state)

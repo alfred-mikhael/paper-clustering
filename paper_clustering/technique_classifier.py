@@ -16,12 +16,22 @@ class TechniqueClassifier(ABC):
     """Interface for models that score proof-technique passages."""
 
     @abstractmethod
-    def predict_logits(self, texts: list[str], batch_size: int = 32) -> torch.Tensor:
-        """Return one five-class logit vector for each supplied passage."""
+    def predict_logits(
+        self,
+        texts: list[str],
+        batch_size: int = 32,
+        *,
+        return_overflow_mapping: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        """Return CPU logits, optionally for windows with passage indices.
+
+        Overflow windows contain at most 512 tokens including special tokens
+        and overlap by 128 passage tokens. Without overflow, truncate passages.
+        """
 
     @abstractmethod
-    def predict(self, texts: list[str]) -> torch.Tensor:
-        """Return a score from 0 to 4 for each supplied passage."""
+    def predict(self, texts: list[str], *, pooling: str | None = None) -> torch.Tensor:
+        """Return passage scores, using mean/max window pooling or truncation."""
 
 
 class SciBERTClassifier(nn.Module, TechniqueClassifier):
@@ -129,16 +139,31 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         cls_representation = encoder_output.last_hidden_state[:, 0, :]
         return self.classifier(cls_representation).squeeze(-1)
 
-    def predict_logits(self, passages: list[str], batch_size: int = 32) -> torch.Tensor:
-        """Run batched inference and return CPU logits for every passage."""
+    def predict_logits(
+        self,
+        passages: list[str],
+        batch_size: int = 32,
+        *,
+        return_overflow_mapping: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        """Return CPU logits, optionally with original passage indices per window.
+
+        Windows fit 512 tokens including special tokens and overlap by 128
+        passage tokens. Model batches never exceed ``batch_size`` windows.
+        """
         if batch_size < 1:
             raise ValueError("batch_size must be positive")
         if not passages:
-            return torch.empty((0, 5), dtype=torch.float32)
+            empty = torch.empty((0, 5), dtype=torch.float32)
+            if return_overflow_mapping:
+                return empty, torch.empty(0, dtype=torch.long)
+            return empty
 
         device = next(self.parameters()).device
         batches = DataLoader(passages, batch_size=batch_size, shuffle=False)
         logits: list[torch.Tensor] = []
+        passage_indices: list[torch.Tensor] = []
+        passage_offset = 0
         was_training = self.training
 
         self.eval()
@@ -150,22 +175,53 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
                         padding=True,
                         truncation=True,
                         max_length=512,
+                        stride=128 if return_overflow_mapping else 0,
+                        return_overflowing_tokens=return_overflow_mapping,
                         return_tensors="pt",
                     )
-                    model_inputs = {
-                        key: value.to(device)
-                        for key, value in inputs.items()
-                        if key in {"input_ids", "attention_mask", "token_type_ids"}
-                    }
-                    logits.append(self(**model_inputs).cpu())
+                    if return_overflow_mapping:
+                        passage_indices.append(
+                            inputs.pop("overflow_to_sample_mapping") + passage_offset
+                        )
+                    passage_offset += len(batch)
+                    for start in range(0, len(inputs["input_ids"]), batch_size):
+                        model_inputs = {
+                            key: value[start : start + batch_size].to(device)
+                            for key, value in inputs.items()
+                            if key in {"input_ids", "attention_mask", "token_type_ids"}
+                        }
+                        logits.append(self(**model_inputs).cpu())
         finally:
             self.train(was_training)
 
-        return torch.cat(logits)
+        result = torch.cat(logits)
+        if return_overflow_mapping:
+            return result, torch.cat(passage_indices)
+        return result
 
-    def predict(self, passages: list[str]) -> torch.Tensor:
-        """Predict an ordinal score from 0 to 4 for every passage."""
-        logits = self.predict_logits(passages)
+    def predict(self, passages: list[str], *, pooling: str | None = None) -> torch.Tensor:
+        """Score passages from 0 to 4, optionally pooling final window scores.
+
+        ``None`` preserves truncation; ``"mean"`` and ``"max"`` combine scores
+        from 512-token windows with 128 passage tokens of overlap.
+        """
+        if pooling not in (None, "mean", "max"):
+            raise ValueError('pooling must be None, "mean", or "max"')
+        if pooling is None:
+            logits = self.predict_logits(passages)
+        else:
+            logits, passage_indices = self.predict_logits(
+                passages, return_overflow_mapping=True
+            )
         probabilities = logits.softmax(dim=-1)
         classes = torch.arange(5, dtype=logits.dtype, device=logits.device)
-        return probabilities @ classes
+        scores = probabilities @ classes
+        if pooling is None or not passages:
+            return scores
+        counts = torch.bincount(passage_indices, minlength=len(passages)).tolist()
+        return torch.stack(
+            [
+                window_scores.mean() if pooling == "mean" else window_scores.max()
+                for window_scores in scores.split(counts)
+            ]
+        )

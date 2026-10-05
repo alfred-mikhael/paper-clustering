@@ -18,4 +18,4 @@ DPPy
 psycopg[binary,pool]
 pgvector
 hdbscan
-fastapi
+fastapi[standard]

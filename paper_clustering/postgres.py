@@ -2,7 +2,6 @@ from typing import Any
 from contextlib import AbstractContextManager
 
 import psycopg
-from pgvector.psycopg import register_vector
 from psycopg import sql
 from psycopg.rows import dict_row
 import logging

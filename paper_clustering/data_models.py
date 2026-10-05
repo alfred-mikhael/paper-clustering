@@ -61,7 +61,6 @@ class EmbeddedPaper(Paper):
     arxiv_id: str
     area_vector: np.ndarray
     techniques: list[Technique]
-    coords: tuple[float, float]
 
 
 @dataclass(frozen=True, slots=True)

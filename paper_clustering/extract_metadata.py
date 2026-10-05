@@ -46,7 +46,7 @@ def read_metadata_archive(
         return []
 
     selected_categories = frozenset(
-        category.strip() for category in categories or () if category.strip()
+        category.casefold().strip() for category in categories or () if category.strip()
     )
     selected_keywords = tuple(
         keyword.casefold().strip() for keyword in keywords or () if keyword.strip()
@@ -75,7 +75,9 @@ def read_metadata_archive(
                     # records; one bad row should not abort a long scan.
                     continue
 
-                record_categories = set(str(record["categories"]).split())
+                record_categories = set(
+                    s.casefold() for s in str(record["categories"]).split()
+                )
                 if selected_categories and not record_categories.intersection(
                     selected_categories
                 ):

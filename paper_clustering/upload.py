@@ -9,11 +9,7 @@ from paper_clustering.utils import DatabaseClient
 def upload(
     papers: list[EmbeddedPaper], client: DatabaseClient
 ) -> tuple[bool, bool] | None:
-    """Insert papers and their techniques together in one transaction.
-
-    Convert NumPy vectors to ordinary lists before insertion. An insert error
-    rolls back both tables; a client reporting failure also triggers rollback.
-    """
+    """Insert papers and their techniques together in one transaction."""
     if not papers:
         return None
 
@@ -21,13 +17,12 @@ def upload(
     techniques: list[dict[str, Any]] = []
     for paper in papers:
         metadata = paper.metadata
-        x, y = paper.coords
 
         for technique in paper.techniques:
             techniques.append(
                 {
                     "arxiv_id": metadata.arxiv_id,
-                    "embedding": technique.embedding.tolist(),
+                    "embedding": technique.embedding,
                     "passage": technique.text,
                     "score": technique.score,
                 }
@@ -41,15 +36,13 @@ def upload(
             "abstract": metadata.abstract,
             "url": metadata.url,
             "primary_category": metadata.primary_category,
-            "area_embedding": paper.area_vector.tolist(),
-            "umap_x": x,
-            "umap_y": y,
+            "area_embedding": paper.area_vector,
         }
         records.append(record)
 
     with client.transaction():
         if not client.insert(table="papers", records=records):
-            raise RuntimeError("Paper insertion failed; rolling back upload")
+            raise RuntimeError("Paper insertion failed")
         if not client.insert(table="techniques", records=techniques):
-            raise RuntimeError("Technique insertion failed; rolling back upload")
+            raise RuntimeError("Technique insertion failed")
     return True, True

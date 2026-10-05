@@ -57,7 +57,9 @@ def merge_similar(
     indices_by_paper: dict[str, list[int]] = {}
     for index, technique in enumerate(techniques):
         indices_by_paper.setdefault(technique.arxiv_id, []).append(index)
-    parents = list((i, len(t.text)) for i, t in enumerate(techniques))
+    parents = list(
+        (i, len(encoder.tokenizer.encode(t.text))) for i, t in enumerate(techniques)
+    )
 
     def find(index: int) -> tuple[int, int]:
         root = index
@@ -137,7 +139,15 @@ def extract_techniques_and_embed_batch(
     *,
     threshold: float = 0.9,
     k: int = 3,
+    pooling: str | None = None,
 ) -> list[list[Technique]]:
+    """Extract passages with optional mean/max pooling of classifier window scores.
+
+    ``None`` truncates at 512 tokens. Pooling uses 512-token windows (including
+    special tokens) with 128 passage tokens of overlap, preserving full text.
+    """
+    if pooling not in (None, "mean", "max"):
+        raise ValueError('pooling must be None, "mean", or "max"')
     datasets = [prepare_data(p.sections) for p in papers]
     # Run the classifier on every paragraph in a single batch.
     paragraphs = [paragraph for _, _, _, text in datasets for paragraph in text]
@@ -146,7 +156,7 @@ def extract_techniques_and_embed_batch(
         len(papers),
         len(paragraphs),
     )
-    predictions = classifier.predict(paragraphs)
+    predictions = classifier.predict(paragraphs, pooling=pooling)
 
     # Get the top candidate paragraphs from each paper.
     offset = 0
