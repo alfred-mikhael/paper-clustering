@@ -1,10 +1,10 @@
-"""Select arXiv IDs, embed papers, generate coordinates, and label clusters.
+"""Select paper metadata, embed papers, generate coordinates, and label clusters.
 
 Examples::
 
     python -m paper_clustering.pipeline select --days-back 7 \
-        --input-archive data/math_cs_metadata.zip --output-filepath data/ids.txt
-    python -m paper_clustering.pipeline embed --input-filepath data/ids.txt \
+        --input-archive data/math_cs_metadata.zip --output-filepath data/papers.jsonl
+    python -m paper_clustering.pipeline embed --input-filepath data/papers.jsonl \
         --output-path data/embedded --upload
     python -m paper_clustering.pipeline generate_coords \
         --save-umap-weights weights/umap.joblib --output-filepath data/coords.csv.gz
@@ -39,7 +39,6 @@ from paper_clustering.utils import DatabaseClient
 from paper_clustering.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
     read_metadata_archive,
-    MetadataExtractionError,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +53,7 @@ def get_relevant(
     keywords: list[str] | None = None,
     input_archive: str | Path = DEFAULT_ARCHIVE_PATH,
 ) -> bool:
-    """Write matching IDs, one per line, returning whether selection succeeded.
+    """Write complete paper metadata as JSON Lines, returning selection success.
 
     Dates are inclusive UTC calendar days, based on the first arXiv version.
     Match any category AND any keyword (in title/abstract); empty filters are
@@ -88,9 +87,11 @@ def get_relevant(
         ) as handle:
             temporary_path = Path(handle.name)
             for paper in papers:
-                handle.write(f"{paper.arxiv_id}\n")
+                record = asdict(paper)
+                record["publication_date"] = paper.publication_date.isoformat()
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         temporary_path.replace(output_path)
-        logger.info("ID export took %.3fs", perf_counter() - stage_started)
+        logger.info("Metadata export took %.3fs", perf_counter() - stage_started)
         dates = [paper.publication_date.date() for paper in papers]
         logger.info(
             "Selected %d papers; earliest publication: %s; latest publication: %s; output: %s",
@@ -708,15 +709,34 @@ def embed_papers(
             8 if embedding_batch_size is None else embedding_batch_size
         )
         stage_started = perf_counter()
-        ids = list(
-            dict.fromkeys(
-                value
-                for line in input_filepath.read_text(encoding="utf-8").splitlines()
-                for value in re.split(r"[\s,]+", line.split("#", 1)[0].strip())
-                if value
-            )
-        )
-        logger.info("ID loading took %.3fs", perf_counter() - stage_started)
+        metadata_by_id = {}
+        with input_filepath.open(encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                    if not isinstance(record, dict):
+                        raise ValueError("Expected a paper metadata object")
+                    if not isinstance(record.get("authors"), list) or not all(
+                        isinstance(author, str) for author in record["authors"]
+                    ):
+                        raise ValueError("authors must be a list of strings")
+                    record["authors"] = tuple(record["authors"])
+                    record["publication_date"] = datetime.fromisoformat(
+                        record["publication_date"]
+                    )
+                    metadata = PaperMetadata(**record)
+                    if not isinstance(metadata.arxiv_id, str) or not metadata.arxiv_id:
+                        raise ValueError("arxiv_id must be a nonempty string")
+                except (ValueError, TypeError, KeyError) as error:
+                    raise ValueError(
+                        f"Invalid paper metadata at line {line_number}; "
+                        "use the JSON Lines output from select"
+                    ) from error
+                metadata_by_id.setdefault(metadata.arxiv_id, metadata)
+        ids = list(metadata_by_id)
+        logger.info("Metadata loading took %.3fs", perf_counter() - stage_started)
         settings = {
             "batch_size": batch_size,
             "embedding_model": embedding_model,
@@ -786,13 +806,10 @@ def embed_papers(
                     logger.info(
                         "Downloading paper %d/%d: %s", index, len(ids), arxiv_id
                     )
-                    try:
-                        paper = get_paper(
-                            session, arxiv_id, include_proofs=include_proofs, retries=1
-                        )
-                    except MetadataExtractionError as e:
-                        logger.warning(str(e))
-                        continue
+                    paper = get_paper(
+                        session, arxiv_id, metadata=metadata_by_id[arxiv_id],
+                        include_proofs=include_proofs, retries=1,
+                    )
                     if not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
                     papers.append(paper)
@@ -886,8 +903,8 @@ def embed_papers(
 def main(argv: list[str] | None = None) -> int:
     """Run selection, embedding, coordinates, or labelled clustering.
 
-    Embed IDs may be separated by commas or whitespace, with # comments.
-    Duplicates are removed in input order. --batch-size controls papers per batch.
+    Embed reads paper metadata from the JSON Lines output of select.
+    Duplicate IDs keep their first record. --batch-size controls papers per batch.
     With --upload, commit each batch using the existing upload function. With
     --output-path, save each batch to a new batch_0001, batch_0002, ... folder.
     A failure stops subsequent batches; prior uploads and batch files remain.
@@ -896,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    select = commands.add_parser("select", help="Select IDs from a metadata ZIP")
+    select = commands.add_parser("select", help="Select paper metadata from a ZIP")
     select.add_argument("--days-back", type=int, required=True)
     select.add_argument("--input-archive", type=Path, default=DEFAULT_ARCHIVE_PATH)
     select.add_argument("--output-filepath", type=Path, required=True)
@@ -907,7 +924,10 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser = commands.add_parser(
         "embed", help="Embed papers for file export or upload"
     )
-    embed_parser.add_argument("--input-filepath", type=Path, required=True)
+    embed_parser.add_argument(
+        "--input-filepath", type=Path, required=True,
+        help="Paper metadata JSON Lines file produced by select",
+    )
     embed_parser.add_argument(
         "--upload", action="store_true", help="Upload to the database"
     )

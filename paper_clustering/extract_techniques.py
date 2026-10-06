@@ -8,6 +8,7 @@ from sentence_transformers import SentenceTransformer
 from paper_clustering.data_models import ArxivSection, Paper, Technique
 from paper_clustering.embedding import embed, embed_techniques
 from paper_clustering.technique_classifier import TechniqueClassifier
+from time import perf_counter
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,8 @@ def merge_similar(
     ]
     merged_embeddings = (
         iter(embed(merged_texts, encoder, batch_size=embedding_batch_size))
-        if merged_texts else iter(())
+        if merged_texts
+        else iter(())
     )
 
     merged: list[Technique] = []
@@ -161,12 +163,18 @@ def extract_techniques_and_embed_batch(
     # Score all paragraphs using the classifier's internal batching.
     paragraphs = [paragraph for _, _, _, text in datasets for paragraph in text]
     logger.info(
-        "processed %d papers with a total of %d paragraphs",
+        "Processing %d papers with a total of %d paragraphs",
         len(papers),
         len(paragraphs),
     )
+    start = perf_counter()
     predictions = classifier.predict(
         paragraphs, pooling=pooling, batch_size=technique_batch_size
+    )
+    logger.info(
+        "Classifier run (batch size %d) took %ds",
+        technique_batch_size,
+        perf_counter() - start,
     )
 
     # Get the top candidate paragraphs from each paper.
@@ -196,9 +204,16 @@ def extract_techniques_and_embed_batch(
     if not candidates:
         return [[] for _ in papers]
 
+    start = perf_counter()
     embeddings = embed(
-        [text for _, _, _, text, _ in candidates], encoder,
+        [text for _, _, _, text, _ in candidates],
+        encoder,
         batch_size=embedding_batch_size,
+    )
+    logger.info(
+        "Embedding (batch size %d) took %ds",
+        embedding_batch_size,
+        perf_counter() - start,
     )
     techniques = [
         Technique(
