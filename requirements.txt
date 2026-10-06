@@ -1,6 +1,6 @@
 feedparser 
 torch 
-transformers 
+transformers==4.57.6
 scikit-learn 
 tqdm 
 umap-learn 

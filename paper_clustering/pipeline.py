@@ -43,6 +43,7 @@ from paper_clustering.extract_metadata import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def get_relevant(
@@ -774,7 +775,8 @@ def embed_papers(
                     _write_batch_manifest(batch_path, manifest)
                 logger.info(
                     "Processing batch %d: %d papers",
-                    offset // batch_size + 1, len(batch_ids)
+                    offset // batch_size + 1,
+                    len(batch_ids),
                 )
                 stage_started = perf_counter()
                 papers = []
@@ -927,7 +929,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     embed_parser.add_argument("--device", help="Torch device; default: automatic")
     embed_parser.add_argument(
-        "--batch-size", type=int, default=500,
+        "--batch-size",
+        type=int,
+        default=500,
         help="Papers per processing/export batch (default: 500)",
     )
     embed_parser.add_argument(

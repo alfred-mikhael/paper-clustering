@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 
 class TechniqueClassifier(ABC):
@@ -61,6 +61,8 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         contain either a plain PyTorch state dictionary or the richer checkpoint
         written by ``train_classifier.py``. Pass ``None`` to start from the
         pretrained SciBERT checkpoint even if the default local checkpoint exists.
+        With a local checkpoint, only the tokenizer and encoder configuration
+        are loaded from Hugging Face; pretrained encoder weights are not loaded.
     """
 
     DEFAULT_MODEL_NAME = "allenai/scibert_scivocab_uncased"
@@ -80,8 +82,15 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         if not 0.0 <= dropout < 1.0:
             raise ValueError("dropout must be in the interval [0, 1)")
 
+        self.weights_path = Path(weights_path) if weights_path is not None else None
+        if self.weights_path is not None and not self.weights_path.is_file():
+            raise FileNotFoundError(f"Cannot find {self.weights_path}")
+
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.scibert = AutoModel.from_pretrained(model_name)
+        if self.weights_path is None:
+            self.scibert = AutoModel.from_pretrained(model_name)
+        else:
+            self.scibert = AutoModel.from_config(AutoConfig.from_pretrained(model_name))
         encoder_hidden_size = self.scibert.config.hidden_size
 
         self.classifier = nn.Sequential(
@@ -93,11 +102,8 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         )
         self.classifier.apply(self._initialize_head_weights)
 
-        self.weights_path = Path(weights_path) if weights_path is not None else None
-        if self.weights_path is not None and self.weights_path.exists():
+        if self.weights_path is not None:
             self.load_weights(self.weights_path)
-        elif self.weights_path is not None and not self.weights_path.exists():
-            raise FileNotFoundError(f"Cannot find {self.weights_path}")
 
     def _initialize_head_weights(self, module: nn.Module) -> None:
         """Initialize MLP linear layers consistently with the BERT checkpoint."""
