@@ -563,7 +563,9 @@ def _resume_embedding_offset(
         if not manifest_path.is_file():
             raise ValueError(f"Missing manifest: {manifest_path}; cannot safely resume")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        expected_ids = ids[offset : offset + 500]
+        # Older exports used a fixed 500-paper batch size.
+        manifest.setdefault("batch_size", 500)
+        expected_ids = ids[offset : offset + settings["batch_size"]]
         if not expected_ids or manifest.get("arxiv_ids") != expected_ids:
             raise ValueError(f"Input paper IDs differ from {manifest_path}")
         for key, value in settings.items():
@@ -680,7 +682,7 @@ def embed_papers(
     classifier_weights: Path = Path("weights/technique_classifier_checkpoint.pt"),
     embedding_model: str = "nomic-ai/nomic-embed-text-v2-moe",
     device: str | None = None,
-    batch_size: int = 8,
+    batch_size: int = 500,
     technique_batch_size: int = 32,
     embedding_batch_size: int | None = None,
     include_proofs: bool = False,
@@ -702,7 +704,7 @@ def embed_papers(
             embedding_batch_size=embedding_batch_size,
         )
         embedding_batch_size = (
-            batch_size if embedding_batch_size is None else embedding_batch_size
+            8 if embedding_batch_size is None else embedding_batch_size
         )
         stage_started = perf_counter()
         ids = list(
@@ -715,6 +717,7 @@ def embed_papers(
         )
         logger.info("ID loading took %.3fs", perf_counter() - stage_started)
         settings = {
+            "batch_size": batch_size,
             "embedding_model": embedding_model,
             "classifier_weights": str(classifier_weights.resolve()),
             "pooling": pooling,
@@ -757,11 +760,11 @@ def embed_papers(
         )
         embedded_count = start_offset
         with requests.Session() as session:
-            for offset in range(start_offset, len(ids), 500):
+            for offset in range(start_offset, len(ids), batch_size):
                 batch_started = perf_counter()
-                batch_ids = ids[offset : offset + 500]
+                batch_ids = ids[offset : offset + batch_size]
                 batch_path = (
-                    output_path / f"batch_{offset // 500 + 1:04d}"
+                    output_path / f"batch_{offset // batch_size + 1:04d}"
                     if output_path is not None
                     else None
                 )
@@ -770,7 +773,8 @@ def embed_papers(
                     batch_path.mkdir(parents=True, exist_ok=True)
                     _write_batch_manifest(batch_path, manifest)
                 logger.info(
-                    "Processing batch %d: %d papers", offset // 500 + 1, len(batch_ids)
+                    "Processing batch %d: %d papers",
+                    offset // batch_size + 1, len(batch_ids)
                 )
                 stage_started = perf_counter()
                 papers = []
@@ -860,7 +864,7 @@ def embed_papers(
                     _write_batch_manifest(batch_path, manifest)
                 logger.info(
                     "Embedding batch %d took %.3fs",
-                    offset // 500 + 1,
+                    offset // batch_size + 1,
                     perf_counter() - batch_started,
                 )
                 embedded_count += len(embedded_papers)
@@ -881,7 +885,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run selection, embedding, coordinates, or labelled clustering.
 
     Embed IDs may be separated by commas or whitespace, with # comments.
-    Duplicates are removed in input order. Process up to 500 papers at a time.
+    Duplicates are removed in input order. --batch-size controls papers per batch.
     With --upload, commit each batch using the existing upload function. With
     --output-path, save each batch to a new batch_0001, batch_0002, ... folder.
     A failure stops subsequent batches; prior uploads and batch files remain.
@@ -922,7 +926,10 @@ def main(argv: list[str] | None = None) -> int:
         "--resume", action="store_true", help="Continue batches saved to --output-path"
     )
     embed_parser.add_argument("--device", help="Torch device; default: automatic")
-    embed_parser.add_argument("--batch-size", type=int, default=8)
+    embed_parser.add_argument(
+        "--batch-size", type=int, default=500,
+        help="Papers per processing/export batch (default: 500)",
+    )
     embed_parser.add_argument(
         "--technique-batch-size",
         type=int,
@@ -932,7 +939,7 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser.add_argument(
         "--embedding-batch-size",
         type=int,
-        help="Area and technique embedding batch size (default: --batch-size, or 8)",
+        help="Area and technique embedding batch size (default: 8)",
     )
     embed_parser.add_argument("--include-proofs", action="store_true")
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
