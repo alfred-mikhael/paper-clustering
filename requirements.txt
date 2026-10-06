@@ -5,6 +5,17 @@ scikit-learn
 tqdm 
 umap-learn 
 sentence-transformers 
+einops
 supabase
 pandas
 matplotlib
+bitsandbytes
+python-dotenv
+huggingface_hub
+accelerate 
+requests
+DPPy
+psycopg[binary,pool]
+pgvector
+hdbscan
+fastapi[standard]

@@ -18,3 +18,6 @@ TODO: Add the rest as you go
 
 ## Demo
 
+## How to run
+Run `python -m spacy download en_core_web_sm` 
+Put your HF access token in your .env file.

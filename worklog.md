@@ -1,48 +1,937 @@
 # Work Log — Paper Clustering Project
 
-**Date: July 8, 2026**
-**Time spent: 2 hours**
-**Goal for this session: Refactor codebase to be local, and set up systems to improve development efficiency. **
+## Date: July 8, 2026
+### Time spent: 2 hours
+**Goal for this session:** Refactor codebase to be local, and set up systems to improve development efficiency.
 
-## What I worked on
+### What I worked on
 
-Briefly describe what you did.
+* Initialize git repository for project instead of working on Colab
+* Set up worklog.md and readme.md, as well as a project on GPT so everything related to this project is kept in the same place
+* Set up miniconda environment for the project
+* Improve download from arxiv by:
+    * better category detection
+    * better failure logging
 
-## Files or data used
+### Files or data used
 
 List any datasets, papers, scripts, notebooks, or output files.
 
-*
-*
+* data_collection.ipynb
+* requirements.txt
+* readme.md
+* wordklog.md
 
-## Method used
-
-Describe the main approach.
-
-Example: generated embeddings, cleaned abstracts, ran k-means, inspected clusters, made a visualization.
-
-## Results
+<!-- ### Results
 
 Write the main outcome.
 
 * Number of papers:
 * Number of clusters:
 * Useful observations:
-* Problems noticed:
+* Problems noticed: -->
 
-## Decisions made
+### Decisions made
 
 Record any choices you made and why.
 
-Example: decided to use title + abstract instead of abstract only because the clusters were clearer.
+Decided to skip collecting papers whose primary label is not in the categories list, as they seem to be 
+tangentially related at best, and quite irrelevant most of the time.
 
-## Issues or questions
+### Issues or questions
 
 List anything confusing, broken, or worth checking later.
 
-*
-*
+* Might want to refactor failure logging in a cleaner way. Logger class that has an in-memory buffer and 
+can flush to a file seems like a better way to handle logging, especially since the construction of the log
+message might not be the same in every scenario.
 
-## Next step
+### Next step
 
-Write the next concrete thing to do.
+Update intro extraction, bulk download Arxiv papers and upload to Supabase, deduplication
+
+
+## Date: July 9, 2026
+### Time spent: 2 hours
+**Goal for this session:** Update intro extraction, upload papers to supabase and deduplicate. Start logging to files and supabase.
+
+### What I worked on
+
+* Create a better logging system. Now logs things as jsonl
+* Make arxiv fetch function more modular and handles errors better
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/data_collection.ipynb
+* src/arxiv_fetch.py
+* src/logger.py
+
+<!-- ### Results
+
+Write the main outcome.
+
+* Number of papers:
+* Number of clusters:
+* Useful observations:
+* Problems noticed: -->
+
+### Decisions made
+
+Record any choices you made and why.
+
+Make separate logger class, because I will eventually want to log errors in a database, and I want to reuse the class for logging errors with intro extraction and tex source downloads. Moved functions into a .py file instead of keeping everything in .ipynb so that it is easy to reuse.
+
+### Issues or questions
+
+List anything confusing, broken, or worth checking later.
+
+* Might not want to open and close file every time I log. Could buffer and flush periodically, but that seems overengineered for my use case. 
+
+### Next step
+
+Update intro extraction, bulk download Arxiv papers and upload to Supabase, deduplication
+
+## Date: July 10, 2026
+### Time spent: 3.5 hours
+**Goal for this session:** Update intro extraction, upload papers to supabase and deduplicate. Start logging to supabase. Get preliminary embeddings and mappings. 
+
+### What I worked on
+
+* Used codex to update math extraction into three levels: level 0 where all math is replaced by <MATH> tokens. Level 1 where some common and important expressions are replaced with english hints, and the rest is replaced with <MATH>. Level 2 where all expressions are turned into a normalized english representation, for example "x + y" becomes "x_plus_y", and "$\Pr[x \geq 2] \leq \exp(-2t)" becomes "Pr_x_ge_2_le_exp_neg_2_t". 
+* Used codex to optimize the speed of intro extraction, as it was quite slow. I need to review that code more carefully, because I can probably optimize it significantly. Maybe it is best to use a C program for this?
+* Logger now logs skipped papers to a file, and can optionally log to stdout
+* fetch_arxiv_data now has a (toggleable) progress bar
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/data_collection.ipynb
+* src/arxiv_fetch.py
+* src/logger.py
+* src/extract_intro.py
+
+<!-- ### Results
+
+Write the main outcome.
+
+* Number of papers:
+* Number of clusters:
+* Useful observations:
+* Problems noticed: -->
+
+### Decisions made
+
+Record any choices you made and why.
+
+Had codex generate different levels of math normalization when doing intro extraction. The first level suprresses all math notation with a <MATH> symbol. The second level replaces some expressions with english hints (i.e. y \in \F_2^n becomes finite field vector), and the third level keeps as much math notation as possible, separated by underscores (i.e. y \in \F_2^n becomes y_in_finite_field_2_n, and \Pr[|x - y| > 10] < 0.1 becomes Pr_abs_x_minus_y_gt_10_lt_0.1). I did this because, while the math notation is of course very important, there is a lot of variation in how people write it, both in symbols and especially in LaTeX macros. For example, the boolean cube {0, 1}^n can be written as 
+1. \{0, 1\}^n,  
+2. \lbrace 0, 1 \rbrace^n
+3. \F_2^n 
+4. \bits^n 
+5. \Bits^n
+6. \F2^n
+And so on. Moreover, the same parameters are often given different variable names. Although they are usually chosen from a small range of options, this still adds noise to the model. It will take a lot of experimentation to see the right level of feature extraction that should be done.
+
+### Issues or questions
+
+List anything confusing, broken, or worth checking later.
+
+* Definitely need to review (and probably rewrite) the code generated by Codex. While it is very useful, I do not think it has a place in writing anything except short snippets of boilerplate code. I think the intro extraction from the tex files is probably fine (if perhaps a little slow) but the math cleaning rules need to be verified and rewritten by me. 
+
+### Next step
+
+No need to focus on improving performance at this stage. Before rewriting rules for intro extraction techniques, I should evaluate what I have against a few models. I need to collect a dataset of about 200-300 papers, across a range of research areas and with hard examples for clustering. Then I can run this against a few different embedding models and evaluate the quality of the clusters both qualitatively (manually) and quantitatively (need to resarch what methods are used to evaluate clustering quality)
+
+## Date: July 13, 2026
+### Time spent: 3.5 hours
+**Goal for this session:** Evaluate which level of math extraction and what embedding model is best as a baseline. I need to do this **before** uploading to Supabase. 
+
+### What I worked on
+
+* Evaluated quality of embeddings with different level of math removal and different embeeding models.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/first_evals.ipynb
+
+### Results
+
+Write the main outcome.
+
+* SPECTER performs better than BM25, and all-minillm-l12-v2. 
+* 'coarse' level of math extraction does (marginally) better than 'fine' and 'no_math', but it is a very small difference
+* all-minillm-l12-v2 is not affected at all by the level of math extraction. It performs silghtly worse than SPECTER but not by a lot
+* BM25 performs very poorly across all levels of math extraction
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Rather than handpicking papers for the evaluation dataset, I decided to choose a few different categories and use the existing Arxiv keyword search to get the papers. Handpicking 500 papers would take an extremely long time, and it's definitely not worth it for this initial evaluation
+* Decided to compare SPECTER and all-minillm-l12-v2. SPECTER has been trained on scientific papers (but not math papers), and all-minillm-l12-v2 is a more general purpose model. It is important to see the performance of both.
+* Used codex to generate the code which runs the experiment. I think it was very successful. 
+
+### Issues or questions
+
+List anything confusing, broken, or worth checking later.
+
+* Did not consider the context window size of the models. It probably doesn't make much of a difference whether I just embed title + abstract or title + abstract + intro, since most abstracts will already fill up the entire window, and the first few sentences of an introduction aren't particularly useful. 
+* PyTorch is not running on GPU locally and I'm not sure why. It might be better to run the experiments on Colab to save some time, rather than trying to debug why my GPU isn't working.
+
+### Next step
+
+* Test the difference between title + abstract and title + abstract + intro. 
+* Test an embedding model which has a large enough context window to fit the entire introduction
+* Decide whether to do experiments on Colab or locally? Long term it is better to fix it locally, but it will also be time consuming.
+
+## Date: July 15, 2026
+### Time spent: 2.5 hours
+**Goal for this session:** Continue evaluating which embedding model + level of math removal is most useful. Test whether embedding the introduction is useful at all. If possible, handcraft some better math extraction rules and see about extracting only parts of the intro which are most useful ("Our results", "Proof overview", Theorem statements, etc). 
+
+### What I worked on
+
+* Completed and documented evaluations for embedding models. The experiment was a qualitative evaluation of the top10 nearest neighbours of 2 papers.
+* Had Codex simplify the code in extract_intro.py 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+* notebooks/first_evals.ipynb
+
+### Results
+
+Write the main outcome.
+
+* Fixed PyTorch so it runs on GPU locally. Did this by avoiding the conda installer and using `python -m pip install ...` and installing torch from `--index-url https://download.pytorch.org/whl/cu118`
+* Found that title + abstract currently performs the best, so math removal is unnecssary. That's a little disappointing but it's good that I found out now and won't spend much time on it. Hard to pin down a single best model so far. Nomic performed best on the catalytic paper, while SPECTER did best on the LCC paper, while MiniLM did decent in both. BM25 also did very well, and takes extremely little computation time. It might be best to use BM25 as a baseline for experimentation, and test against all the other 3 if it passes the intial filter. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Decided to do experiments by qualitatively analyzing the top10 nearest neighbours from a couple of papers. I could've done more papers, but this already took a long time and it's just a preliminary investigation. It's also hard to quantify what makes a paper more relevant than another. 
+* Removed the neural network noisy papers from the dataset. These papers just add a bunch of easy examples, which are not so important compared to the hard examples (papers which sound similar but are different).
+
+### Issues or questions
+
+
+### Next step
+
+* Instead of extracting math from the papers, try to extract a few very important sentences. I will first do this programatically, and then later try with an LLM to do some structured extraction. It will also be helpful to have different embeddings for different purposes, so that it is easier to cluster by techniques and by areas. Most papers have some sort of "proof overview" or "technical overview" or "our techinques" section, but some do not, so it is a challenge to figure out how to extract information about the techniques used in a clear way. 
+
+## Date: July 21, 2026
+### Time spent: 2 hours
+**Goal for this session:** Since math removal is actually not helpful for model performance, try to extract some important sentences from the introduction and use that to enrich the embedding. I definitely want to extract any definitions and theorem statements in the introduction, and maybe in the second 
+
+### What I worked on
+
+Had codex generate some code for extracting enrichment from an introduction. I went back and forth with it a few times about what the regex should be and what sort of information is considered useful. I compared Nomic embeddings title + abstract + enrichment to BM25 with title + abstract + enrichment and BM25 with only title + abstract. Results showed that enrichment did not improve performance at all.  
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* notebooks/test_enrichment.ipynb
+* src/extract_intro.py
+
+### Results
+
+Write the main outcome.
+
+Enrichment extracts sentences from the introduction that are relevant to the results or the proof techniques used, as well as the theorem statements for the main results. Naively appending the enrichment to the title and abstract did not improve performance for the Nomic embedding, or the BM25 scores. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* I did not include any mention of prior work in the enrichment, since it would dilute information about the current results and the techniques used. 
+* I decided to append the enrichment to the title and abstract, hoping that the Nomic model could learn more about the paper from it
+
+### Issues or questions
+
+* GPT recommends a multi-view embedding, where I try to extract information about techinques separately from information about the area, seperately from the baseline title + abstract, and then combine them all together. That sounds pretty promising, and apparantly it was used for the SPECTER model
+* I still need to think about math removal in the enrichment
+* I should test an embedding model with __just__ the enrichment, rather than title + abstract + enrichment, to see if the enrichment is really not good or if the issue is too much text diluting the main ideas. 
+* I also need to generate a good training data set with some labelled examples so I have a proper testbed. 
+
+### Next step
+* Generate a good training data set, with labels, and rerun tests for enrichment using that dataset. 
+
+## Date: July 22, 2026
+### Time spent: 2 hours
+**Goal for this session:** Plan out the training / test data set generation. I need to choose which papers to include, decide how the extraction should work, and make sure that everything will go properly before running it through a teacher model to generate labels. 
+
+### What I worked on
+
+Mostly planned out how I am going to label the data, and simplified enrichment code. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+
+### Results
+
+Write the main outcome.
+
+Here is the plan for generating a labelled dataset: 
+1. Must finalize enrichment from introduction
+2. Get a dataset of a couple thousand papers across a variety of different fields. I should focus on what is most relevant to me, and adjacent fields. 
+3. Select about 75 "anchor" papers which I will measure similarity to. These should be quite influential, and span a wide range of different ideas and fields
+4. Get the top10 most related papers from each of BM25, Nomic with enrichment, and SPECTER. Deduplicate and use these as the labelled pairs. There will be a lot of positives, but also a fair amount of semi-related and unrelated papers (hard negatives)
+5. Possibly run a model on the enrichment to generate a structured output
+6. Use OpenAI batch API to generate labels for each pair of papers. The model will receive the title, abstract, and the enrichment, and should output a score from 0 - 5, as well as a brief explanation of that score (what I ask for depends on how small I want to make the output tokens)
+7. This should generate about 1000 labelled pairs. I should manually validate a few hundred (write a python script to help speed this up), and then reserve those for testing. I can use the rest to do some initial fine-tuning. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Will probably use the OpenAI batch API on GPT5.6 Luna, since it balances cost and quality. Total cost should be <=$20 for the first 1000 pairs. 
+* Will use this knowledge distillation sort of approach because I do not have the time to manually label 15-25k pairs. I can try writing a python script to see roughly how long it takes me. If it takes me roughly 30s per pair to label, then just labelling 1000 pairs will take roughly 8 hours of work - doable, but not pleasant. I can try looking into a semi-supervised approach to make things even cheaper?
+* Run a model on the enrichment to generate structured output: this reduces input size, and makes it easier for the teacher model to make good labels allowing me to use a cheaper model. Conversely, it has a fixed cost per new paper, which would be nice to avoid.
+
+### Issues or questions
+* How worthwhile is the OpenAI API? What can be done manually versus what should be labelled by a stronger model
+* Can I train a small local model to take the enrichment text extracted from the intro by regex and convert it into a more structured format? It will probably be much better in the long run than using an OpenAI model
+* Do I really need 15k training examples?
+
+### Next step
+Keep experimenting with and finalize enrichment. Get a dataset and choose the anchor papers carefully. Get a small script to see how long it really takes to manually label data, and look into a semi-supervised approach which might be cheaper than using the OpenAI API.  
+
+## Date: July 28, 2026
+### Time spent: 2 hour
+**Goal for this session:** Keep working on text enrichment. Also do better preprocessing on the text before embedding and see if that makes any changes.
+
+### What I worked on
+Continued working on the enrichmenet and did research into what sort of clustering people do. I found a good paper on clustering using LLMs, as well as a survey on various clustering techniques and their pros/cons. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+
+### Results
+Enrichment keeps getting better, but it is not complete yet. It still catches some sentences that are not important and misses some important ones.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* I decided NOT to do the text preprocessing which I was planning to do, namely stopword removal and stemming. According to the research I did, this usually reduces the performance of LLMs and text embeddings, since they are trained on full sentences with all stop words, grammer, and transitions. 
+* I did put back a little bit of math handling. I just want to replace common constants with their english versions, so that the math doesn't become meaningless. I also removed dollar signs to hopefully reduce noise in the model.
+
+### Issues or questions
+* I had this idea of chunking the text of papers so that each chunk fits into the context window of a BERT family embedding. When searching for the top10 nearest neieghbours, I can get the top5 for each cluster as candidates, and then take the top10 candidates which have best average cross-cluster relevance. The issue with this is that it would bias papers which are about the same topic, and use different techniques. 
+* What if I use BM25 or TF-IDF to help with the enrichment? I can try by computing BM25 indices for a small dataset, and then using those precomputed indices to give weight to sentences with keywords when doing enrichment. 
+
+### Next step
+I really like the idea of using BM25 to help filter in the enrichment step. I will try that out, and I can also learn about and try out some other cool classical techniques I come across, although it's hard to imagine how anything will be much different from BM25 or TF-IDF.
+
+## Date: August 2, 2026
+### Time spent: 2 hours
+**Goal for this session:** Study and implement some information extraction techniques to help with the enrichment step.
+
+### What I worked on
+Apparently there is a whole field called "information extraction" which solves this exact problem. I had GPT generate a survey on the techniques used, which I will read, implement, and test. This probably has a lot more yield than the BM25 idea or improving regex. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+
+### Results
+Enrichment keeps getting better, but it is not complete yet. It still catches some sentences that are not important and misses some important ones.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* I realized the BM25 technique actually will not help much with enrichment for a couple of reasons: 
+    * The same word can indicate a technique in one place and a result in another place, but BM25 will not catch the distinction
+    * Sometimes, each word on its own is not meaningful but together they are important, like "polynomial method" .This can, to an extent, be solved by including bigrams and trigrams. 
+
+
+### Issues or questions
+How can I improve the enrichment? I need to keep reading.
+
+### Next step
+Read more about improving the enrichment. I'm spending a lot of time on this, but this is by far the most important part of the project. The output of my embedding can only be as good as the input is.
+
+## Date: August 7, 2026
+### Time spent: 4 hours
+**Goal for this session:** Study and implement some information extraction techniques to help with the enrichment step. Start labelling some data
+
+### What I worked on
+Read up a lot about all sorts of ML and IE concepts. I settled on a plan to determine exactly what I'm going to do. I started working on the weak label generation.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+* slm_labels.py
+* regex_labels.py
+* generate_weak_labels.py
+
+### Results
+Finalized plan and started generating weak labels for data.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Using a weak supervision + active learning framework to train a sentence classifier, which will determine if a sentence contains relevant info about the techniques used or not. This minimizes human labelling and lets me train a model which hopefully captures more implicit information than the regex can capture. For weak labelling, I'm using both the regex and a SLM to generate pseudolabels. The SLM should capture lexical variations that the regex might miss. 
+* Decided to use the Gemma 3 4b-it model with 4 bit quantization. I might try others, but a quick search shows that the Gemma models are relatively good at mathematical reasoning and are small enough to run on my laptop.
+
+### Issues or questions
+* Gemma 3 is running quite slowly on my laptop. A single paper took over 15 minutes to score each sentence. I did score sentences that are probably not important (i.e. no need to score anything in the proof details), but it is still averaging 3s per inference, with a batch size of 8. I need to think about whether that is too slow or not.
+
+### Next step
+Finish weak label generation and begin training the technique classifier. 
+
+## Date: August 10, 2026
+### Time spent: 2 hours
+**Goal for this session:** Create script to manually label data some data.
+
+### What I worked on
+Created and debugged a script to help me manually label some sentence data for testing. I will need this later to evaluate the classifier, and I need it now in order to optimize the output of Gemma (it is very bad right now).
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* extract_intro.py
+* scripts/label_sentences.py
+* scripts/README.md
+
+### Results
+Created a nice script that will let me label data quite quickly. Each paper has a few hundred sentences to label, which I can probably optimize a lot by only looking at the entire thing if there is no proof overview / technical overview / techniques etc section. I should manually label about 100-200 sentences for debugging Gemma and some more for testing the classifier later.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Decided to exclude the content of proofs in the labelling (and extraction). I think these sentences will be too technical, and will not convey the main ideas of the proof with only 3 sentences of context. Also, the dense mathematical notation will add a lot of noise into the data, which isn't good. 
+
+### Issues or questions
+* There is a tradeoff between how much time I spend labelling and how much I benefit from the weak supervision technique. I hope I can just label a couple hundred to improve the performance of Gemma, and then spend most of my time labelling in the active learning phase. 
+
+### Next step
+Label some test data and debug Gemma. 
+
+## Date: August 19, 2026
+### Time spent: 2 hours
+**Goal for this session:** Continue Gemma debugging and (hopefully) label a validation / test dataset.
+
+### What I worked on
+
+I forgot to record a log for my previous work session. In that session, I did some tuning for the prompt (mainly Gemma now outputs A, B, C, D, or E rather than a number from 1-100), and decided to use logits to get a smoother output and faster inference. Inference is still very slow, and experimentally the labels generated by Gemma are still bad. 
+
+For today's work, I did a bunch of prompt tuning to get a decently good prompt for Gemma. Results are okay now, although it tends to give things higher weight than they deserve. I think a little more prompt tuning and it will be good enough to generate weak labels, although I need to evaluate it on a test paper first. Once that's done, I can finally start training the actual classifier. This took a lot longer than expected, but I can use weak supervision to train on a curated dataset of 150 influential papers across a wide range of fields. I can also fine tune the embeddings, since I will have so much data. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+* src/slm_labels.py
+
+### Results
+Created a new prompt for Gemma which did not perform as well as the original. Added a few examples into the original prompt, and tuned it slightly to get much better performance. It has (qualitatively) good recall but lower precision. Recall is more important in this context, since missing an informative sentence is much more damaging than including an uninformative sentence. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+
+### Issues or questions
+
+* Will probably want to switch to llama.cpp and use prefix caching when I am labelling the data in full, as there will be a huge number of sentences and any improvement in speed will be appreciated. 
+* I think it is better to start with a dataset of 45 papers rather than the full 150 when training the classifier. Before I pour more compute into labelling, I want to get a baseline of the performance. 
+
+### Next step
+Finish fine tuning and evaluate the Gemma model quantitatively. 
+
+## Date: August 21, 2026
+### Time spent: 3 hours
+**Goal for this session:** Label test / validations set for Gemma and get some quantitative measurements of performance.
+
+### What I worked on
+
+Labelled "A Combinatorial Characterization of Constant Mixing Time"(2511.21868), and started a larger test set. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+* src/extract_intro.py
+* src/slm_labels.py
+* sentence_labels.tsv
+* labels.tsv
+
+### Results
+Fiddled around with the Gemma prompt a little to try and minimize the MSE with a validation paper. It has a rather concerning issue where it undervalues sentences that should be important and overvalues rather uninformative sentences. I also started labelling a larger test set. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+
+### Issues or questions
+
+* Upon further thought, maybe labelling sentences is not the way to go. Even I had some trouble while labelling sentences, because there is usually not enough context in just 3 sentence blocks to make a good decision. I will try labelling entire paragraphs instead. The issue with that is it might include some irrelevant information just to get 1 good sentence, or worse miss a good sentence because the rest of the paragraph is useless, but I think those will be very rare cases. Probably this will also speed up my weak label generation by a lot.
+
+### Next step
+Experiment with labelling paragraphs instead of sentences.
+
+
+## Date: August 22, 2026
+### Time spent: 4 hours
+**Goal for this session:** Experiment with labelling paragraphs instead of labelling sentences.
+
+### What I worked on
+Adjusted APIs and tuned Gemma prompt to label paragraphs instead of sentences. I don't think I can get better results with the SLM labels with anything that can run on 6gb of vram. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/label_generation/slm_labels.py
+* src/extract_text.py
+* scripts/label_sentences.py
+
+### Results
+Qualitatively I'm much happier with the results of Gemma now. It looks like I should use a threshold of approximately 0.7 to consider something useful. It mostly doesn't miss anything now, but it does label some things much higher than they need to be. I think that will be offset well by the regex labels though. Labelling paragraphs is also much faster!
+
+### Decisions made
+
+Record any choices you made and why.
+* Labelling paragraphs instead of sentences because this gives more context to work with. It also makes generating labels way faster. 
+* Added a lot of examples in the prompt to improve performance on hard negatives. Changed the rules and scoring critera slightly to improve performance. 
+
+### Issues or questions
+* Label generation is still a little too slow, about 10 minutes for a 30 page paper. I will deal with this via prompt caching, since the (relatively long) prefix of the prompt is fixed between runs. 
+
+### Next step
+Use llama.cpp to do prompt caching and speed up label generation. Then update src/label_generation/regex_labels.py to score on the same scale as Gemma, and to score paragraphs rather than sentences. Start training the classifier and figure out how I am going to do the active learning step.
+
+## Date: August 24, 2026
+### Time spent: 3 hours
+**Goal for this session:** Set up llama.cpp and update regex label rules.
+
+### What I worked on
+Set up llama.cpp and got it to work with cuda (was pretty easy, but needed a reboot). Updated regex labelling rules.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/label_management/slm_labels.py
+* src/label_management/regex_labels.py
+* src/label_management/label_manager.py
+* src/train/*
+
+### Results
+llama.cpp and prompt caching brings me up to 100 tokens/second, and 3 minutes to label an entire 30 page paper. This is a very nice improvement. I updated the regex rules and started working on the training code for the classifier. 
+
+### Decisions made
+
+Record any choices you made and why.
+* I should mention the architecture used for the classifier. The base embedding model is SciBert, which might change if I encounter lots of paragraphs longer than the 512 token context window. I am using a 2 layer MLP where the input is the last hidden state of the \[CLS\] token. This accomplishes two things: 
+1. It lets me train a specific classifier head, rather than using SciBert's pretrained pooling layer (which is not trained for classification)
+2. It lets me compress the hidden layer so that there is less overfitting risk (hidden layer will be roughly size 256 rather than 768).
+I could also use a logistic regression (a single layer MLP) right on the hidden state, but I hope this extra layer will be able to train a good representation of the paragraphs, and since I am using weak labelling I should have enough data to train it. 
+* I renamed the label_generation folder to label_management, since I want a LabelManager class to provide a unified API to generate weak labels and to select which paragraphs to manually label during active learning.
+
+
+### Issues or questions
+I need to figure out how exactly I am going to choose what to relabel during the active learning. I also need to see how to fit the training into my 6gb (more like 5gb) of vram. I read a little about gradient checkpointing, and I will need to see what other methods I can use while sacrificing as little quality as possible.
+
+### Next step
+Figure out my active learning paragraph selection technique (probably best to read a couple papers). Verify the training code written by Codex (important!), read techniques for reducing vram usage, and start training. 
+
+I also read something about offloading memory to ram when using a MoE model. Maybe I can try using the Gemma-4-E2B-it model if that actually works. Maybe that's something to do later on.
+
+## Date: August 25-26, 2026
+### Time spent: 20 hours
+**Goal for this session:** Review the training code, read about and implement techniques for selecting samples to label duing active learning, and start training the classifier. I'll also need to read about how to reduce memory footprint during training and see what I can do.
+
+### What I worked on
+I worked on training a calibration model to take in the gemma scores and the regex scores and convert it into a single pseudolabel. This involved labelling about 500 paragraphs across 6 papers, some learning about training on class imbalances, which evaluation metrics to use, and review of writing code for logistic regression.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+
+Almost all of them. I made a major refactor to make the code cleaner. I should've done that way earlier.
+
+### Results
+To reduce memory footprint, there is this article on hugging face (https://huggingface.co/docs/transformers/main/perf_train_gpu_one?) which discusses memory managment during training. Most relevant are: 
+1. Gradient accumulation
+2. Gradient checkpointing
+3. Mixed precision training
+4. torch compile
+For selecting samples for active learning, I looked through a survey by Burr (https://burrsettles.com/pub/settles.activelearning.pdf) and a paper on fine-tuning BERT (https://aclanthology.org/2020.emnlp-main.638.pdf). It seems that the core-set method (https://arxiv.org/pdf/1708.00489) gives the best tradeoff between computation time and quality, however the least confidence / max entropy method is not far behind (and much simpler). I might implement the core-set anyway, because it looks cooler (and it is slightly better).
+
+I tried to train a (multiclass) logistic regression calibration model to take in the Gemma probabilities and some regex features (important section, number positive hits, number negative hits) and output a single pseudolabel. I also tried an ordinal regression model. In both cases, paragraphs labelled D/E were consistently rated too low, so I absolutely do not want to train SciBERT on this miscalibrated labels. 
+### Decisions made
+
+Record any choices you made and why.
+* Gemma has an opposite issue, where it ranks irrelevant things too highly. In light of that, I'm going to completely abandon training a calibration model, and abandon the regex features, and just use Gemma as a teacher. 
+
+### Issues or questions
+
+
+### Next step
+Start labelling with Gemma, begin fine-tuning and active learning.
+
+
+## Date: August 27, 2026
+
+### Time spent: 6 hours
+
+**Goal for this session:** Fine-tune SciBERT and do some evaluations.
+
+### What I worked on
+Fine-tuned the SciBERT classifier on about 8.5k paragraphs across 60 influential papers. Unfortunately, the results leave a lot to be desired...
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* src/train/active_learning.py
+* src/train/evaluate_model.py
+* src/train/train_classifier.py
+
+### Results
+I fine-tuned SciBERT on about 8.5k labelled section+paragraph pairs. It trained for 2 epochs, and each epoch took about 15-18 mins to train. I trained for a third epoch, but it increased validation loss so I discarded those results. Only gradient checkpointing was needed to fit everything into VRAM with a batch size of 64, and `export PYTORCH_ALLOC_CONF=expandable_segments:true` (or something along those lines) in order to make better use of VRAM. 
+
+Here are the evaluation metrics that the fine-tuned SciBERT got before active learning. It has a very serious issue in that it underranks the most important paragraphs. I hope that active learning can fix that. 
+    
+    Accuracy: 0.2936
+    Macro F1: 0.1480
+    Macro precision: 0.2176
+    Cross-entropy: 2.3494
+    D/E labels classified as D/E (%): 36.2069
+    Mean Precision@10: 0.2000
+    F1 (A): 0.4014
+    F1 (B): 0.2835
+    F1 (C): 0.0000
+    F1 (D): 0.0553
+    F1 (E): 0.0000
+
+### Decisions made
+
+Record any choices you made and why.
+* In order to correct the underranking, it is especially important during active learning to select the right samples. I want to select samples which are labelled higher than they should be to bring them lower. It is even more important to select samples which 
+* Trained SciBERT on the distribution output by Gemma rather than just the argmax labels. This helps SciBERT learn from the entropy in the distribution, and is what is recommended in the knowledge distillation paper by Hinton.
+* I ended up switching to Gemma 4 E4B, since it fits in memory. I also adjusted the prompt to add a lot more examples about the C/D/E boundary. 
+* I tried to parallelize the weak label generation, but adding an three extra threads actually ended up reducing the number of iterations per second. To me, it looks like requests do not necessarily get batched together very well, as the number of iterations would not always increment by 4. It also took a very long time at the first batch for each thread to do its prefilling. GPU utilization is at 100% anyway, and I'm going to leave it to run overnight so there's no point in wasting time speeding it up.
+
+### Issues or questions
+* There is a serious systematic issue in the results of the SciBERT classifier. I probably want to revise the Gemma model to bias towards recall over precision, since it will be easier to improve precision than recall during active learning (since I can easily sample bad paragraphs that the model ranked highly, but it is difficult to sample good paragraphs that the model ranked low.)
+* I also notice that SciBERT (and therefore Gemma) is ranking paragraphs higher when they have a lot of technical notation. Since notation differs a lot from paper to paper, notation heavy paragraphs are very poor for retreival, and therefore I also want to correct this.
+* I can also see that SciBERT almost never produces Cs or Es. A little inspection of the labels shows that Gemma also doesn't produce any Cs or Es, which is really bad, especially the missing distinction between C and D. 
+
+### Next step
+Retrain and re-evaluate the SciBERT classifier, and do active learning if it looks good. 
+
+
+## Date: August 28-29, 2026
+### Time spent: 14 hours
+**Goal for this session:** Fine-tune SciBERT and do some evaluations. Start active learning
+
+### What I worked on
+I relabelled the training data using the new prompt and using the (much stronger) Gemma 4 E4B-it model which somehow fit into my VRAM. It is a little slower in labelling (~60 tokens / second compared to ~100 tokens/second), but results are much better. I fine-tuned the SciBERT classifier, evaluated, did the active learning rounds, and began implementing the rest of the pipeline. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* weights/*
+* scripts/label_active_learning.py
+* scripts/select_active_learning.py
+* paper_clustering/train/active_learning.py
+* paper_clustering/label/paragraph_label_gui.py
+* paper_clustering/embedding.py
+* paper_clustering/extract_techniques.py
+
+### Results
+Here is the output of `python -m paper_clustering.train.evaluate_model`. The new model is a little worse at labelling D/E paragraphs, but has a much higher mean precision@10, and doesn't have the class collapse issue from before. It still favours labelling A, C, D, but at least it does put a lot of B and E labels. I think active learning can help with this a lot, though I do want to come up with a way to sample good paragraphs that are mislabelled. A good heuristic idea is to randomly sample from "proof overview" sections or similar. 
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Accuracy: 0.6848
+    Macro F1: 0.3309
+    Macro precision: 0.3917
+    Cross-entropy: 1.0861
+    D/E labels classified as D/E (%): 32.7586
+    Mean Precision@10: 0.4125
+    F1 (A): 0.8386
+    F1 (B): 0.1204
+    F1 (C): 0.3708
+    F1 (D): 0.2069
+    F1 (E): 0.1176
+
+After one round of active learning on 200 total samples (40 samples entropy, 20 disagreement, 60 topk random, 60 regex random, 20 random), the metrics look like 
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4696
+    Binary cross-entropy: 0.3698
+    Macro F1: 0.3367
+    A: accuracy=0.7587, recall=0.9364, precision=0.7620, F1=0.8402
+    B: accuracy=0.7967, recall=0.1279, precision=0.3143, F1=0.1818
+    C: accuracy=0.9014, recall=0.2857, precision=0.4000, F1=0.3333
+    D: accuracy=0.9538, recall=0.2000, precision=0.2222, F1=0.2105
+    E: accuracy=0.9692, recall=0.0714, precision=0.3333, F1=0.1176
+
+I'm still not happy with the recall, especially for class D, E. I found that the entropy sampling was by far the most useful, so for the next round I will increase the amount of entropy samples (100 entropy, 20 disagreement, 50 topk, 15 regex, 15 random) for a total of 195 (deduplicated) samples.
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4598
+    Binary cross-entropy: 0.3484
+    Macro F1: 0.3536
+    A: accuracy=0.7608, recall=0.9227, precision=0.7699, F1=0.8394
+    B: accuracy=0.7803, recall=0.1686, precision=0.2900, F1=0.2132
+    C: accuracy=0.9066, recall=0.2619, precision=0.4314, F1=0.3259
+    D: accuracy=0.9559, recall=0.2000, precision=0.2400, F1=0.2182
+    E: accuracy=0.9702, recall=0.1071, precision=0.4286, F1=0.1714
+
+And when trained with a weighted loss function (weights are heuristic [1.0, 1.0, 1.2, 2.0, 3.0], not inverse class frequency).
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4000
+    Brier score: 0.4587
+    Binary cross-entropy: 0.3472
+    Macro F1: 0.3598
+    A: accuracy=0.7608, recall=0.9227, precision=0.7699, F1=0.8394
+    B: accuracy=0.7854, recall=0.1686, precision=0.3053, F1=0.2172
+    C: accuracy=0.9055, recall=0.2262, precision=0.4130, F1=0.2923
+    D: accuracy=0.9507, recall=0.2000, precision=0.2000, F1=0.2000
+    E: accuracy=0.9692, recall=0.1786, precision=0.4167, F1=0.2500
+
+When trained with weights that are inverse class frequencies: 
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4619
+    Binary cross-entropy: 0.3358
+    Macro F1: 0.3608
+    A: accuracy=0.7618, recall=0.9106, precision=0.7765, F1=0.8382
+    B: accuracy=0.7906, recall=0.1686, precision=0.3222, F1=0.2214
+    C: accuracy=0.8963, recall=0.2738, precision=0.3651, F1=0.3129
+    D: accuracy=0.9466, recall=0.2000, precision=0.1765, F1=0.1875
+    E: accuracy=0.9682, recall=0.1786, precision=0.3846, F1=0.2439
+
+I will keep training with inverse class frequencies I believe. Here is the result after the 3rd (and final) round of AL.
+
+    Evaluated scibert on 974 paragraphs from 8 papers
+    Mean Precision@10: 0.4125
+    Brier score: 0.4595
+    Binary cross-entropy: 0.3255
+    Macro F1: 0.3433
+    A: accuracy=0.7690, recall=0.8970, precision=0.7904, F1=0.8403
+    B: accuracy=0.7844, recall=0.1570, precision=0.2935, F1=0.2045
+    C: accuracy=0.8881, recall=0.2738, precision=0.3239, F1=0.2968
+    D: accuracy=0.9384, recall=0.2000, precision=0.1429, F1=0.1667
+    E: accuracy=0.9610, recall=0.1786, precision=0.2500, F1=0.2083
+
+And here is the result of training with `dropout=0.2` and `lr=1e-4`, and using inverse class frequencies as weights.
+
+    Mean Precision@10: 0.4250
+    Brier score: 0.4554
+    Binary cross-entropy: 0.3225
+    Macro F1: 0.3438
+    A: accuracy=0.7690, recall=0.8924, precision=0.7927, F1=0.8396
+    B: accuracy=0.7669, recall=0.2151, precision=0.2868, F1=0.2458
+    C: accuracy=0.9025, recall=0.1190, precision=0.3226, F1=0.1739
+    D: accuracy=0.9343, recall=0.2000, precision=0.1304, F1=0.1579
+    E: accuracy=0.9620, recall=0.2857, precision=0.3200, F1=0.3019
+
+I also implemented `extract_techniques.py` and `embedding.py`. Technique extraction first gets the top20 (adjustable) passages from each paper according to the TechniqueClassifier scores, then does a semantic similarity merging step to hopefully merge all mentions of similar techniques, then uses a DPP to select a diverse set of passages. This is probably overkill unless a paper has a lot of techniques, but it was cool to learn about. The embedding step is rather straightforwards, with `sentence_transformers` doing all the heavy lifting.
+
+### Decisions made
+* Training with the loss weighted to inverse class frequency really helps increase recall for the important classes (D, E). It's also a common way of dealing with imbalanced classes. 
+* Most of the active learning I did with no validation set! It's because I didn't want my very limited D/E examples to be randomly selected for validation rather than training, and a validation set with no D/E samples would be useless. I essentially ended up using the test set as the validation set, which I know is not a good idea, but I don't have much of a choice. I will do more heuristic testing later. 
+* For technique extraction, there is a semantic similarity merging step, so that the <= 3 technique vectors which are chosen should all be about distinct techniques. I might need to tune the threshold for merging, it is currently at 0.85. 
+* Also for technique extraction, after merging of candidates I am using a DPP to select a diverse set of technique vectors. Because I am already doing this, I probably want to increase the threshold for merging up from 0.85, since it is quite unlikely that too similar techniques will pass this step.
+
+### Issues or questions
+* Using the test set in place of the validation set is sure to bias my metrics slightly. Time-permitting, I should label a different test set and compare models in an unbiased way. 
+* I need to figure out how exactly I'm going to string everything together with the website, and compute t-SNE or UMAP embeddings also, as well as title+abstract embeddings. Most of the ML work is done though, and all that's left are software engineering problems
+
+### Next step
+* Finally start computing embeddings and uploading to Supabase. I want to add hybrid keyword search and an RRF reranking function, so I need to see how to implement that either in Supabase or Javascript. I also need to start thinking about how everything is going to fit together. 
+
+
+## Date: September 1, 2026
+### Time spent: 4 hours
+**Goal for this session:** Finish up pipeline functionality.
+
+### What I worked on
+Finished up main pipeline functionality and ran a small test.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/cluster.py
+* paper_clustering/generate_coords.py
+* paper_clustering/query.py
+* paper_clustering/upload.py
+* scripts/filter_math_cs_metadata.py
+* notebooks/pipeline_test_500.py
+* data/math_cs_metadata.zip
+
+### Results
+The basic pipeline is working now, although the technique similarity is iffy at best. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* I downloaded the arxiv metadata and am reading from a file rather than making a network request, since each request takes a long time. In general, I should not make a request for a single paper's metadata at a time when I have the option to do a batch request. 
+
+### Issues or questions
+* Need to make a batch interface for extract_techniques.py, as the current interface is painfully slow at about 5s/paper. 
+* Decide whether or not to make a citation graph, and if so how? Read co-regularized spectral embedding paper.
+* I don't understand the code written in the pipeline test notebook under technique similarity queries. I need to review that and understand it.
+* I probably need to download the arxiv data from S3 (and pay for it...), since 3s per paper for 1.5 million math papers means the program will be running for 34 days straight and hammering the arxiv servers. I can start with a much smaller sample size as a PoC, since that many papers will never fit into the free tier of Supabase either. 
+
+### Next step
+Make sure that everything is using the appropriate batch API and get a small PoC working with a frontend. After that, I can think about how to make the ML stuff higher quality and more efficient. Decide on the citation graph quickly and implement if wanted.
+
+## Date: September 2-8, 2026
+### Time spent: 6 hours
+**Goal for this session:** Refactor codebase and plan out next steps. Tune pipeline.
+
+### What I worked on
+Refactored the codebase to something I'm happier with. I'm still using codex, but I'm being much more judicious with the usage. This better matches my database design as well. Installed postgreSQL on the server. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/data_models.py
+* paper_clustering/extract_techniques.py
+
+### Results
+Lots of refactoring in terms of data models. I created a batch API for extracting techniques, and was able to test the pipeline end-to-end much faster. It seems like optimizing for diversity is causing pretty bad choices of techniques, so I am getting rid of that step entirely for the time being.
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Got rid of ClusteredPaper, TechniqueInfo, EmbeddingInfo. These classes were kind of contrived and the need for EmbeddingInfo to contain an area vector forced extract_techniques to compute an area vector or return a default all 0s value, neither of which is good. I replaced with a Technique class, and now an embedded paper contains a list of techniques. The Technique contains its own embedding. This matches the database schema much more closely, and allows for better separation of responsibilities. Also I adjusted the classes a little so there is less nesting.  
+* Removed the DPP from the technique extraction. As cool as it is mathematically, it is not suited here because missing techniques with high importance score is a lot more harmful than slightly less diversity. The merging step already (hopefully) prevents multiple passages about the same technique which are all rated highly dominating the top 10.  
+
+### Issues or questions
+* How to set up the API to talk to PostgreSQL?
+* I should probably move away from this flat file structure not that things are getting a little more complicated
+* Need to do dependency injection in upload.py, because I am no longer using supabase (but I should have the option to change back if needed).
+
+### Next step
+Set up the API and the postgreSQL server. Finish refactoring the codebase to work with the new data models. Work on front-end :(.
+
+## Date: September 9-13, 2026
+### Time spent: 6.5 hours
+**Goal for this session:** Finish refactoring, get basic front-end working and set up API
+
+### What I worked on
+Added a paper visualization page to my portfolio website and tested with some mock data. Deck.gl looks nice and functions great, although my styling surely needs some review (as does the styling of the entire website). Started configuring Apache to serve static files and the API. Created functions to connect the pipeline to postgres using psycopg3.
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/cluster.py
+* paper_clustering/upload.py
+* paper_clustering/postgres.py
+* paper_clustering/utils.py
+* paper_clustering/data_models.py
+* paper_clustering/generate_coords.py
+* paper_clustering/query.py
+* requirements.txt (added psycopg, pgvector, and hdbscan)
+* alfred-mikhael.github.io/src/paperVisualizationScreen.js
+* alfred-mikhael.github.io/src/paperVisualizationScreen.css
+* config files in apache2s
+
+### Results
+Apache is serving static files locally (haven't added a DNS record yet). With mock data, the front end looks pretty nice. On hovering, it displays the arxiv id and title of the paper. When clicking a paper, it zooms in on it, inputs its title and arxiv_id into the search bar, and runs the API request to get other papers with similar techniques. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Added a title column to the clusters table, since I want to essentially gzip that entire thing and serve it from apache. I could match every arxiv_id to its title when I'm preparing the gzip, but that seems like a lot of unncessary work (at least a large database join every time I want to update the clusters) for very little space savings. Also, I want an easy-to-understand identifier of the paper in the cluster info, rather than just its arxiv id; that should probalby help with debugging.
+* I removed the navbar from the paperVisualization page, since I don't want it to distract. 
+
+### Issues or questions
+* I am a little over-reliant on codex for the front-end. I still did a lot of things myself, but I should be careful not to lean to heavily on it. 
+* I tested gpt5.6-luna on light thinking, it is decent at writing code, but not good at debugging. For example, I wondered why my website kept scrolling even when there was nothing there. It suggested a number of hacky fixes, even though the change was simply changing the .App-header::min-height in a css file. Medium or high thinking does much better.
+* I saw a reddit comment [here](https://www.reddit.com/r/math/comments/1g1nfx8/comment/lrutzol/?context=3) which suggests using word2vec embeddings rather than sentence transformers, since UMAP compression will already lose some of that nuance and it is much more efficient. That seems like a very interesting idea, and one that would save me tons of time if it works. I will think about it and see if its worth it or not. 
+
+### Next step
+Set up Uvicorn, FastAPI, and finish setting up Apache. Then do a small test on maybe 500 sample data points before doing some stylistic finishing touches and testing with a larget dataset of maybe 10k points. Also need to finish the clustering logic and generate the labels, which I haven't done yet.
+
+## Date: September 21-25, 2026
+### Time spent: 6 hours
+**Goal for this session:** Improve retrieval quality
+
+### What I worked on
+I am not satisfied with the quality of retrieval at all. I added an OpenJEV reranker, which made some improvements, but also has some strange issues. I compared reranking with a few different models, Qwen 0.6b, Qwen 3.5b with 4-bit quantization, Zerank2 4B with 4-bit quantization, and the OpenJev reranker. I tested with 100 papers published past 2010, with the keywords "locally decodable", "LDC", or "LCC". I looked at papers 85-90, and looked at the top 5 reranked papers for each. The important test in this case were the papers "an exponential lower bound for 3-query locally correctable codes" and "Small even covers, locally decodable codes and restricted subgraphs of edge-colored Kikuchi graphs", as these are the papers that I'm sure have matches in the candidate pool. 
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* paper_clustering/reranker.py
+* notebooks/pipeline_test_500.ipynb
+
+### Results
+The results from my testing were roughly Qwen 0.6B = Zerank2 > Qwen 3.5B >> OpenJev. Qwen performs slightly better on the small even covers paper, while zerank misses the ideal match. Neither catch the other papers using the Kikuchi method (unfortunately). Both Qwen and Zerank get the right matches in the top5 for the exponential lower bound paper, but the ordering by Zerank is better. However, it does take much longer to run, at over a minute per paper which is unacceptable. 
+
+I can accept this retrieval quality for now. It is easy enough to switch out the rerankers later. 
+
+### Decisions made
+
+Record any choices you made and why.
+
+* The reranker is needed in the first place to improve retrieval quality. Using just nearest neighbour search, there is very strange behaviour where two entirely dissimilar paragraphs are embedded close to each other, perhaps because they share some superficial notation or vocabulary. I don't have time to train a custom embedding model, so a reranker is a good way to significantly improve retrieval quality. 
+* For passages which are too long for the SciBERT context window, I've added pooling (mean or max pooling) with a stride of 128 tokens. Only about 10\% of passages were longer than the context window, but with max pooling this helps avoid false negatives (which are the costliest error in this context).
+
+### Issues or questions
+
+### Next step
+
+## Date: October 1 - Oct 7, 2026
+### Time spent: ... hours
+**Goal for this session:** Finalize pipeline and finally get an MVP.
+
+### What I worked on
+
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* Almost all of them
+
+### Results
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Using threadpool in the api to help with many concurrent users
+* Put unique constraint on (arxiv_id, passage) in techniques table so that I can "on conflict (arxiv_id, passage) do ..." in my sql and get idempotent operations
+* Resumable downloads and embedding, also done in batches. 
+* Generally added a lot of options to save data locally. I wasn't really thinking of using the pipeline as a CLI before, but I realized that there is probably too much data to fit comfortably into memory, and I definitely don't want a single hardware / network error to cost me hours of compute.
+* Separated UMAP coordinates from the `EmbeddedPaper` data model. This lets me use the model after embedding but before doing UMAP (without doing any hacks). It also makes more sense, since the UMAP coordinates are not actually part of the paper. I don't see a need to add a new database table for the coordinates, I will just save them as CSV and serve them as static files.
+
+### Issues or questions
+
+### Next step
