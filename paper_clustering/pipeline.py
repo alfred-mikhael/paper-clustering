@@ -109,7 +109,7 @@ def get_relevant(
 
 def get_month_from_batch_api():
     """Download arxiv source files from the S3 API, and process only those papers which are relevant."""
-    pass
+    raise NotImplementedError()
 
 
 @contextmanager
@@ -289,12 +289,14 @@ def generate_coordinates(
         logger.info("Coordinates finished in %.3fs", perf_counter() - total_started)
 
 
-def _save_embeddings(papers: list[EmbeddedPaper], output_path: Path) -> None:
-    """Save one batch as four gzip files in a new batch folder."""
+def _save_embeddings(
+    papers: list[EmbeddedPaper], output_path: Path, *, overwrite: bool = False
+) -> None:
+    """Save four gzip files; overwrite only a validated interrupted batch."""
     import numpy as np
     import torch
 
-    output_path.mkdir(parents=True, exist_ok=False)
+    output_path.mkdir(parents=True, exist_ok=overwrite)
     techniques = [technique for paper in papers for technique in paper.techniques]
     embeddings = torch.from_numpy(np.stack([paper.area_vector for paper in papers]))
     technique_vectors = (
@@ -488,18 +490,307 @@ def _validate_embedding_options(
     merge_threshold: float,
     technique_k: int,
     pooling: str | None,
+    technique_batch_size: int = 32,
+    embedding_batch_size: int | None = None,
 ) -> None:
     """Validate the embedding workflow independently of argument parsing."""
     if not upload and output_path is None:
         raise ValueError("embed requires --upload, --output-path, or both")
     if batch_size < 1:
         raise ValueError("--batch-size must be positive")
+    if technique_batch_size < 1:
+        raise ValueError("--technique-batch-size must be positive")
+    if embedding_batch_size is not None and embedding_batch_size < 1:
+        raise ValueError("--embedding-batch-size must be positive")
     if not -1 <= merge_threshold <= 1:
         raise ValueError("--merge-threshold must be between -1 and 1")
     if technique_k < 0:
         raise ValueError("--technique-k must be non-negative")
     if pooling not in (None, "mean", "max"):
         raise ValueError("--pooling must be either None, 'mean' or 'max'")
+
+
+def _write_batch_manifest(batch_path: Path, manifest: dict[str, Any]) -> None:
+    """Replace the manifest atomically so interruption preserves the old status."""
+    pending = batch_path / "manifest.json.tmp"
+    pending.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    pending.replace(batch_path / "manifest.json")
+
+
+def _resume_embedding_offset(
+    ids: list[str],
+    output_path: Path | None,
+    settings: dict[str, Any],
+    resume: bool,
+) -> int:
+    """Validate existing batches before any downloading or model loading."""
+    if output_path is None:
+        if resume:
+            raise ValueError("--resume requires --output-path")
+        return 0
+    if output_path.exists() and not output_path.is_dir():
+        raise ValueError("--output-path must be a directory")
+    batches = sorted(output_path.glob("batch_*"))
+    if batches and not resume:
+        raise ValueError(
+            "Output already contains batches; use --resume or a new output path"
+        )
+    offset = 0
+    for number, batch_path in enumerate(batches, start=1):
+        if batch_path.name != f"batch_{number:04d}" or not batch_path.is_dir():
+            raise ValueError(f"Expected consecutive batch folders; found {batch_path}")
+        manifest_path = batch_path / "manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError(f"Missing manifest: {manifest_path}; cannot safely resume")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        expected_ids = ids[offset : offset + 500]
+        if not expected_ids or manifest.get("arxiv_ids") != expected_ids:
+            raise ValueError(f"Input paper IDs differ from {manifest_path}")
+        for key, value in settings.items():
+            if manifest.get(key) != value or key not in manifest:
+                raise ValueError(f"{key} differs from {manifest_path}")
+        status = manifest.get("status")
+        if status == "uploading":
+            raise ValueError(
+                f"Upload outcome is uncertain for {batch_path}; reconcile the database "
+                "before resuming. Automatic upload retries are not yet supported."
+            )
+        if status == "processing":
+            if batch_path != batches[-1]:
+                raise ValueError(
+                    f"Incomplete batch precedes later batches: {batch_path}"
+                )
+            logger.info("Recomputing interrupted batch %s", batch_path)
+            return offset
+        if status != "completed":
+            raise ValueError(f"Unknown batch status in {manifest_path}: {status!r}")
+        for filename in (
+            "embeddings.pt.gz",
+            "techniques.pt.gz",
+            "metadata.csv.gz",
+            "techniques.csv.gz",
+        ):
+            if not (batch_path / filename).is_file():
+                raise ValueError(f"Completed batch is missing {batch_path / filename}")
+        offset += len(expected_ids)
+        logger.info(
+            "Skipping completed batch %s (%d papers)", batch_path, len(expected_ids)
+        )
+    return offset
+
+
+def embed_papers(
+    input_filepath: Path,
+    *,
+    upload: bool = False,
+    output_path: Path | None = None,
+    resume: bool = False,
+    classifier_weights: Path = Path("weights/technique_classifier_checkpoint.pt"),
+    embedding_model: str = "nomic-ai/nomic-embed-text-v2-moe",
+    device: str | None = None,
+    batch_size: int = 8,
+    technique_batch_size: int = 32,
+    embedding_batch_size: int | None = None,
+    include_proofs: bool = False,
+    merge_threshold: float = 0.9,
+    technique_k: int = 3,
+    pooling: str | None = None,
+) -> bool:
+    """Embed papers in batches, optionally continuing a manifest-backed export."""
+    total_started = perf_counter()
+    try:
+        _validate_embedding_options(
+            upload=upload,
+            output_path=output_path,
+            batch_size=batch_size,
+            merge_threshold=merge_threshold,
+            technique_k=technique_k,
+            pooling=pooling,
+            technique_batch_size=technique_batch_size,
+            embedding_batch_size=embedding_batch_size,
+        )
+        embedding_batch_size = (
+            batch_size if embedding_batch_size is None else embedding_batch_size
+        )
+        stage_started = perf_counter()
+        ids = list(
+            dict.fromkeys(
+                value
+                for line in input_filepath.read_text(encoding="utf-8").splitlines()
+                for value in re.split(r"[\s,]+", line.split("#", 1)[0].strip())
+                if value
+            )
+        )
+        logger.info("ID loading took %.3fs", perf_counter() - stage_started)
+        settings = {
+            "embedding_model": embedding_model,
+            "classifier_weights": str(classifier_weights.resolve()),
+            "pooling": pooling,
+            "metadata_filename": "metadata.csv.gz",
+            "include_proofs": include_proofs,
+            "merge_threshold": merge_threshold,
+            "technique_k": technique_k,
+            "upload": upload,
+        }
+        start_offset = _resume_embedding_offset(ids, output_path, settings, resume)
+        if not ids:
+            logger.info("No arXiv IDs to embed")
+            return True
+        if start_offset == len(ids):
+            logger.info("All requested papers are already complete")
+            return True
+        # Keep model/database dependencies out of archive selection and CLI help.
+        import numpy as np
+        from tqdm import tqdm
+        import requests
+        from sentence_transformers import SentenceTransformer
+
+        from paper_clustering.embedding import _choose_device, embed
+        from paper_clustering.extract_techniques import (
+            extract_techniques_and_embed_batch,
+        )
+        from paper_clustering.extract_text import get_paper
+        from paper_clustering.technique_classifier import SciBERTClassifier
+        from paper_clustering.upload import upload as upload_papers
+
+        device = _choose_device(device)
+        stage_started = perf_counter()
+        classifier = SciBERTClassifier(weights_path=classifier_weights).to(device)
+        logger.info("Classifier loading took %.3fs", perf_counter() - stage_started)
+        stage_started = perf_counter()
+        encoder = SentenceTransformer(
+            embedding_model, trust_remote_code=True, device=device
+        )
+        logger.info(
+            "Embedding model loading took %.3fs", perf_counter() - stage_started
+        )
+        embedded_count = start_offset
+        with requests.Session() as session:
+            for offset in range(start_offset, len(ids), 500):
+                batch_started = perf_counter()
+                batch_ids = ids[offset : offset + 500]
+                batch_path = (
+                    output_path / f"batch_{offset // 500 + 1:04d}"
+                    if output_path is not None
+                    else None
+                )
+                manifest = {**settings, "arxiv_ids": batch_ids, "status": "processing"}
+                if batch_path is not None:
+                    batch_path.mkdir(parents=True, exist_ok=True)
+                    _write_batch_manifest(batch_path, manifest)
+                logger.info(
+                    "Processing batch %d: %d papers", offset // 500 + 1, len(batch_ids)
+                )
+                stage_started = perf_counter()
+                papers = []
+                for index, arxiv_id in tqdm(
+                    enumerate(batch_ids, start=offset + 1), total=len(batch_ids)
+                ):
+                    logger.info(
+                        "Downloading paper %d/%d: %s", index, len(ids), arxiv_id
+                    )
+                    try:
+                        paper = get_paper(
+                            session, arxiv_id, include_proofs=include_proofs, retries=1
+                        )
+                    except:
+                        logger.warning(
+                            f"Source download failed: skipping paper {arxiv_id}."
+                        )
+                    if not any(section.text for section in paper.sections):
+                        logger.warning("No usable source paragraphs for %s", arxiv_id)
+                    papers.append(paper)
+                logger.info(
+                    "Paper download/extraction took %.3fs",
+                    perf_counter() - stage_started,
+                )
+                stage_started = perf_counter()
+                area_vectors = embed(
+                    [
+                        f"{paper.metadata.title}\n\n{paper.metadata.abstract}"
+                        for paper in papers
+                    ],
+                    encoder,
+                    batch_size=embedding_batch_size,
+                    prompt="clustering: ",
+                    device=device,
+                )
+                logger.info("Area embedding took %.3fs", perf_counter() - stage_started)
+                stage_started = perf_counter()
+                techniques = extract_techniques_and_embed_batch(
+                    papers,
+                    classifier,
+                    encoder,
+                    threshold=merge_threshold,
+                    k=technique_k,
+                    pooling=pooling,
+                    technique_batch_size=technique_batch_size,
+                    embedding_batch_size=embedding_batch_size,
+                )
+                logger.info(
+                    "Technique extraction/embedding took %.3fs",
+                    perf_counter() - stage_started,
+                )
+                stage_started = perf_counter()
+                embedded_papers = [
+                    EmbeddedPaper(
+                        metadata=paper.metadata,
+                        sections=paper.sections,
+                        embedding_dim=len(vector),
+                        model_name=embedding_model,
+                        arxiv_id=paper.metadata.arxiv_id,
+                        area_vector=np.asarray(vector),
+                        techniques=passages,
+                    )
+                    for paper, vector, passages in zip(
+                        papers, area_vectors, techniques, strict=True
+                    )
+                ]
+                logger.info(
+                    "Embedding record preparation took %.3fs",
+                    perf_counter() - stage_started,
+                )
+                if output_path is not None:
+                    stage_started = perf_counter()
+                    _save_embeddings(
+                        embedded_papers,
+                        batch_path,
+                        overwrite=True,
+                    )
+                    logger.info(
+                        "Batch file export took %.3fs", perf_counter() - stage_started
+                    )
+                if upload:
+                    if batch_path is not None:
+                        manifest["status"] = "uploading"
+                        _write_batch_manifest(batch_path, manifest)
+                    with _database_client() as client:
+                        stage_started = perf_counter()
+                        if upload_papers(embedded_papers, client) != (True, True):
+                            raise RuntimeError("Upload did not complete successfully")
+                        logger.info(
+                            "Database upload took %.3fs", perf_counter() - stage_started
+                        )
+                if batch_path is not None:
+                    manifest["status"] = "completed"
+                    _write_batch_manifest(batch_path, manifest)
+                logger.info(
+                    "Embedding batch %d took %.3fs",
+                    offset // 500 + 1,
+                    perf_counter() - batch_started,
+                )
+                embedded_count += len(embedded_papers)
+                logger.info("Embedded %d/%d papers", embedded_count, len(ids))
+                del papers, area_vectors, techniques
+                del embedded_papers
+        return True
+    except Exception:
+        logger.exception("Pipeline embedding failed")
+        return False
+    finally:
+        logger.info(
+            "Embedding pipeline finished in %.3fs", perf_counter() - total_started
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -510,6 +801,7 @@ def main(argv: list[str] | None = None) -> int:
     With --upload, commit each batch using the existing upload function. With
     --output-path, save each batch to a new batch_0001, batch_0002, ... folder.
     A failure stops subsequent batches; prior uploads and batch files remain.
+    With --resume, validate manifests and skip completed batches.
     Generate visualization coordinates separately.
     """
     parser = argparse.ArgumentParser(description=__doc__)
@@ -542,8 +834,19 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser.add_argument(
         "--embedding-model", default="nomic-ai/nomic-embed-text-v2-moe"
     )
+    embed_parser.add_argument(
+        "--resume", action="store_true", help="Continue batches saved to --output-path"
+    )
     embed_parser.add_argument("--device", help="Torch device; default: automatic")
     embed_parser.add_argument("--batch-size", type=int, default=8)
+    embed_parser.add_argument(
+        "--technique-batch-size", type=int, default=32,
+        help="Technique classifier batch size (default: 32)",
+    )
+    embed_parser.add_argument(
+        "--embedding-batch-size", type=int,
+        help="Area and technique embedding batch size (default: --batch-size, or 8)",
+    )
     embed_parser.add_argument("--include-proofs", action="store_true")
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
     embed_parser.add_argument("--technique-k", type=int, default=3)
@@ -658,162 +961,26 @@ def main(argv: list[str] | None = None) -> int:
             else 1
         )
 
-    try:
-        _validate_embedding_options(
+    return (
+        0
+        if embed_papers(
+            args.input_filepath,
             upload=args.upload,
             output_path=args.output_path,
+            resume=args.resume,
+            technique_batch_size=args.technique_batch_size,
+            embedding_batch_size=args.embedding_batch_size,
+            classifier_weights=args.classifier_weights,
+            embedding_model=args.embedding_model,
+            device=args.device,
             batch_size=args.batch_size,
+            include_proofs=args.include_proofs,
             merge_threshold=args.merge_threshold,
             technique_k=args.technique_k,
             pooling=args.pooling,
         )
-    except ValueError as error:
-        parser.error(str(error))
-
-    total_started = perf_counter()
-    try:
-        stage_started = perf_counter()
-        ids = list(
-            dict.fromkeys(
-                value
-                for line in args.input_filepath.read_text(encoding="utf-8").splitlines()
-                for value in re.split(r"[\s,]+", line.split("#", 1)[0].strip())
-                if value
-            )
-        )
-        logger.info("ID loading took %.3fs", perf_counter() - stage_started)
-        if not ids:
-            logger.info("No arXiv IDs to embed")
-            return 0
-        # Keep model/database dependencies out of archive selection and CLI help.
-        import numpy as np
-        from tqdm import tqdm
-        import requests
-        from sentence_transformers import SentenceTransformer
-
-        from paper_clustering.embedding import _choose_device, embed
-        from paper_clustering.extract_techniques import (
-            extract_techniques_and_embed_batch,
-        )
-        from paper_clustering.extract_text import get_paper
-        from paper_clustering.technique_classifier import SciBERTClassifier
-        from paper_clustering.upload import upload
-
-        device = _choose_device(args.device)
-        stage_started = perf_counter()
-        classifier = SciBERTClassifier(weights_path=args.classifier_weights).to(device)
-        logger.info("Classifier loading took %.3fs", perf_counter() - stage_started)
-        stage_started = perf_counter()
-        encoder = SentenceTransformer(
-            args.embedding_model, trust_remote_code=True, device=device
-        )
-        logger.info(
-            "Embedding model loading took %.3fs", perf_counter() - stage_started
-        )
-        embedded_count = 0
-        with requests.Session() as session:
-            for offset in range(0, len(ids), 500):
-                batch_started = perf_counter()
-                batch_ids = ids[offset : offset + 500]
-                logger.info(
-                    "Processing batch %d: %d papers", offset // 500 + 1, len(batch_ids)
-                )
-                stage_started = perf_counter()
-                papers = []
-                for index, arxiv_id in tqdm(
-                    enumerate(batch_ids, start=offset + 1), total=len(batch_ids)
-                ):
-                    logger.info(
-                        "Downloading paper %d/%d: %s", index, len(ids), arxiv_id
-                    )
-                    paper = get_paper(
-                        session, arxiv_id, include_proofs=args.include_proofs
-                    )
-                    if not any(section.text for section in paper.sections):
-                        logger.warning("No usable source paragraphs for %s", arxiv_id)
-                    papers.append(paper)
-                logger.info(
-                    "Paper download/extraction took %.3fs",
-                    perf_counter() - stage_started,
-                )
-                stage_started = perf_counter()
-                area_vectors = embed(
-                    [
-                        f"{paper.metadata.title}\n\n{paper.metadata.abstract}"
-                        for paper in papers
-                    ],
-                    encoder,
-                    batch_size=args.batch_size,
-                    prompt="clustering: ",
-                    device=device,
-                )
-                logger.info("Area embedding took %.3fs", perf_counter() - stage_started)
-                stage_started = perf_counter()
-                techniques = extract_techniques_and_embed_batch(
-                    papers,
-                    classifier,
-                    encoder,
-                    threshold=args.merge_threshold,
-                    k=args.technique_k,
-                    pooling=args.pooling,
-                )
-                logger.info(
-                    "Technique extraction/embedding took %.3fs",
-                    perf_counter() - stage_started,
-                )
-                stage_started = perf_counter()
-                embedded_papers = [
-                    EmbeddedPaper(
-                        metadata=paper.metadata,
-                        sections=paper.sections,
-                        embedding_dim=len(vector),
-                        model_name=args.embedding_model,
-                        arxiv_id=paper.metadata.arxiv_id,
-                        area_vector=np.asarray(vector),
-                        techniques=passages,
-                    )
-                    for paper, vector, passages in zip(
-                        papers, area_vectors, techniques, strict=True
-                    )
-                ]
-                logger.info(
-                    "Embedding record preparation took %.3fs",
-                    perf_counter() - stage_started,
-                )
-                if args.output_path is not None:
-                    stage_started = perf_counter()
-                    _save_embeddings(
-                        embedded_papers,
-                        args.output_path / f"batch_{offset // 500 + 1:04d}",
-                    )
-                    logger.info(
-                        "Batch file export took %.3fs", perf_counter() - stage_started
-                    )
-                if args.upload:
-                    with _database_client() as client:
-                        stage_started = perf_counter()
-                        if upload(embedded_papers, client) != (True, True):
-                            raise RuntimeError("Upload did not complete successfully")
-                        logger.info(
-                            "Database upload took %.3fs", perf_counter() - stage_started
-                        )
-                logger.info(
-                    "Embedding batch %d took %.3fs",
-                    offset // 500 + 1,
-                    perf_counter() - batch_started,
-                )
-                embedded_count += len(embedded_papers)
-                logger.info("Embedded %d/%d papers", embedded_count, len(ids))
-                del papers, area_vectors, techniques
-                del embedded_papers
-        return 0
-    except Exception:
-        logger.exception("Pipeline embedding failed")
-        return 1
-    finally:
-        logger.info(
-            "Embedding pipeline finished in %.3fs", perf_counter() - total_started
-        )
+        else 1
+    )
 
 
 if __name__ == "__main__":

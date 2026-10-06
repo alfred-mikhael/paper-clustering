@@ -30,7 +30,9 @@ class TechniqueClassifier(ABC):
         """
 
     @abstractmethod
-    def predict(self, texts: list[str], *, pooling: str | None = None) -> torch.Tensor:
+    def predict(
+        self, texts: list[str], *, pooling: str | None = None, batch_size: int = 32
+    ) -> torch.Tensor:
         """Return passage scores, using mean/max window pooling or truncation."""
 
 
@@ -199,7 +201,9 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
             return result, torch.cat(passage_indices)
         return result
 
-    def predict(self, passages: list[str], *, pooling: str | None = None) -> torch.Tensor:
+    def predict(
+        self, passages: list[str], *, pooling: str | None = None, batch_size: int = 32
+    ) -> torch.Tensor:
         """Score passages from 0 to 4, optionally pooling final window scores.
 
         ``None`` preserves truncation; ``"mean"`` and ``"max"`` combine scores
@@ -208,10 +212,10 @@ class SciBERTClassifier(nn.Module, TechniqueClassifier):
         if pooling not in (None, "mean", "max"):
             raise ValueError('pooling must be None, "mean", or "max"')
         if pooling is None:
-            logits = self.predict_logits(passages)
+            logits = self.predict_logits(passages, batch_size=batch_size)
         else:
             logits, passage_indices = self.predict_logits(
-                passages, return_overflow_mapping=True
+                passages, batch_size=batch_size, return_overflow_mapping=True
             )
         probabilities = logits.softmax(dim=-1)
         classes = torch.arange(5, dtype=logits.dtype, device=logits.device)

@@ -3,8 +3,10 @@
 from collections import defaultdict, deque
 from collections.abc import Callable, Sequence
 import json
+import logging
 import os
 import random
+from time import sleep
 
 from hdbscan import HDBSCAN
 import numpy as np
@@ -16,6 +18,8 @@ from paper_clustering.data_models import (
     EmbeddedPaper,
     PaperMetadata,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def validate_clustering_options(
@@ -161,6 +165,8 @@ def label_clusters(
     Use the local llama.cpp chat endpoint (or ``LLAMA_CPP_SERVER_URL``).
     Alternatively, ``generate(prompt)`` can call any LLM and must return a
     JSON object mapping string cluster IDs to labels.
+    Retry transient request failures and invalid labels up to three attempts
+    per sibling group, waiting one then two seconds between attempts.
     """
     validate_labelling_options(num_samples, request_timeout)
     if not clusters:
@@ -224,7 +230,37 @@ def label_clusters(
                 {"parent_label": parent_label, "clusters": samples}, ensure_ascii=False
             )
         )
-        labels = json.loads(generate(prompt))
+        for attempt in range(3):
+            try:
+                labels = json.loads(generate(prompt))
+                if (
+                    not isinstance(labels, dict)
+                    or set(labels) != set(samples)
+                    or any(
+                        not isinstance(label, str) or not label.strip()
+                        for label in labels.values()
+                    )
+                ):
+                    raise ValueError("Expected a nonempty label for each cluster ID")
+                break
+            except (
+                requests.RequestException, ValueError, KeyError, IndexError, TypeError
+            ) as error:
+                if isinstance(error, requests.HTTPError):
+                    response = error.response
+                    if response is not None and (
+                        response.status_code not in (408, 429)
+                        and response.status_code < 500
+                    ):
+                        raise
+                if attempt == 2:
+                    raise
+                delay = 2 ** attempt
+                logger.warning(
+                    "Labelling clusters %s failed (attempt %d/3): %s; retrying in %ds",
+                    sibling_ids, attempt + 1, error, delay,
+                )
+                sleep(delay)
         for cid in sibling_ids:
             result[cid] = ClusterMetadata(
                 label=labels[str(cid)].strip(),

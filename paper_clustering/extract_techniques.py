@@ -35,6 +35,8 @@ def merge_similar(
     techniques: list[Technique],
     encoder: SentenceTransformer,
     threshold: float = 0.90,
+    *,
+    embedding_batch_size: int = 8,
 ) -> list[Technique]:
     """Merge semantically similar techniques from the same paper.
 
@@ -110,7 +112,10 @@ def merge_similar(
         for group in groups.values()
         if len(group) > 1
     ]
-    merged_embeddings = iter(embed(merged_texts, encoder)) if merged_texts else iter(())
+    merged_embeddings = (
+        iter(embed(merged_texts, encoder, batch_size=embedding_batch_size))
+        if merged_texts else iter(())
+    )
 
     merged: list[Technique] = []
     for group in groups.values():
@@ -140,6 +145,8 @@ def extract_techniques_and_embed_batch(
     threshold: float = 0.9,
     k: int = 3,
     pooling: str | None = None,
+    technique_batch_size: int = 32,
+    embedding_batch_size: int = 8,
 ) -> list[list[Technique]]:
     """Extract passages with optional mean/max pooling of classifier window scores.
 
@@ -148,15 +155,19 @@ def extract_techniques_and_embed_batch(
     """
     if pooling not in (None, "mean", "max"):
         raise ValueError('pooling must be None, "mean", or "max"')
+    if technique_batch_size < 1 or embedding_batch_size < 1:
+        raise ValueError("Technique and embedding batch sizes must be positive")
     datasets = [prepare_data(p.sections) for p in papers]
-    # Run the classifier on every paragraph in a single batch.
+    # Score all paragraphs using the classifier's internal batching.
     paragraphs = [paragraph for _, _, _, text in datasets for paragraph in text]
     logger.info(
         "processed %d papers with a total of %d paragraphs",
         len(papers),
         len(paragraphs),
     )
-    predictions = classifier.predict(paragraphs, pooling=pooling)
+    predictions = classifier.predict(
+        paragraphs, pooling=pooling, batch_size=technique_batch_size
+    )
 
     # Get the top candidate paragraphs from each paper.
     offset = 0
@@ -185,7 +196,10 @@ def extract_techniques_and_embed_batch(
     if not candidates:
         return [[] for _ in papers]
 
-    embeddings = embed([text for _, _, _, text, _ in candidates], encoder)
+    embeddings = embed(
+        [text for _, _, _, text, _ in candidates], encoder,
+        batch_size=embedding_batch_size,
+    )
     techniques = [
         Technique(
             arxiv_id=arxiv_id,
@@ -197,7 +211,9 @@ def extract_techniques_and_embed_batch(
             candidates, embeddings, strict=True
         )
     ]
-    techniques = merge_similar(techniques, encoder, threshold)
+    techniques = merge_similar(
+        techniques, encoder, threshold, embedding_batch_size=embedding_batch_size
+    )
 
     # Always keep the best technique from each paper. Keep the technique at
     # rank i only when its classifier score is at least k + i / 3.

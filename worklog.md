@@ -896,12 +896,41 @@ List any datasets, papers, scripts, notebooks, or output files.
 The results from my testing were roughly Qwen 0.6B = Zerank2 > Qwen 3.5B >> OpenJev. Qwen performs slightly better on the small even covers paper, while zerank misses the ideal match. Neither catch the other papers using the Kikuchi method (unfortunately). Both Qwen and Zerank get the right matches in the top5 for the exponential lower bound paper, but the ordering by Zerank is better. However, it does take much longer to run, at over a minute per paper which is unacceptable. 
 
 I can accept this retrieval quality for now. It is easy enough to switch out the rerankers later. 
+
 ### Decisions made
 
 Record any choices you made and why.
 
 * The reranker is needed in the first place to improve retrieval quality. Using just nearest neighbour search, there is very strange behaviour where two entirely dissimilar paragraphs are embedded close to each other, perhaps because they share some superficial notation or vocabulary. I don't have time to train a custom embedding model, so a reranker is a good way to significantly improve retrieval quality. 
-* For passages which are too 
+* For passages which are too long for the SciBERT context window, I've added pooling (mean or max pooling) with a stride of 128 tokens. Only about 10\% of passages were longer than the context window, but with max pooling this helps avoid false negatives (which are the costliest error in this context).
+
+### Issues or questions
+
+### Next step
+
+## Date: October 1 - Oct 7, 2026
+### Time spent: ... hours
+**Goal for this session:** Finalize pipeline and finally get an MVP.
+
+### What I worked on
+
+
+### Files or data used
+
+List any datasets, papers, scripts, notebooks, or output files.
+* Almost all of them
+
+### Results
+
+### Decisions made
+
+Record any choices you made and why.
+
+* Using threadpool in the api to help with many concurrent users
+* Put unique constraint on (arxiv_id, passage) in techniques table so that I can "on conflict (arxiv_id, passage) do ..." in my sql and get idempotent operations
+* Resumable downloads and embedding, also done in batches. 
+* Generally added a lot of options to save data locally. I wasn't really thinking of using the pipeline as a CLI before, but I realized that there is probably too much data to fit comfortably into memory, and I definitely don't want a single hardware / network error to cost me hours of compute.
+* Separated UMAP coordinates from the `EmbeddedPaper` data model. This lets me use the model after embedding but before doing UMAP (without doing any hacks). It also makes more sense, since the UMAP coordinates are not actually part of the paper. I don't see a need to add a new database table for the coordinates, I will just save them as CSV and serve them as static files.
 
 ### Issues or questions
 

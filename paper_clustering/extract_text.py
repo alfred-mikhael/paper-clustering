@@ -22,6 +22,8 @@ REQUEST_TIMEOUT_SECONDS = 60
 MAX_INCLUDE_DEPTH = 8
 TEX_SOURCE_SUFFIXES = {".tex", ".ltx"}
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class TexSource:
@@ -236,6 +238,7 @@ def get_paper(
     arxiv_id: str,
     metadata: PaperMetadata | None = None,
     include_proofs: bool = False,
+    retries: int = 0,
 ) -> Paper:
     """Download and clean the sections of an arXiv paper.
 
@@ -244,48 +247,55 @@ def get_paper(
     """
     if not metadata:
         metadata = get_metadata(session, arxiv_id)
-    time.sleep(ARXIV_REQUEST_WAIT_TIME)
-    try:
-        source_bytes = download_source(session, arxiv_id)
-        source = build_tex_source_from_bytes(source_bytes, arxiv_id)
-        if not source:
-            return Paper(metadata=metadata, sections=())
-        if not include_proofs:
-            source = _drop_proof_environments(source)
-        sections = extract_sections_from_latex(source)
-        results: list[ArxivSection] = []
-        major_section_header = ""
-        for section_index, section in enumerate(sections):
-            section_header = clean_latex_for_embedding(section.title)
-            if section.kind in {"part", "chapter", "section"}:
-                major_section_header = section_header
-            results.append(
-                ArxivSection(
-                    arxiv_id=metadata.arxiv_id,
-                    section_index=section_index,
-                    section_header=section_header,
-                    major_section_header=major_section_header,
-                    text=tuple(
-                        _normalize_embedding_whitespace(p)
-                        for p in NEW_PARAGRAPH_RE.split(
-                            clean_latex_for_embedding(section.text)
-                        )
-                        if p.strip()
+    while retries >= 0:
+        time.sleep(ARXIV_REQUEST_WAIT_TIME)
+        try:
+            source_bytes = download_source(session, arxiv_id)
+            source = build_tex_source_from_bytes(source_bytes, arxiv_id)
+            if not source:
+                return Paper(metadata=metadata, sections=())
+            if not include_proofs:
+                source = _drop_proof_environments(source)
+            sections = extract_sections_from_latex(source)
+            results: list[ArxivSection] = []
+            major_section_header = ""
+            for section_index, section in enumerate(sections):
+                section_header = clean_latex_for_embedding(section.title)
+                if section.kind in {"part", "chapter", "section"}:
+                    major_section_header = section_header
+                results.append(
+                    ArxivSection(
+                        arxiv_id=metadata.arxiv_id,
+                        section_index=section_index,
+                        section_header=section_header,
+                        major_section_header=major_section_header,
+                        text=tuple(
+                            _normalize_embedding_whitespace(p)
+                            for p in NEW_PARAGRAPH_RE.split(
+                                clean_latex_for_embedding(section.text)
+                            )
+                            if p.strip()
+                        ),
                     ),
-                ),
+                )
+            return Paper(metadata=metadata, sections=tuple(results))
+        except requests.HTTPError as e:
+            # Source forbidden, no need to retry
+            if e.response.status_code == 403:
+                retries = 0
+            retries -= 1
+            logger.debug(
+                f"HTTP {e.response.status_code} when downloading {arxiv_id}. {retries} retries left"
             )
-        return Paper(metadata=metadata, sections=tuple(results))
-    except (
-        requests.RequestException,
-        tarfile.TarError,
-        zipfile.BadZipFile,
-        OSError,
-        UnicodeError,
-    ) as exc:
-        logging.error(
-            f"{time.asctime()}: Could not download or extract {arxiv_id}: {exc}"
-        )
-        return Paper(metadata=metadata, sections=())
+        except (
+            requests.RequestException,
+            tarfile.TarError,
+            zipfile.BadZipFile,
+            OSError,
+            UnicodeError,
+        ) as exc:
+            logger.error(f"Could not download or extract {arxiv_id}: {exc}")
+            raise RuntimeError(f"Could not download or extract {arxiv_id}: {exc}")
 
 
 def iter_tex_sources(
