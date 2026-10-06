@@ -282,8 +282,7 @@ def get_paper(
         except requests.HTTPError as e:
             # Source forbidden, no need to retry
             if e.response.status_code == 403:
-                retries = 0
-            retries -= 1
+                retries = -1
             logger.debug(
                 f"HTTP {e.response.status_code} when downloading {arxiv_id}. {retries} retries left"
             )
@@ -294,8 +293,11 @@ def get_paper(
             OSError,
             UnicodeError,
         ) as exc:
-            logger.error(f"Could not download or extract {arxiv_id}: {exc}")
-            raise RuntimeError(f"Could not download or extract {arxiv_id}: {exc}")
+            retries -= 1
+            logger.error(
+                f"Could not download or extract {arxiv_id}. {retries} retries left: {exc}"
+            )
+    return Paper(metadata=metadata, sections=())
 
 
 def iter_tex_sources(

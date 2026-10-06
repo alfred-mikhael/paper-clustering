@@ -39,6 +39,7 @@ from paper_clustering.utils import DatabaseClient
 from paper_clustering.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
     read_metadata_archive,
+    MetadataExtractionError,
 )
 
 logger = logging.getLogger(__name__)
@@ -366,7 +367,7 @@ def cluster_papers(
     seed: int | None = None,
     request_timeout: float = 120,
 ) -> bool:
-    """Cluster all area embeddings, save the hierarchy, then label and save it.
+    """Cluster area embeddings, label them, and save files and database records.
 
     File input uses the metadata exported by embed. Database input uses stored
     paper metadata; model consistency can only be checked when model_name exists.
@@ -472,6 +473,25 @@ def cluster_papers(
                 "Labelled cluster export took %.3fs", perf_counter() - stage_started
             )
             logger.info("Labelled %d clusters", len(labelled))
+            stage_started = perf_counter()
+            with _database_client() as client:
+                with client.transaction():
+                    if not client.insert(
+                        table="cluster_metadata",
+                        records=[
+                            {"id": cid, **asdict(cluster)}
+                            for cid, cluster in labelled.items()
+                        ],
+                    ):
+                        raise RuntimeError("Cluster metadata insertion failed")
+                    if not client.insert(
+                        table="clusters",
+                        records=[asdict(record) for record in records],
+                    ):
+                        raise RuntimeError("Cluster membership insertion failed")
+            logger.info(
+                "Cluster database upload took %.3fs", perf_counter() - stage_started
+            )
         return True
     except Exception:
         logger.exception("Clustering or cluster labelling failed")
@@ -523,7 +543,7 @@ def _resume_embedding_offset(
     settings: dict[str, Any],
     resume: bool,
 ) -> int:
-    """Validate existing batches before any downloading or model loading."""
+    """Validate saved batches and finish pending upserts before loading models."""
     if output_path is None:
         if resume:
             raise ValueError("--resume requires --output-path")
@@ -550,11 +570,6 @@ def _resume_embedding_offset(
             if manifest.get(key) != value or key not in manifest:
                 raise ValueError(f"{key} differs from {manifest_path}")
         status = manifest.get("status")
-        if status == "uploading":
-            raise ValueError(
-                f"Upload outcome is uncertain for {batch_path}; reconcile the database "
-                "before resuming. Automatic upload retries are not yet supported."
-            )
         if status == "processing":
             if batch_path != batches[-1]:
                 raise ValueError(
@@ -562,7 +577,7 @@ def _resume_embedding_offset(
                 )
             logger.info("Recomputing interrupted batch %s", batch_path)
             return offset
-        if status != "completed":
+        if status not in ("completed", "uploading"):
             raise ValueError(f"Unknown batch status in {manifest_path}: {status!r}")
         for filename in (
             "embeddings.pt.gz",
@@ -571,12 +586,82 @@ def _resume_embedding_offset(
             "techniques.csv.gz",
         ):
             if not (batch_path / filename).is_file():
-                raise ValueError(f"Completed batch is missing {batch_path / filename}")
+                raise ValueError(f"Saved batch is missing {batch_path / filename}")
+        if status == "uploading":
+            if not settings["upload"] or batch_path != batches[-1]:
+                raise ValueError(f"Invalid pending upload batch: {batch_path}")
+            logger.info("Retrying saved batch upload: %s", batch_path)
+            papers = _load_saved_embeddings(batch_path)
+            saved_ids = [paper.arxiv_id for paper in papers]
+            if (
+                len(set(saved_ids)) != len(saved_ids)
+                or not set(saved_ids).issubset(expected_ids)
+            ):
+                raise ValueError(f"Saved paper IDs do not match {manifest_path}")
+            _upload_embedding_batch(papers)
+            manifest["status"] = "completed"
+            _write_batch_manifest(batch_path, manifest)
         offset += len(expected_ids)
         logger.info(
             "Skipping completed batch %s (%d papers)", batch_path, len(expected_ids)
         )
     return offset
+
+
+def _load_saved_embeddings(batch_path: Path) -> list[EmbeddedPaper]:
+    """Restore a batch's paper and technique vectors for upload replay."""
+    import torch
+    from paper_clustering.data_models import Technique
+
+    papers = {}
+    for record, vector in _embedding_rows(
+        batch_path / "embeddings.pt.gz",
+        batch_path / "metadata.csv.gz",
+        full_metadata=True,
+    ):
+        embedding_dim = int(record.pop("embedding_dim"))
+        model_name = record.pop("model_name")
+        record["authors"] = tuple(json.loads(record["authors"]))
+        record["publication_date"] = datetime.fromisoformat(record["publication_date"])
+        metadata = PaperMetadata(**record)
+        if metadata.arxiv_id in papers or len(vector) != embedding_dim:
+            raise ValueError(f"Invalid paper metadata in {batch_path}")
+        papers[metadata.arxiv_id] = EmbeddedPaper(
+            metadata=metadata, sections=(), embedding_dim=embedding_dim,
+            model_name=model_name, arxiv_id=metadata.arxiv_id,
+            area_vector=vector, techniques=[],
+        )
+    with gzip.open(batch_path / "techniques.pt.gz", "rb") as handle:
+        vectors = torch.load(handle, map_location="cpu", weights_only=True)
+    if (
+        not isinstance(vectors, torch.Tensor)
+        or vectors.ndim != 2
+        or not vectors.is_floating_point()
+    ):
+        raise ValueError(f"Invalid technique vectors in {batch_path}")
+    with gzip.open(
+        batch_path / "techniques.csv.gz", "rt", encoding="utf-8", newline=""
+    ) as handle:
+        for record, vector in zip(csv.DictReader(handle), vectors, strict=True):
+            paper = papers[record["arxiv_id"]]
+            if len(vector) != paper.embedding_dim:
+                raise ValueError(f"Invalid technique dimension in {batch_path}")
+            paper.techniques.append(Technique(
+                arxiv_id=paper.arxiv_id, text=record["text"],
+                embedding=vector.numpy(), score=float(record["score"]),
+            ))
+    return list(papers.values())
+
+
+def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
+    """Use the existing transactional upserts for new and resumed batches."""
+    from paper_clustering.upload import upload
+
+    with _database_client() as client:
+        stage_started = perf_counter()
+        if upload(papers, client) != (True, True):
+            raise RuntimeError("Upload did not complete successfully")
+        logger.info("Database upload took %.3fs", perf_counter() - stage_started)
 
 
 def embed_papers(
@@ -651,7 +736,6 @@ def embed_papers(
         )
         from paper_clustering.extract_text import get_paper
         from paper_clustering.technique_classifier import SciBERTClassifier
-        from paper_clustering.upload import upload as upload_papers
 
         device = _choose_device(device)
         stage_started = perf_counter()
@@ -693,10 +777,9 @@ def embed_papers(
                         paper = get_paper(
                             session, arxiv_id, include_proofs=include_proofs, retries=1
                         )
-                    except:
-                        logger.warning(
-                            f"Source download failed: skipping paper {arxiv_id}."
-                        )
+                    except MetadataExtractionError as e:
+                        logger.warning(str(e))
+                        continue
                     if not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
                     papers.append(paper)
@@ -764,13 +847,7 @@ def embed_papers(
                     if batch_path is not None:
                         manifest["status"] = "uploading"
                         _write_batch_manifest(batch_path, manifest)
-                    with _database_client() as client:
-                        stage_started = perf_counter()
-                        if upload_papers(embedded_papers, client) != (True, True):
-                            raise RuntimeError("Upload did not complete successfully")
-                        logger.info(
-                            "Database upload took %.3fs", perf_counter() - stage_started
-                        )
+                    _upload_embedding_batch(embedded_papers)
                 if batch_path is not None:
                     manifest["status"] = "completed"
                     _write_batch_manifest(batch_path, manifest)
@@ -840,11 +917,14 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser.add_argument("--device", help="Torch device; default: automatic")
     embed_parser.add_argument("--batch-size", type=int, default=8)
     embed_parser.add_argument(
-        "--technique-batch-size", type=int, default=32,
+        "--technique-batch-size",
+        type=int,
+        default=32,
         help="Technique classifier batch size (default: 32)",
     )
     embed_parser.add_argument(
-        "--embedding-batch-size", type=int,
+        "--embedding-batch-size",
+        type=int,
         help="Area and technique embedding batch size (default: --batch-size, or 8)",
     )
     embed_parser.add_argument("--include-proofs", action="store_true")

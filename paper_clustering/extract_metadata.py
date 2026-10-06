@@ -16,6 +16,10 @@ REQUEST_TIMEOUT_SECONDS = 60
 DEFAULT_ARCHIVE_PATH = Path("data/math_cs_metadata.zip")
 
 
+class MetadataExtractionError(Exception):
+    """"""
+
+
 def read_metadata_archive(
     archive_path: str | Path = DEFAULT_ARCHIVE_PATH,
     *,
@@ -176,7 +180,12 @@ def get_metadata(session: requests.Session, arxiv_id: str) -> PaperMetadata:
         params={"id_list": arxiv_id},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        raise MetadataExtractionError(
+            f"Error {response.status_code}: Couldn't extract metadata for {arxiv_id}"
+        )
     return parse_metadata_response(response.content)
 
 
