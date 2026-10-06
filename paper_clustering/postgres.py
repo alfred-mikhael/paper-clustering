@@ -20,6 +20,7 @@ class PostgresClient:
         return self.conn.transaction()
 
     def insert(self, table: str, records: list[dict[str, Any]]) -> bool:
+        """Upsert papers and techniques; insert other tables normally."""
         if not records:
             return True
 
@@ -39,12 +40,39 @@ class PostgresClient:
             sql.SQL(", ").join(map(sql.Identifier, columns)),
             sql.SQL(", ").join(sql.Placeholder() for _ in columns),
         )
+        conflict_columns = {
+            "papers": ("arxiv_id",),
+            "techniques": ("arxiv_id", "passage"),
+        }.get(table)
+        if conflict_columns is not None:
+            update_columns = [
+                column for column in columns if column not in conflict_columns
+            ]
+            query += sql.SQL(" ON CONFLICT ({}) ").format(
+                sql.SQL(", ").join(map(sql.Identifier, conflict_columns))
+            )
+            if update_columns:
+                query += sql.SQL("DO UPDATE SET {}").format(
+                    sql.SQL(", ").join(
+                        sql.SQL("{} = EXCLUDED.{}").format(
+                            sql.Identifier(column), sql.Identifier(column)
+                        )
+                        for column in update_columns
+                    )
+                )
+            else:
+                query += sql.SQL("DO NOTHING")
         values = [tuple(record[column] for column in columns) for record in records]
 
         with self.conn.cursor() as cur:
             cur.executemany(query, values)
 
-        logger.info(f"Inserted {len(records)} records into table {table}")
+        logger.info(
+            "%s %d records into table %s",
+            "Upserted" if conflict_columns is not None else "Inserted",
+            len(records),
+            table,
+        )
         return True
 
     def select(
