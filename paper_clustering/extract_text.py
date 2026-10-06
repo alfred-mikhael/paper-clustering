@@ -280,12 +280,10 @@ def get_paper(
                 )
             return Paper(metadata=metadata, sections=tuple(results))
         except requests.HTTPError as e:
-            # Source forbidden, no need to retry
-            if e.response.status_code == 403:
+            # Source forbidden or unavailable, no need to retry
+            if e.response.status_code == 403 or e.response.status_code == 404:
                 retries = -1
-            logger.debug(
-                f"HTTP {e.response.status_code} when downloading {arxiv_id}. {retries} retries left"
-            )
+            logger.warning(f"HTTP {e.response.status_code} when downloading {arxiv_id}")
         except (
             requests.RequestException,
             tarfile.TarError,
@@ -294,7 +292,7 @@ def get_paper(
             UnicodeError,
         ) as exc:
             retries -= 1
-            logger.error(
+            logger.warning(
                 f"Could not download or extract {arxiv_id}. {retries} retries left: {exc}"
             )
     return Paper(metadata=metadata, sections=())

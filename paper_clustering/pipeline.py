@@ -593,9 +593,8 @@ def _resume_embedding_offset(
             logger.info("Retrying saved batch upload: %s", batch_path)
             papers = _load_saved_embeddings(batch_path)
             saved_ids = [paper.arxiv_id for paper in papers]
-            if (
-                len(set(saved_ids)) != len(saved_ids)
-                or not set(saved_ids).issubset(expected_ids)
+            if len(set(saved_ids)) != len(saved_ids) or not set(saved_ids).issubset(
+                expected_ids
             ):
                 raise ValueError(f"Saved paper IDs do not match {manifest_path}")
             _upload_embedding_batch(papers)
@@ -627,9 +626,13 @@ def _load_saved_embeddings(batch_path: Path) -> list[EmbeddedPaper]:
         if metadata.arxiv_id in papers or len(vector) != embedding_dim:
             raise ValueError(f"Invalid paper metadata in {batch_path}")
         papers[metadata.arxiv_id] = EmbeddedPaper(
-            metadata=metadata, sections=(), embedding_dim=embedding_dim,
-            model_name=model_name, arxiv_id=metadata.arxiv_id,
-            area_vector=vector, techniques=[],
+            metadata=metadata,
+            sections=(),
+            embedding_dim=embedding_dim,
+            model_name=model_name,
+            arxiv_id=metadata.arxiv_id,
+            area_vector=vector,
+            techniques=[],
         )
     with gzip.open(batch_path / "techniques.pt.gz", "rb") as handle:
         vectors = torch.load(handle, map_location="cpu", weights_only=True)
@@ -646,10 +649,14 @@ def _load_saved_embeddings(batch_path: Path) -> list[EmbeddedPaper]:
             paper = papers[record["arxiv_id"]]
             if len(vector) != paper.embedding_dim:
                 raise ValueError(f"Invalid technique dimension in {batch_path}")
-            paper.techniques.append(Technique(
-                arxiv_id=paper.arxiv_id, text=record["text"],
-                embedding=vector.numpy(), score=float(record["score"]),
-            ))
+            paper.techniques.append(
+                Technique(
+                    arxiv_id=paper.arxiv_id,
+                    text=record["text"],
+                    embedding=vector.numpy(),
+                    score=float(record["score"]),
+                )
+            )
     return list(papers.values())
 
 
