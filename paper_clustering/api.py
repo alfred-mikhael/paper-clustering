@@ -71,13 +71,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Paper Technique Search", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-)
-
 @app.middleware("http")
 async def log_request_time(request: Request, call_next):
     """Include routing, endpoint work, and response preparation in request timing."""
@@ -96,6 +89,13 @@ async def log_request_time(request: Request, call_next):
             perf_counter() - started,
         )
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+)
 
 @contextmanager
 def get_database_client(request: Request) -> Iterator[DatabaseClient]:

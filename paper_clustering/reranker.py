@@ -23,7 +23,7 @@ from paper_clustering.interfaces import Reranker
 import logging
 
 logger = logging.getLogger(__name__)
-
+torch.set_num_threads(8)
 
 def _quantized_load_options(
     bits: Literal[4, 8] | None, device: torch.device, dtype: torch.dtype
