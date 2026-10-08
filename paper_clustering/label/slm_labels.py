@@ -1,4 +1,11 @@
-"""Generate sentence-level weak labels through a llama.cpp server."""
+"""Generate sentence-level weak labels through a llama.cpp server.
+
+Launch llama.ccp server by navigating to the llama.ccpp folder and running
+
+`build\bin\llama-server -hf [model-name] -ngl 99 --cont-batching --cache-prompt --cache-reuse 256 --ctx-size 32768 --no-mmproj`
+
+You can use `-m [model name]` if the model is already cached
+"""
 
 import logging
 import hashlib

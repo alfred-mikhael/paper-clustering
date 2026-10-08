@@ -3,7 +3,7 @@
 from typing import Any
 
 from paper_clustering.data_models import EmbeddedPaper
-from paper_clustering.utils import DatabaseClient
+from paper_clustering.interfaces import DatabaseClient
 
 
 def upload(
@@ -30,7 +30,7 @@ def upload(
 
         record: dict[str, Any] = {
             "arxiv_id": metadata.arxiv_id,
-            "authors": metadata.authors,
+            "authors": list(metadata.authors),
             "publication_date": metadata.publication_date.isoformat(),
             "title": metadata.title,
             "abstract": metadata.abstract,

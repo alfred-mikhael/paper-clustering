@@ -40,17 +40,20 @@ class PostgresClient:
             sql.SQL(", ").join(map(sql.Identifier, columns)),
             sql.SQL(", ").join(sql.Placeholder() for _ in columns),
         )
-        conflict_columns = {
-            "papers": ("arxiv_id",),
-            "techniques": ("arxiv_id", "passage"),
-        }.get(table)
-        if conflict_columns is not None:
-            update_columns = [
-                column for column in columns if column not in conflict_columns
-            ]
-            query += sql.SQL(" ON CONFLICT ({}) ").format(
-                sql.SQL(", ").join(map(sql.Identifier, conflict_columns))
-            )
+        upsert_config = {
+            "papers": (
+                sql.Identifier("arxiv_id"),
+                [column for column in columns if column != "arxiv_id"],
+            ),
+            "techniques": (
+                sql.SQL("(md5((arxiv_id || ':'::text) || passage))"),
+                ["embedding", "score"],
+            ),
+        }
+        config = upsert_config.get(table)
+        if config is not None:
+            conflict_target, update_columns = config
+            query += sql.SQL(" ON CONFLICT ({}) ").format(conflict_target)
             if update_columns:
                 query += sql.SQL("DO UPDATE SET {}").format(
                     sql.SQL(", ").join(
@@ -69,7 +72,7 @@ class PostgresClient:
 
         logger.info(
             "%s %d records into table %s",
-            "Upserted" if conflict_columns is not None else "Inserted",
+            "Upserted" if config is not None else "Inserted",
             len(records),
             table,
         )

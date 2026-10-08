@@ -927,10 +927,11 @@ List any datasets, papers, scripts, notebooks, or output files.
 Record any choices you made and why.
 
 * Using threadpool in the api to help with many concurrent users
-* Put unique constraint on (arxiv_id, passage) in techniques table so that I can "on conflict (arxiv_id, passage) do ..." in my sql and get idempotent operations
+* Put unique constraint on (arxiv_id, passage) in techniques table so that I can "on conflict (arxiv_id, passage) do ..." in my sql and get idempotent operations. Later revisited this and changed it to a unique constraint on MD5(arxiv_id||":"||passage) since (arxiv_id, passage) was too long to fit into the B-tree. 
 * Resumable downloads and embedding, also done in batches. 
 * Generally added a lot of options to save data locally. I wasn't really thinking of using the pipeline as a CLI before, but I realized that there is probably too much data to fit comfortably into memory, and I definitely don't want a single hardware / network error to cost me hours of compute.
 * Separated UMAP coordinates from the `EmbeddedPaper` data model. This lets me use the model after embedding but before doing UMAP (without doing any hacks). It also makes more sense, since the UMAP coordinates are not actually part of the paper. I don't see a need to add a new database table for the coordinates, I will just save them as CSV and serve them as static files.
+* Configured server to allow cross-origin access (CORS) for all origins. 
 
 ### Issues or questions
 

@@ -34,7 +34,7 @@ from time import perf_counter
 from typing import Any
 
 from paper_clustering.data_models import ClusterMetadata, EmbeddedPaper, PaperMetadata
-from paper_clustering.utils import DatabaseClient
+from paper_clustering.interfaces import DatabaseClient
 
 from paper_clustering.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
@@ -341,6 +341,53 @@ def _save_embeddings(
         len(techniques),
         output_path,
     )
+
+
+def generate_centroids(
+    memberships_filepath: str | Path,
+    coordinates_filepath: str | Path,
+    output_filepath: str | Path,
+    *,
+    num_samples: int = 100,
+    random_state: int | None = None,
+) -> bool:
+    """Read gzipped memberships/coordinates and write cluster_id,centroid CSV.
+
+    Centroids are JSON arrays [x, y] inside the CSV field. Return success;
+    input and calculation errors are logged before the output is opened.
+    """
+    try:
+        from paper_clustering.cluster import approximate_centroid
+
+        output_filepath = Path(output_filepath)
+        if output_filepath.resolve() in {
+            Path(memberships_filepath).resolve(),
+            Path(coordinates_filepath).resolve(),
+        }:
+            raise ValueError("Centroid output must differ from input files")
+        with gzip.open(memberships_filepath, "rt", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if not {"cluster_id", "arxiv_id"}.issubset(reader.fieldnames or []):
+                raise ValueError("Membership CSV requires cluster_id and arxiv_id columns")
+            memberships = list(reader)
+        with gzip.open(coordinates_filepath, "rt", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if not {"arxiv_id", "umap_x", "umap_y"}.issubset(reader.fieldnames or []):
+                raise ValueError("Coordinate CSV requires arxiv_id, umap_x, umap_y columns")
+            coordinates = list(reader)
+        centroids = approximate_centroid(
+            memberships, coordinates, num_samples=num_samples, random_state=random_state
+        )
+        output_filepath.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(output_filepath, "wt", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(("cluster_id", "centroid"))
+            writer.writerows((cid, json.dumps(point)) for cid, point in centroids)
+        logger.info("Wrote %d cluster centroids to %s", len(centroids), output_filepath)
+        return True
+    except Exception:
+        logger.exception("Cluster centroid generation failed")
+        return False
 
 
 def _save_clusters(clusters: dict[int, ClusterMetadata], filepath: Path) -> None:
@@ -807,8 +854,11 @@ def embed_papers(
                         "Downloading paper %d/%d: %s", index, len(ids), arxiv_id
                     )
                     paper = get_paper(
-                        session, arxiv_id, metadata=metadata_by_id[arxiv_id],
-                        include_proofs=include_proofs, retries=1,
+                        session,
+                        arxiv_id,
+                        metadata=metadata_by_id[arxiv_id],
+                        include_proofs=include_proofs,
+                        retries=1,
                     )
                     if not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
@@ -925,7 +975,9 @@ def main(argv: list[str] | None = None) -> int:
         "embed", help="Embed papers for file export or upload"
     )
     embed_parser.add_argument(
-        "--input-filepath", type=Path, required=True,
+        "--input-filepath",
+        type=Path,
+        required=True,
         help="Paper metadata JSON Lines file produced by select",
     )
     embed_parser.add_argument(
@@ -1025,11 +1077,32 @@ def main(argv: list[str] | None = None) -> int:
     cluster_parser.add_argument("--num-samples", type=int, default=10)
     cluster_parser.add_argument("--seed", type=int, help="Seed for label sampling")
     cluster_parser.add_argument("--request-timeout", type=float, default=120)
+    centroids_parser = commands.add_parser(
+        "generate_centroids", help="Estimate cluster centers from sampled UMAP coordinates"
+    )
+    centroids_parser.add_argument("--memberships-filepath", type=Path, required=True)
+    centroids_parser.add_argument("--coordinates-filepath", type=Path, required=True)
+    centroids_parser.add_argument("--output-filepath", type=Path, required=True)
+    centroids_parser.add_argument("--num-samples", type=int, default=100)
+    centroids_parser.add_argument("--seed", type=int)
     args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     logging.getLogger("psycopg").setLevel(logging.DEBUG)
+
+    if args.command == "generate_centroids":
+        return (
+            0
+            if generate_centroids(
+                args.memberships_filepath,
+                args.coordinates_filepath,
+                args.output_filepath,
+                num_samples=args.num_samples,
+                random_state=args.seed,
+            )
+            else 1
+        )
 
     if args.command == "select":
         return (

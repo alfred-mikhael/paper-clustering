@@ -19,7 +19,7 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
-from paper_clustering.utils import Reranker
+from paper_clustering.interfaces import Reranker
 import logging
 
 logger = logging.getLogger(__name__)

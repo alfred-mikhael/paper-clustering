@@ -27,7 +27,7 @@ from psycopg_pool import ConnectionPool, PoolClosed, PoolTimeout
 from paper_clustering.postgres import PostgresClient
 from paper_clustering.query import SearchResult, rank_candidates, retrieve_candidates
 from paper_clustering.reranker import SLMReranker
-from paper_clustering.utils import DatabaseClient
+from paper_clustering.interfaces import DatabaseClient
 
 # Inherit Uvicorn's configured INFO handler when running the documented command.
 logger = logging.getLogger("uvicorn.error").getChild(__name__)
@@ -90,7 +90,10 @@ async def log_request_time(request: Request, call_next):
     finally:
         logger.info(
             "%s %s status=%d took %.3fs",
-            request.method, request.url.path, status_code, perf_counter() - started,
+            request.method,
+            request.url.path,
+            status_code,
+            perf_counter() - started,
         )
 
 
@@ -144,7 +147,9 @@ def query_papers(
                 candidates = retrieve_candidates(arxiv_id.strip(), client, k=k)
             finally:
                 logger.info(
-                    "Query %s retrieval took %.3fs", arxiv_id, perf_counter() - stage_started
+                    "Query %s retrieval took %.3fs",
+                    arxiv_id,
+                    perf_counter() - stage_started,
                 )
         # Return the connection before waiting for the GPU; only ranking is serialized.
         if not candidates:
@@ -153,14 +158,21 @@ def query_papers(
         with request.app.state.reranker_lock:
             logger.info(
                 "Query %s reranker lock wait took %.3fs",
-                arxiv_id, perf_counter() - stage_started,
+                arxiv_id,
+                perf_counter() - stage_started,
             )
             stage_started = perf_counter()
             try:
-                return rank_candidates(candidates, k=k, reranker=request.app.state.reranker)
+                return rank_candidates(
+                    candidates, k=k, reranker=request.app.state.reranker
+                )
             finally:
                 logger.info(
-                    "Query %s reranking took %.3fs", arxiv_id, perf_counter() - stage_started
+                    "Query %s reranking took %.3fs",
+                    arxiv_id,
+                    perf_counter() - stage_started,
                 )
     finally:
-        logger.info("Query %s total took %.3fs", arxiv_id, perf_counter() - total_started)
+        logger.info(
+            "Query %s total took %.3fs", arxiv_id, perf_counter() - total_started
+        )

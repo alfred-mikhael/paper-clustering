@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
-from paper_clustering.utils import DatabaseClient, Reranker
+from paper_clustering.interfaces import DatabaseClient, Reranker
 
 
 @dataclass(frozen=True)

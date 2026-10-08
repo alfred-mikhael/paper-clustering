@@ -146,7 +146,7 @@ def extract_techniques_and_embed_batch(
     *,
     threshold: float = 0.9,
     k: int = 3,
-    pooling: str | None = None,
+    pooling: str | None = "max",
     technique_batch_size: int = 32,
     embedding_batch_size: int = 8,
 ) -> list[list[Technique]]:
