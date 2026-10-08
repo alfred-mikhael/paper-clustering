@@ -4,6 +4,7 @@ from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 import json
 from pathlib import Path
+import re
 from typing import Any, Iterable
 import zipfile
 
@@ -215,6 +216,7 @@ def parse_metadata_response(response: bytes) -> PaperMetadata:
         if marker in identifier_url
         else identifier_url.rsplit("/", 1)[-1]
     )
+    arxiv_id = re.sub(r"v[0-9]+$", "", arxiv_id)
     if not arxiv_id:
         raise ValueError("arXiv paper entry has an invalid identifier")
 

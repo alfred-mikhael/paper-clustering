@@ -793,6 +793,8 @@ def embed_papers(
                     record["publication_date"] = datetime.fromisoformat(
                         record["publication_date"]
                     )
+                    if isinstance(record.get("arxiv_id"), str):
+                        record["arxiv_id"] = re.sub(r"v[0-9]+$", "", record["arxiv_id"])
                     metadata = PaperMetadata(**record)
                     if not isinstance(metadata.arxiv_id, str) or not metadata.arxiv_id:
                         raise ValueError("arxiv_id must be a nonempty string")

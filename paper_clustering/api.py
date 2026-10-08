@@ -128,11 +128,14 @@ def query_papers(
     request: Request,
     arxiv_id: Annotated[str, Query(min_length=1, pattern=r"\S")],
     k: Annotated[int, Query(ge=1, le=100)] = 10,
+    rerank: Annotated[bool, Query(description="Order papers using the reranker")] = True,
 ) -> dict[str, list[SearchResult]]:
     """Find up to k similar papers, grouped by target arXiv ID.
 
-    Papers are ordered by their best reranker score; each match's similarity
-    remains the original vector similarity. An empty object
+    Papers are ordered by their best reranker score by default. Set rerank=false
+    to order papers by their best vector similarity instead. The reranker stays
+    loaded for other requests. Each match's similarity remains the original
+    vector similarity. An empty object
     means no matches were found, including when the query has no stored passages.
     """
     # FastAPI returns HTTP 422 for invalid query parameters.
@@ -154,6 +157,8 @@ def query_papers(
         # Return the connection before waiting for the GPU; only ranking is serialized.
         if not candidates:
             return {}
+        if not rerank:
+            return rank_candidates(candidates, k=k)
         stage_started = perf_counter()
         with request.app.state.reranker_lock:
             logger.info(
