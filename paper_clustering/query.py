@@ -15,7 +15,7 @@ class SearchResult:
 def find_similar(
     arxiv_id: str,
     client: DatabaseClient,
-    k: int = 10,
+    k: int = 11,
     reranker: Reranker | None = None,
 ) -> dict[str, list[SearchResult]]:
     """Return similar papers grouped by ID, optionally ordered by reranker score.
@@ -26,11 +26,12 @@ def find_similar(
     Without a reranker, use the existing vector-similarity ranking.
     """
     candidates = retrieve_candidates(arxiv_id, client, k=k)
+    candidates = [c for c in candidates if c.target_arxiv_id != c.query_arxiv_id]
     return rank_candidates(candidates, k=k, reranker=reranker)
 
 
 def retrieve_candidates(
-    arxiv_id: str, client: DatabaseClient, k: int = 10
+    arxiv_id: str, client: DatabaseClient, k: int = 11
 ) -> list[SearchResult]:
     """Materialize all candidate pairs before releasing the database connection."""
     resp = client.select(

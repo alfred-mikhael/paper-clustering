@@ -365,15 +365,23 @@ def generate_centroids(
             Path(coordinates_filepath).resolve(),
         }:
             raise ValueError("Centroid output must differ from input files")
-        with gzip.open(memberships_filepath, "rt", encoding="utf-8", newline="") as handle:
+        with gzip.open(
+            memberships_filepath, "rt", encoding="utf-8", newline=""
+        ) as handle:
             reader = csv.DictReader(handle)
             if not {"cluster_id", "arxiv_id"}.issubset(reader.fieldnames or []):
-                raise ValueError("Membership CSV requires cluster_id and arxiv_id columns")
+                raise ValueError(
+                    "Membership CSV requires cluster_id and arxiv_id columns"
+                )
             memberships = list(reader)
-        with gzip.open(coordinates_filepath, "rt", encoding="utf-8", newline="") as handle:
+        with gzip.open(
+            coordinates_filepath, "rt", encoding="utf-8", newline=""
+        ) as handle:
             reader = csv.DictReader(handle)
             if not {"arxiv_id", "umap_x", "umap_y"}.issubset(reader.fieldnames or []):
-                raise ValueError("Coordinate CSV requires arxiv_id, umap_x, umap_y columns")
+                raise ValueError(
+                    "Coordinate CSV requires arxiv_id, umap_x, umap_y columns"
+                )
             coordinates = list(reader)
         centroids = approximate_centroid(
             memberships, coordinates, num_samples=num_samples, random_state=random_state
@@ -644,8 +652,13 @@ def _resume_embedding_offset(
             logger.info("Retrying saved batch upload: %s", batch_path)
             papers = _load_saved_embeddings(batch_path)
             saved_ids = [paper.arxiv_id for paper in papers]
-            if len(set(saved_ids)) != len(saved_ids) or not set(saved_ids).issubset(
-                expected_ids
+            expected_id_set = set(expected_ids)
+            # API metadata may resolve an unversioned request to a versioned ID.
+            # Explicitly requested versions must still match exactly.
+            if len(set(saved_ids)) != len(saved_ids) or any(
+                saved_id not in expected_id_set
+                and re.sub(r"v[0-9]+$", "", saved_id) not in expected_id_set
+                for saved_id in saved_ids
             ):
                 raise ValueError(f"Saved paper IDs do not match {manifest_path}")
             _upload_embedding_batch(papers)
@@ -723,8 +736,9 @@ def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
 
 
 def embed_papers(
-    input_filepath: Path,
+    input_filepath: Path | None = None,
     *,
+    ids_filepath: Path | None = None,
     upload: bool = False,
     output_path: Path | None = None,
     resume: bool = False,
@@ -739,9 +753,11 @@ def embed_papers(
     technique_k: int = 3,
     pooling: str | None = None,
 ) -> bool:
-    """Embed papers in batches, optionally continuing a manifest-backed export."""
+    """Embed JSONL metadata or newline-separated IDs, optionally resuming an export."""
     total_started = perf_counter()
     try:
+        if (input_filepath is None) == (ids_filepath is None):
+            raise ValueError("Supply exactly one of --input-filepath or --ids-filepath")
         _validate_embedding_options(
             upload=upload,
             output_path=output_path,
@@ -757,9 +773,13 @@ def embed_papers(
         )
         stage_started = perf_counter()
         metadata_by_id = {}
-        with input_filepath.open(encoding="utf-8") as handle:
+        source_path = input_filepath if input_filepath is not None else ids_filepath
+        with source_path.open(encoding="utf-8") as handle:
             for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
+                    continue
+                if ids_filepath is not None:
+                    metadata_by_id.setdefault(line.strip(), None)
                     continue
                 try:
                     record = json.loads(line)
@@ -953,7 +973,7 @@ def embed_papers(
 def main(argv: list[str] | None = None) -> int:
     """Run selection, embedding, coordinates, or labelled clustering.
 
-    Embed reads paper metadata from the JSON Lines output of select.
+    Embed reads JSON Lines metadata from select or a file with one arXiv ID per line.
     Duplicate IDs keep their first record. --batch-size controls papers per batch.
     With --upload, commit each batch using the existing upload function. With
     --output-path, save each batch to a new batch_0001, batch_0002, ... folder.
@@ -974,11 +994,16 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser = commands.add_parser(
         "embed", help="Embed papers for file export or upload"
     )
-    embed_parser.add_argument(
+    embed_input = embed_parser.add_mutually_exclusive_group(required=True)
+    embed_input.add_argument(
         "--input-filepath",
         type=Path,
-        required=True,
         help="Paper metadata JSON Lines file produced by select",
+    )
+    embed_input.add_argument(
+        "--ids-filepath",
+        type=Path,
+        help="Text file with one arXiv ID per line; metadata is fetched automatically",
     )
     embed_parser.add_argument(
         "--upload", action="store_true", help="Upload to the database"
@@ -1017,10 +1042,10 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Area and technique embedding batch size (default: 8)",
     )
-    embed_parser.add_argument("--include-proofs", action="store_true")
+    embed_parser.add_argument("--include-proofs", action="store_true", default=True)
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
     embed_parser.add_argument("--technique-k", type=int, default=3)
-    embed_parser.add_argument("--pooling", type=str, default=None)
+    embed_parser.add_argument("--pooling", type=str, default="max")
     coords_parser = commands.add_parser(
         "generate_coords", help="Fit/save UMAP or apply a saved reducer"
     )
@@ -1078,7 +1103,8 @@ def main(argv: list[str] | None = None) -> int:
     cluster_parser.add_argument("--seed", type=int, help="Seed for label sampling")
     cluster_parser.add_argument("--request-timeout", type=float, default=120)
     centroids_parser = commands.add_parser(
-        "generate_centroids", help="Estimate cluster centers from sampled UMAP coordinates"
+        "generate_centroids",
+        help="Estimate cluster centers from sampled UMAP coordinates",
     )
     centroids_parser.add_argument("--memberships-filepath", type=Path, required=True)
     centroids_parser.add_argument("--coordinates-filepath", type=Path, required=True)
@@ -1156,6 +1182,7 @@ def main(argv: list[str] | None = None) -> int:
         0
         if embed_papers(
             args.input_filepath,
+            ids_filepath=args.ids_filepath,
             upload=args.upload,
             output_path=args.output_path,
             resume=args.resume,
