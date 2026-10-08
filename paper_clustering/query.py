@@ -25,13 +25,13 @@ def find_similar(
     that score. SearchResult.similarity remains the original vector similarity.
     Without a reranker, use the existing vector-similarity ranking.
     """
-    candidates = retrieve_candidates(arxiv_id, client, k=k + 1)
+    candidates = retrieve_candidates(arxiv_id, client, k=k)
     candidates = [c for c in candidates if c.target_arxiv_id != c.query_arxiv_id]
     return rank_candidates(candidates, k=k, reranker=reranker)
 
 
 def retrieve_candidates(
-    arxiv_id: str, client: DatabaseClient, k: int = 11
+    arxiv_id: str, client: DatabaseClient, k: int = 10
 ) -> list[SearchResult]:
     """Materialize all candidate pairs before releasing the database connection."""
     resp = client.select(
@@ -50,8 +50,9 @@ def retrieve_candidates(
                 similarity=sim,
             )
             for target_id, passage, sim in _find_similar_vectors(
-                row["embedding"], client, k=k
+                row["embedding"], client, k=k + 1
             )
+            if arxiv_id != target_id
         ]
     return candidates
 
