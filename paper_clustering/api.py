@@ -20,6 +20,7 @@ from typing import Annotated
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool, PoolClosed, PoolTimeout
 
@@ -70,6 +71,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Paper Technique Search", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+)
 
 @app.middleware("http")
 async def log_request_time(request: Request, call_next):

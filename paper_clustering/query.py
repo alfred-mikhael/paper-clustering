@@ -98,9 +98,9 @@ def _find_similar_vectors(
 ) -> list[tuple[str, str, float]]:
     """Returns a list of (arxiv_id, passage, similarity) of most similar passages, deduplicated by paper"""
     res = client.execute_rpc(
-        "ANN",
+        "ann",
         {
-            "query_embedding": query,
+            "query_vector": query,
             "match_count": k,
         },
     )
