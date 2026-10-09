@@ -145,7 +145,7 @@ def extract_techniques_and_embed_batch(
     encoder: SentenceTransformer,
     *,
     threshold: float = 0.9,
-    k: int = 3,
+    k: float = 3.0,
     pooling: str | None = "max",
     technique_batch_size: int = 32,
     embedding_batch_size: int = 8,

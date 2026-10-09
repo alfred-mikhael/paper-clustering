@@ -6,6 +6,10 @@ Examples::
         --input-archive data/math_cs_metadata.zip --output-filepath data/papers.jsonl
     python -m paper_clustering.pipeline embed --input-filepath data/papers.jsonl \
         --output-path data/embedded --upload
+    python -m paper_clustering.pipeline download --input-filepath data/papers.jsonl \
+        --output-path data/sources --resume
+    python -m paper_clustering.pipeline embed --input-filepath data/papers.jsonl \
+        --source-path data/sources --output-path data/embedded
     python -m paper_clustering.pipeline generate_coords \
         --save-umap-weights weights/umap.joblib --output-filepath data/coords.csv.gz
     python -m paper_clustering.pipeline generate_coords \
@@ -32,8 +36,15 @@ import re
 import tempfile
 from time import perf_counter
 from typing import Any
+from urllib.parse import quote
 
-from paper_clustering.data_models import ClusterMetadata, EmbeddedPaper, PaperMetadata
+from paper_clustering.data_models import (
+    ArxivSection,
+    ClusterMetadata,
+    EmbeddedPaper,
+    Paper,
+    PaperMetadata,
+)
 from paper_clustering.interfaces import DatabaseClient
 
 from paper_clustering.extract_metadata import (
@@ -622,6 +633,7 @@ def _resume_embedding_offset(
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         # Older exports used a fixed 500-paper batch size.
         manifest.setdefault("batch_size", 500)
+        manifest.setdefault("source_path", None)
         expected_ids = ids[offset : offset + settings["batch_size"]]
         if not expected_ids or manifest.get("arxiv_ids") != expected_ids:
             raise ValueError(f"Input paper IDs differ from {manifest_path}")
@@ -735,10 +747,146 @@ def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
         logger.info("Database upload took %.3fs", perf_counter() - stage_started)
 
 
+def _read_paper_input(
+    input_filepath: Path | None, ids_filepath: Path | None
+) -> dict[str, PaperMetadata | None]:
+    """Read the shared selection/ID input, preserving order and deduplicating IDs."""
+    if (input_filepath is None) == (ids_filepath is None):
+        raise ValueError("Supply exactly one of --input-filepath or --ids-filepath")
+    metadata_by_id = {}
+    source_path = input_filepath if input_filepath is not None else ids_filepath
+    with source_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            if ids_filepath is not None:
+                metadata_by_id.setdefault(line.strip(), None)
+                continue
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    raise ValueError("Expected a paper metadata object")
+                if not isinstance(record.get("authors"), list) or not all(
+                    isinstance(author, str) for author in record["authors"]
+                ):
+                    raise ValueError("authors must be a list of strings")
+                record["authors"] = tuple(record["authors"])
+                record["publication_date"] = datetime.fromisoformat(
+                    record["publication_date"]
+                )
+                if isinstance(record.get("arxiv_id"), str):
+                    record["arxiv_id"] = re.sub(r"v[0-9]+$", "", record["arxiv_id"])
+                metadata = PaperMetadata(**record)
+                if not isinstance(metadata.arxiv_id, str) or not metadata.arxiv_id:
+                    raise ValueError("arxiv_id must be a nonempty string")
+            except (ValueError, TypeError, KeyError) as error:
+                raise ValueError(
+                    f"Invalid paper metadata at line {line_number}; "
+                    "use the JSON Lines output from select"
+                ) from error
+            metadata_by_id.setdefault(metadata.arxiv_id, metadata)
+    return metadata_by_id
+
+
+def _source_filepath(source_path: Path, arxiv_id: str) -> Path:
+    """Encode IDs, including old-style IDs containing slashes, as filenames."""
+    return source_path / f"{quote(arxiv_id, safe='')}.json.gz"
+
+
+def _load_source_paper(source_path: Path, arxiv_id: str, include_proofs: bool) -> Paper:
+    """Restore downloaded text and reject incompatible extraction settings."""
+    filepath = _source_filepath(source_path, arxiv_id)
+    with gzip.open(filepath, "rt", encoding="utf-8") as handle:
+        record = json.load(handle)
+    if record["requested_arxiv_id"] != arxiv_id:
+        raise ValueError(f"Paper ID differs from {filepath}")
+    if record["include_proofs"] != include_proofs:
+        raise ValueError(f"--include-proofs differs from {filepath}")
+    metadata = record["metadata"]
+    metadata["authors"] = tuple(metadata["authors"])
+    metadata["publication_date"] = datetime.fromisoformat(metadata["publication_date"])
+    return Paper(
+        metadata=PaperMetadata(**metadata),
+        sections=tuple(
+            ArxivSection(**{**section, "text": tuple(section["text"])})
+            for section in record["sections"]
+        ),
+    )
+
+
+def download_papers(
+    input_filepath: Path | None = None,
+    *,
+    ids_filepath: Path | None = None,
+    output_path: Path,
+    include_proofs: bool = False,
+    resume: bool = False,
+) -> bool:
+    """Save extracted papers individually; resume reuses complete saved files.
+
+    Empty sections are saved too, matching embed's metadata-only fallback when
+    source text is unavailable. Remove such a file before resuming to retry it.
+    """
+    temporary_path = None
+    try:
+        metadata_by_id = _read_paper_input(input_filepath, ids_filepath)
+        output_path.mkdir(parents=True, exist_ok=True)
+        if not resume and any(
+            _source_filepath(output_path, arxiv_id).exists()
+            for arxiv_id in metadata_by_id
+        ):
+            raise ValueError("Saved sources already exist; use --resume or a new path")
+        import requests
+        from paper_clustering.extract_text import get_paper
+
+        with requests.Session() as session:
+            for index, (arxiv_id, metadata) in enumerate(metadata_by_id.items(), 1):
+                filepath = _source_filepath(output_path, arxiv_id)
+                if resume and filepath.exists():
+                    _load_source_paper(output_path, arxiv_id, include_proofs)
+                    logger.info("Skipping saved paper %s", arxiv_id)
+                    continue
+                logger.info(
+                    "Downloading paper %d/%d: %s", index, len(metadata_by_id), arxiv_id
+                )
+                paper = get_paper(
+                    session,
+                    arxiv_id,
+                    metadata=metadata,
+                    include_proofs=include_proofs,
+                    retries=1,
+                )
+                if not any(section.text for section in paper.sections):
+                    logger.warning("No usable source paragraphs for %s", arxiv_id)
+                record = asdict(paper)
+                record["metadata"][
+                    "publication_date"
+                ] = paper.metadata.publication_date.isoformat()
+                record.update(
+                    requested_arxiv_id=arxiv_id, include_proofs=include_proofs
+                )
+                with tempfile.NamedTemporaryFile(
+                    dir=output_path, delete=False
+                ) as handle:
+                    temporary_path = Path(handle.name)
+                with gzip.open(temporary_path, "wt", encoding="utf-8") as handle:
+                    json.dump(record, handle, ensure_ascii=False)
+                temporary_path.replace(filepath)
+                temporary_path = None
+        return True
+    except Exception:
+        logger.exception("Paper download failed")
+        return False
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+
+
 def embed_papers(
     input_filepath: Path | None = None,
     *,
     ids_filepath: Path | None = None,
+    source_path: Path | None = None,
     upload: bool = False,
     output_path: Path | None = None,
     resume: bool = False,
@@ -750,14 +898,16 @@ def embed_papers(
     embedding_batch_size: int | None = None,
     include_proofs: bool = False,
     merge_threshold: float = 0.9,
-    technique_k: int = 3,
+    technique_k: float = 3.0,
     pooling: str | None = None,
 ) -> bool:
-    """Embed JSONL metadata or newline-separated IDs, optionally resuming an export."""
+    """Embed selected papers, optionally reading saved text from source_path.
+
+    Saved sources supply both metadata and sections; input selects their IDs.
+    Missing/invalid saved sources fail rather than falling back to downloading.
+    """
     total_started = perf_counter()
     try:
-        if (input_filepath is None) == (ids_filepath is None):
-            raise ValueError("Supply exactly one of --input-filepath or --ids-filepath")
         _validate_embedding_options(
             upload=upload,
             output_path=output_path,
@@ -772,38 +922,7 @@ def embed_papers(
             8 if embedding_batch_size is None else embedding_batch_size
         )
         stage_started = perf_counter()
-        metadata_by_id = {}
-        source_path = input_filepath if input_filepath is not None else ids_filepath
-        with source_path.open(encoding="utf-8") as handle:
-            for line_number, line in enumerate(handle, start=1):
-                if not line.strip():
-                    continue
-                if ids_filepath is not None:
-                    metadata_by_id.setdefault(line.strip(), None)
-                    continue
-                try:
-                    record = json.loads(line)
-                    if not isinstance(record, dict):
-                        raise ValueError("Expected a paper metadata object")
-                    if not isinstance(record.get("authors"), list) or not all(
-                        isinstance(author, str) for author in record["authors"]
-                    ):
-                        raise ValueError("authors must be a list of strings")
-                    record["authors"] = tuple(record["authors"])
-                    record["publication_date"] = datetime.fromisoformat(
-                        record["publication_date"]
-                    )
-                    if isinstance(record.get("arxiv_id"), str):
-                        record["arxiv_id"] = re.sub(r"v[0-9]+$", "", record["arxiv_id"])
-                    metadata = PaperMetadata(**record)
-                    if not isinstance(metadata.arxiv_id, str) or not metadata.arxiv_id:
-                        raise ValueError("arxiv_id must be a nonempty string")
-                except (ValueError, TypeError, KeyError) as error:
-                    raise ValueError(
-                        f"Invalid paper metadata at line {line_number}; "
-                        "use the JSON Lines output from select"
-                    ) from error
-                metadata_by_id.setdefault(metadata.arxiv_id, metadata)
+        metadata_by_id = _read_paper_input(input_filepath, ids_filepath)
         ids = list(metadata_by_id)
         logger.info("Metadata loading took %.3fs", perf_counter() - stage_started)
         settings = {
@@ -816,7 +935,12 @@ def embed_papers(
             "merge_threshold": merge_threshold,
             "technique_k": technique_k,
             "upload": upload,
+            "source_path": (
+                str(source_path.resolve()) if source_path is not None else None
+            ),
         }
+        if source_path is not None and not source_path.is_dir():
+            raise ValueError("--source-path must be a saved-source directory")
         start_offset = _resume_embedding_offset(ids, output_path, settings, resume)
         if not ids:
             logger.info("No arXiv IDs to embed")
@@ -872,21 +996,24 @@ def embed_papers(
                 for index, arxiv_id in tqdm(
                     enumerate(batch_ids, start=offset + 1), total=len(batch_ids)
                 ):
-                    logger.info(
-                        "Downloading paper %d/%d: %s", index, len(ids), arxiv_id
-                    )
-                    paper = get_paper(
-                        session,
-                        arxiv_id,
-                        metadata=metadata_by_id[arxiv_id],
-                        include_proofs=include_proofs,
-                        retries=1,
-                    )
+                    logger.info("Loading paper %d/%d: %s", index, len(ids), arxiv_id)
+                    if source_path is not None:
+                        paper = _load_source_paper(
+                            source_path, arxiv_id, include_proofs
+                        )
+                    else:
+                        paper = get_paper(
+                            session,
+                            arxiv_id,
+                            metadata=metadata_by_id[arxiv_id],
+                            include_proofs=include_proofs,
+                            retries=1,
+                        )
                     if not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
                     papers.append(paper)
                 logger.info(
-                    "Paper download/extraction took %.3fs",
+                    "Paper loading took %.3fs",
                     perf_counter() - stage_started,
                 )
                 stage_started = perf_counter()
@@ -973,7 +1100,7 @@ def embed_papers(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run selection, embedding, coordinates, or labelled clustering.
+    """Run selection, source download, embedding, coordinates, or clustering.
 
     Embed reads JSON Lines metadata from select or a file with one arXiv ID per line.
     Duplicate IDs keep their first record. --batch-size controls papers per batch.
@@ -981,6 +1108,7 @@ def main(argv: list[str] | None = None) -> int:
     --output-path, save each batch to a new batch_0001, batch_0002, ... folder.
     A failure stops subsequent batches; prior uploads and batch files remain.
     With --resume, validate manifests and skip completed batches.
+    Download saves extracted papers; embed --source-path reads those files.
     Generate visualization coordinates separately.
     """
     parser = argparse.ArgumentParser(description=__doc__)
@@ -992,6 +1120,22 @@ def main(argv: list[str] | None = None) -> int:
     select.add_argument("--max-results", type=int, default=10000)
     select.add_argument("--categories", nargs="+")
     select.add_argument("--keywords", nargs="+")
+
+    download_parser = commands.add_parser(
+        "download", help="Save extracted section text and metadata for later embedding"
+    )
+    download_input = download_parser.add_mutually_exclusive_group(required=True)
+    download_input.add_argument(
+        "--input-filepath", type=Path, help="Metadata JSONL from select"
+    )
+    download_input.add_argument(
+        "--ids-filepath", type=Path, help="One arXiv ID per line"
+    )
+    download_parser.add_argument("--output-path", type=Path, required=True)
+    download_parser.add_argument("--include-proofs", action="store_true")
+    download_parser.add_argument(
+        "--resume", action="store_true", help="Reuse saved papers"
+    )
 
     embed_parser = commands.add_parser(
         "embed", help="Embed papers for file export or upload"
@@ -1006,6 +1150,11 @@ def main(argv: list[str] | None = None) -> int:
         "--ids-filepath",
         type=Path,
         help="Text file with one arXiv ID per line; metadata is fetched automatically",
+    )
+    embed_parser.add_argument(
+        "--source-path",
+        type=Path,
+        help="Read saved papers from download; no paper downloads. Match --include-proofs used there.",
     )
     embed_parser.add_argument(
         "--upload", action="store_true", help="Upload to the database"
@@ -1044,9 +1193,9 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Area and technique embedding batch size (default: 8)",
     )
-    embed_parser.add_argument("--include-proofs", action="store_true", default=True)
+    embed_parser.add_argument("--include-proofs", action="store_true")
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
-    embed_parser.add_argument("--technique-k", type=int, default=3)
+    embed_parser.add_argument("--technique-k", type=float, default=3.0)
     embed_parser.add_argument("--pooling", type=str, default="max")
     coords_parser = commands.add_parser(
         "generate_coords", help="Fit/save UMAP or apply a saved reducer"
@@ -1119,6 +1268,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     logging.getLogger("psycopg").setLevel(logging.DEBUG)
 
+    if args.command == "download":
+        return (
+            0
+            if download_papers(
+                args.input_filepath,
+                ids_filepath=args.ids_filepath,
+                output_path=args.output_path,
+                include_proofs=args.include_proofs,
+                resume=args.resume,
+            )
+            else 1
+        )
+
     if args.command == "generate_centroids":
         return (
             0
@@ -1185,6 +1347,7 @@ def main(argv: list[str] | None = None) -> int:
         if embed_papers(
             args.input_filepath,
             ids_filepath=args.ids_filepath,
+            source_path=args.source_path,
             upload=args.upload,
             output_path=args.output_path,
             resume=args.resume,

@@ -908,12 +908,15 @@ Record any choices you made and why.
 
 ### Next step
 
-## Date: October 1 - Oct 7, 2026
-### Time spent: ... hours
+## Date: October 1 - Oct 8, 2026
+### Time spent: 24 hours
 **Goal for this session:** Finalize pipeline and finally get an MVP.
 
 ### What I worked on
 
+Most importantly, finally created a small evaluation set with hard positive and negative examples. I should've done this much earlier, but I kept putting it off because I thought it'd be very time consuming. Turns out it was just a few GPT prompts and then some time verifying.
+
+See decisions made section for the most important things that were done.
 
 ### Files or data used
 
@@ -934,5 +937,6 @@ Record any choices you made and why.
 * Configured server to allow cross-origin access (CORS) for all origins. 
 
 ### Issues or questions
+* A very small example with the evaluation set shows that there are serious issues with passage selection and retrieval, particularly passage selection. I
 
 ### Next step

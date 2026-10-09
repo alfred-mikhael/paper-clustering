@@ -7,6 +7,7 @@ from paper_clustering.interfaces import DatabaseClient, Reranker
 class SearchResult:
     query_arxiv_id: str
     target_arxiv_id: str
+    target_title: str
     query_passage: str
     target_passage: str
     similarity: float
@@ -48,8 +49,9 @@ def retrieve_candidates(
                 query_passage=row["passage"],
                 target_passage=passage,
                 similarity=sim,
+                target_title=title,
             )
-            for target_id, passage, sim in _find_similar_vectors(
+            for target_id, passage, sim, title in _find_similar_vectors(
                 row["embedding"], client, k=k + 1
             )
             if arxiv_id != target_id
@@ -97,7 +99,7 @@ def _find_topk(candidates: list[SearchResult], k: int) -> list[str]:
 
 def _find_similar_vectors(
     query: np.ndarray, client: DatabaseClient, k: int
-) -> list[tuple[str, str, float]]:
+) -> list[tuple[str, str, float, str]]:
     """Returns a list of (arxiv_id, passage, similarity) of most similar passages, deduplicated by paper"""
     res = client.execute_rpc(
         "ann",
@@ -106,7 +108,10 @@ def _find_similar_vectors(
             "match_count": k,
         },
     )
-    return [(row["arxiv_id"], row["passage"], row["similarity"]) for row in res]
+    return [
+        (row["arxiv_id"], row["passage"], row["similarity"], row["title"])
+        for row in res
+    ]
 
 
 def _aggregate_results(
