@@ -23,7 +23,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from paper_clustering.extract_text import ArxivSection, get_paper
+from paper_clustering.extract.extract_text import ArxivSection, get_paper
 from paper_clustering.label.paragraph_label_gui import ParagraphLabelApp
 
 ARXIV_ID_RE = re.compile(

@@ -25,7 +25,7 @@ import argparse
 from collections.abc import Iterator
 from contextlib import contextmanager
 import csv
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
 import gzip
 import json
@@ -47,7 +47,7 @@ from paper_clustering.data_models import (
 )
 from paper_clustering.interfaces import DatabaseClient
 
-from paper_clustering.extract_metadata import (
+from paper_clustering.extract.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
     read_metadata_archive,
 )
@@ -634,6 +634,7 @@ def _resume_embedding_offset(
         # Older exports used a fixed 500-paper batch size.
         manifest.setdefault("batch_size", 500)
         manifest.setdefault("source_path", None)
+        manifest.setdefault("semchunk", False)
         expected_ids = ids[offset : offset + settings["batch_size"]]
         if not expected_ids or manifest.get("arxiv_ids") != expected_ids:
             raise ValueError(f"Input paper IDs differ from {manifest_path}")
@@ -837,7 +838,7 @@ def download_papers(
         ):
             raise ValueError("Saved sources already exist; use --resume or a new path")
         import requests
-        from paper_clustering.extract_text import get_paper
+        from paper_clustering.extract.extract_text import get_paper
 
         with requests.Session() as session:
             for index, (arxiv_id, metadata) in enumerate(metadata_by_id.items(), 1):
@@ -900,13 +901,17 @@ def embed_papers(
     merge_threshold: float = 0.9,
     technique_k: float = 3.0,
     pooling: str | None = None,
+    semchunk: bool = False,
 ) -> bool:
     """Embed selected papers, optionally reading saved text from source_path.
 
     Saved sources supply both metadata and sections; input selects their IDs.
     Missing/invalid saved sources fail rather than falling back to downloading.
+    With semchunk enabled, split cleaned sections into SciBERT-sized chunks.
+    Saved sources are chunked into temporary files before either model loads.
     """
     total_started = perf_counter()
+    chunked_sources = None
     try:
         _validate_embedding_options(
             upload=upload,
@@ -930,6 +935,7 @@ def embed_papers(
             "embedding_model": embedding_model,
             "classifier_weights": str(classifier_weights.resolve()),
             "pooling": pooling,
+            "semchunk": semchunk,
             "metadata_filename": "metadata.csv.gz",
             "include_proofs": include_proofs,
             "merge_threshold": merge_threshold,
@@ -955,13 +961,64 @@ def embed_papers(
         from sentence_transformers import SentenceTransformer
 
         from paper_clustering.embedding import _choose_device, embed
-        from paper_clustering.extract_techniques import (
+        from paper_clustering.extract.extract_techniques import (
             extract_techniques_and_embed_batch,
         )
-        from paper_clustering.extract_text import get_paper
+        from paper_clustering.extract.extract_text import get_paper
         from paper_clustering.technique_classifier import SciBERTClassifier
 
         device = _choose_device(device)
+        chunker = None
+        if semchunk:
+            from semchunk import chunkerify
+            from transformers import AutoTokenizer
+
+            tokenizer = AutoTokenizer.from_pretrained(
+                SciBERTClassifier.DEFAULT_MODEL_NAME
+            )
+            chunker = chunkerify(
+                tokenizer,
+                chunk_size=512 - tokenizer.num_special_tokens_to_add(pair=False),
+                tokenizer_kwargs={"add_special_tokens": False},
+                # semchunk's global memoization retains tokenizers after deletion.
+                memoize=source_path is None,
+            )
+            del tokenizer
+        paper_source_path = source_path
+        if source_path is not None and chunker is not None:
+            import gc
+
+            stage_started = perf_counter()
+            chunked_sources = tempfile.TemporaryDirectory(
+                prefix="paper-clustering-chunks-"
+            )
+            paper_source_path = Path(chunked_sources.name)
+            for arxiv_id in tqdm(ids[start_offset:], desc="Chunking saved papers"):
+                paper = _load_source_paper(source_path, arxiv_id, include_proofs)
+                paper = replace(
+                    paper,
+                    sections=tuple(
+                        replace(section, text=tuple(chunker("\n\n".join(section.text))))
+                        for section in paper.sections
+                    ),
+                )
+                record = asdict(paper)
+                record["metadata"][
+                    "publication_date"
+                ] = paper.metadata.publication_date.isoformat()
+                record.update(
+                    requested_arxiv_id=arxiv_id, include_proofs=include_proofs
+                )
+                with gzip.open(
+                    _source_filepath(paper_source_path, arxiv_id),
+                    "wt",
+                    encoding="utf-8",
+                ) as handle:
+                    json.dump(record, handle, ensure_ascii=False)
+                del paper, record
+            chunker = None
+            gc.collect()
+            logger.info("Source chunking took %.3fs", perf_counter() - stage_started)
         stage_started = perf_counter()
         classifier = SciBERTClassifier(weights_path=classifier_weights).to(device)
         logger.info("Classifier loading took %.3fs", perf_counter() - stage_started)
@@ -997,9 +1054,9 @@ def embed_papers(
                     enumerate(batch_ids, start=offset + 1), total=len(batch_ids)
                 ):
                     logger.info("Loading paper %d/%d: %s", index, len(ids), arxiv_id)
-                    if source_path is not None:
+                    if paper_source_path is not None:
                         paper = _load_source_paper(
-                            source_path, arxiv_id, include_proofs
+                            paper_source_path, arxiv_id, include_proofs
                         )
                     else:
                         paper = get_paper(
@@ -1008,6 +1065,7 @@ def embed_papers(
                             metadata=metadata_by_id[arxiv_id],
                             include_proofs=include_proofs,
                             retries=1,
+                            chunker=chunker,
                         )
                     if not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
@@ -1094,6 +1152,8 @@ def embed_papers(
         logger.exception("Pipeline embedding failed")
         return False
     finally:
+        if chunked_sources is not None:
+            chunked_sources.cleanup()
         logger.info(
             "Embedding pipeline finished in %.3fs", perf_counter() - total_started
         )
@@ -1194,8 +1254,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Area and technique embedding batch size (default: 8)",
     )
     embed_parser.add_argument("--include-proofs", action="store_true")
+    embed_parser.add_argument(
+        "--semchunk",
+        action="store_true",
+        help="Chunk cleaned sections with semchunk and SciBERT's tokenizer before classification",
+    )
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
-    embed_parser.add_argument("--technique-k", type=float, default=3.0)
+    embed_parser.add_argument("--technique-k", type=float, default=2.2)
     embed_parser.add_argument("--pooling", type=str, default="max")
     coords_parser = commands.add_parser(
         "generate_coords", help="Fit/save UMAP or apply a saved reducer"
@@ -1361,6 +1426,7 @@ def main(argv: list[str] | None = None) -> int:
             merge_threshold=args.merge_threshold,
             technique_k=args.technique_k,
             pooling=args.pooling,
+            semchunk=args.semchunk,
         )
         else 1
     )

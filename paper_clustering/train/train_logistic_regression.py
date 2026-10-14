@@ -23,7 +23,7 @@ from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from paper_clustering.extract_text import get_paper
+from paper_clustering.extract.extract_text import get_paper
 from paper_clustering.train.label_management.regex_labels import (
     FEATURE_NAMES,
     label_paper as regex_features,

@@ -11,6 +11,7 @@ import sys
 from types import SimpleNamespace
 
 import torch
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
@@ -112,7 +113,7 @@ def predict_gemma_probabilities(
             paper_probabilities = labeler.label_paper(paper)
             probabilities_by_key.update(zip(ordered_keys, paper_probabilities))
     finally:
-        labeler.session.close()
+        labeler.connector.session.close()
 
     return torch.stack([probabilities_by_key[key] for key in keys])
 
@@ -194,7 +195,7 @@ def print_top_passages_by_expected_score(
     passages: list[str],
     truth: torch.Tensor,
     logits: torch.Tensor,
-    k: int = 5,
+    k: int = 0,
 ) -> None:
     """Print each paper's top passages and D/E expected-score rate."""
     probabilities = logits.softmax(dim=1)
@@ -236,7 +237,7 @@ def evaluate(
     model_type: str = "scibert",
     batch_size: int = 32,
     device: str | None = None,
-    k: int = 10,
+    k: int = 0,
     server_url: str | None = None,
     request_timeout: float = 300.0,
     cache_dir: str | Path | None = None,
@@ -297,6 +298,17 @@ def evaluate(
             f"{label}: accuracy={accuracy:.4f}, recall={recall:.4f}, "
             f"precision={precision:.4f}, F1={f1:.4f}"
         )
+    # Merge the predicted and true classes into D/E versus A-C.
+    de_truth = (truth.detach().cpu() >= 3).numpy()
+    de_predictions = (logits.detach().cpu().argmax(dim=1) >= 3).numpy()
+    de_precision, de_recall, de_f1, _ = precision_recall_fscore_support(
+        de_truth, de_predictions, average="binary", zero_division=0
+    )
+    de_accuracy = accuracy_score(de_truth, de_predictions)
+    print(
+        f"D/E combined: accuracy={de_accuracy:.4f}, recall={de_recall:.4f}, "
+        f"precision={de_precision:.4f}, F1={de_f1:.4f}"
+    )
     print_top_passages_by_expected_score(paper_ids, passages, truth, logits)
     if k:
         print_de_false_negatives(paper_ids, passages, truth, logits, k)
@@ -317,7 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-k",
         "--error-samples",
         type=int,
-        default=10,
+        default=0,
         help="number of true D/E paragraphs misclassified as A-C to print",
     )
     parser.add_argument("--server-url", help="llama.cpp URL for Gemma evaluation")

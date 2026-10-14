@@ -18,7 +18,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from paper_clustering.extract_text import get_paper
+from paper_clustering.extract.extract_text import get_paper
 from paper_clustering.label.slm_labels import LABELS, SLMWeakLabelGen
 
 OUTPUT_FIELDS = (

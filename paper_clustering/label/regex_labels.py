@@ -265,7 +265,7 @@ def _negative_pattern_hits(sentence: str) -> set[str]:
 
 
 if __name__ == "__main__":
-    from ..extract_text import get_paper
+    from ..extract.extract_text import get_paper
     import requests
 
     arxiv_id = "2608.20924v1"

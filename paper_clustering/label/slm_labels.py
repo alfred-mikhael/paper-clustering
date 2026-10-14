@@ -2,7 +2,7 @@
 
 Launch llama.ccp server by navigating to the llama.ccpp folder and running
 
-`build\bin\llama-server -hf [model-name] -ngl 99 --cont-batching --cache-prompt --cache-reuse 256 --ctx-size 32768 --no-mmproj`
+`build/bin/llama-server -hf [model-name] -ngl 99 --cont-batching --cache-prompt --cache-reuse 256 --ctx-size 32768 --no-mmproj`
 
 You can use `-m [model name]` if the model is already cached
 """
@@ -18,10 +18,10 @@ import time
 
 import requests
 import torch
-from dotenv import load_dotenv
 from tqdm import tqdm
 
 from paper_clustering.data_models import ArxivSection, Paper
+from paper_clustering.llama import LlamaConnector
 
 LABELS = ("A", "B", "C", "D", "E")
 MODEL_ID = "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M"
@@ -203,14 +203,7 @@ class SLMWeakLabelGen:
         request_timeout: float = 300.0,
         cache_dir: str | os.PathLike[str] | None = None,
     ):
-        load_dotenv()
-        self.server_url = (
-            server_url or os.getenv("LLAMA_CPP_SERVER_URL") or "http://127.0.0.1:8080"
-        ).rstrip("/")
-        if request_timeout <= 0:
-            raise ValueError("request_timeout must be positive")
-        self.request_timeout = request_timeout
-        self.session = requests.Session()
+        self.connector = LlamaConnector(server_url, request_timeout)
         self.cache_dir = Path(
             cache_dir or os.getenv("SLM_LABEL_CACHE_DIR") or ".slm_label_cache"
         )
@@ -363,41 +356,25 @@ class SLMWeakLabelGen:
         results = []
         for message in tqdm(messages, desc="Labeling paragraphs"):
             start = time.perf_counter()
-            http_response = None
-            try:
-                http_response = self.session.post(
-                    f"{self.server_url}/v1/chat/completions",
-                    json={
-                        "messages": message,
-                        "max_tokens": 1,
-                        "stream": False,
-                        "cache_prompt": True,
-                        "grammar": LABEL_GRAMMAR,
-                        # Neutral sampling settings make the returned distribution
-                        # a softmax over the grammar's five allowed labels.
-                        "temperature": 1.0,
-                        "top_k": 0,
-                        "top_p": 1.0,
-                        "min_p": 0.0,
-                        "typical_p": 1.0,
-                        "repeat_penalty": 1.0,
-                        "presence_penalty": 0.0,
-                        "frequency_penalty": 0.0,
-                        "logprobs": True,
-                        "top_logprobs": 20,
-                        "post_sampling_probs": True,
-                    },
-                    timeout=self.request_timeout,
-                )
-                http_response.raise_for_status()
-                response = http_response.json()
-            except (requests.RequestException, ValueError) as exc:
-                detail = ""
-                if http_response is not None:
-                    detail = f": {http_response.text[:500]}"
-                raise RuntimeError(
-                    f"Failed to query llama.cpp at {self.server_url}{detail}"
-                ) from exc
+            response = self.connector.complete(
+                message,
+                grammar=LABEL_GRAMMAR,
+                max_tokens=1,
+                stream=False,
+                cache_prompt=True,
+                # Neutral sampling gives a softmax over the five allowed labels.
+                temperature=1.0,
+                top_k=0,
+                top_p=1.0,
+                min_p=0.0,
+                typical_p=1.0,
+                repeat_penalty=1.0,
+                presence_penalty=0.0,
+                frequency_penalty=0.0,
+                logprobs=True,
+                top_logprobs=20,
+                post_sampling_probs=True,
+            )
 
             results.append(self._probabilities_from_response(response))
             logging.debug(
@@ -410,7 +387,7 @@ class SLMWeakLabelGen:
 
 
 if __name__ == "__main__":
-    from ..extract_text import get_paper
+    from ..extract.extract_text import get_paper
 
     arxiv_id = "2608.24866v1"
     with requests.session() as session:

@@ -19,3 +19,4 @@ psycopg[binary,pool]
 pgvector
 hdbscan
 fastapi[standard]
+semchunk

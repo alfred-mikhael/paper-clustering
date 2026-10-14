@@ -9,12 +9,12 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import requests
 
 from paper_clustering.data_models import ArxivSection, Paper, PaperMetadata
-from paper_clustering.extract_metadata import get_metadata
+from paper_clustering.extract.extract_metadata import get_metadata
 
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{arxiv_id}"
 ARXIV_REQUEST_WAIT_TIME = 3
@@ -239,11 +239,16 @@ def get_paper(
     metadata: PaperMetadata | None = None,
     include_proofs: bool = False,
     retries: int = 0,
+    chunker: Callable[..., list[str]] | None = None,
+    **chunker_kwargs: Any,
 ) -> Paper:
     """Download and clean the sections of an arXiv paper.
 
     When ``include_proofs`` is false, proof and proof* environments are removed
-    in their entirety before the remaining LaTeX is converted to plain text.
+    before conversion to plain text. Section ``raw_latex`` retains proofs.
+    If supplied, ``chunker`` receives each cleaned section and ``chunker_kwargs``;
+    its output is stored as a tuple in ``ArxivSection.text``. Otherwise, use
+    the existing paragraph splitting and whitespace normalization.
     """
     if not metadata:
         metadata = get_metadata(session, arxiv_id)
@@ -254,28 +259,33 @@ def get_paper(
             source = build_tex_source_from_bytes(source_bytes, arxiv_id)
             if not source:
                 return Paper(metadata=metadata, sections=())
-            if not include_proofs:
-                source = _drop_proof_environments(source)
             sections = extract_sections_from_latex(source)
             results: list[ArxivSection] = []
             major_section_header = ""
             for section_index, section in enumerate(sections):
+                text = section.text
+                if not include_proofs:
+                    text = _drop_proof_environments(text)
                 section_header = clean_latex_for_embedding(section.title)
                 if section.kind in {"part", "chapter", "section"}:
                     major_section_header = section_header
+                cleaned_text = clean_latex_for_embedding(text)
+                if chunker is not None:
+                    chunks = tuple(chunker(cleaned_text, **chunker_kwargs))
+                else:
+                    chunks = tuple(
+                        _normalize_embedding_whitespace(p)
+                        for p in NEW_PARAGRAPH_RE.split(cleaned_text)
+                        if p.strip()
+                    )
                 results.append(
                     ArxivSection(
                         arxiv_id=metadata.arxiv_id,
                         section_index=section_index,
                         section_header=section_header,
                         major_section_header=major_section_header,
-                        text=tuple(
-                            _normalize_embedding_whitespace(p)
-                            for p in NEW_PARAGRAPH_RE.split(
-                                clean_latex_for_embedding(section.text)
-                            )
-                            if p.strip()
-                        ),
+                        raw_latex=section.text,
+                        text=chunks,
                     ),
                 )
             return Paper(metadata=metadata, sections=tuple(results))

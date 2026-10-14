@@ -27,13 +27,25 @@ class PaperMetadata:
 
 @dataclass(frozen=True, slots=True)
 class ArxivSection:
-    """A cleaned paper section returned by :func:`get_sections`."""
+    """A paper section with cleaned paragraphs and its source LaTeX."""
 
     arxiv_id: str
     section_index: int
     section_header: str
     major_section_header: str
     text: tuple[str, ...]
+    raw_latex: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Statement:
+    """A theorem-like environment with its section context and original body."""
+
+    major_section_header: str
+    section_header: str
+    statement_type: str
+    raw_latex: str
+    labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

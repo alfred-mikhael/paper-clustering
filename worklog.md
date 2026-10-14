@@ -924,6 +924,11 @@ List any datasets, papers, scripts, notebooks, or output files.
 * Almost all of them
 
 ### Results
+Here is an evaluation of the retrieval so far. Pairwise ranking is high because most of the time the intended cross-field positive examples were missed. Comparison coverage records the fraction of labelled pairs for which at least one was not missed.
+    Pairwise ranking accuracy	0.568966	116	positive-negative comparisons
+    Recall@10 (macro)	0.344828	29	queries with positives
+    Cross-field hit@10	0.125000	24	queries with cross-field positives
+    Comparison coverage	0.448276	116	positive-negative comparisons
 
 ### Decisions made
 
