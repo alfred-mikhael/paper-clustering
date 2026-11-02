@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paper-clustering"
+version = "0.1.0"
+description = "Extract research-paper techniques, embed papers, and cluster and search their representations."
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+test = ["coverage[toml]>=7", "build>=1"]
+
+[project.scripts]
+paper-clustering = "paper_clustering.pipeline:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["paper_clustering", "paper_clustering.*"]
+namespaces = true
+
+# Keep runtime dependencies in one place, including in source distributions.
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+# python -m coverage run -m unittest discover -s tests
+# python -m coverage report
+[tool.coverage.run]
+branch = true
+source = ["paper_clustering"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 1
+include_namespace_packages = true

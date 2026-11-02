@@ -33,17 +33,17 @@ class PipelineStorageTests(unittest.TestCase):
     def test_selection_and_download_use_compatible_storage_formats(self):
         metadata_path = self.root / "papers.jsonl"
         with patch.object(pipeline, "read_metadata_archive", return_value=[self.metadata]):
-            self.assertTrue(pipeline.get_relevant(1, metadata_path))
+            self.assertIsNone(pipeline.get_relevant(1, metadata_path))
         paper = Paper(self.metadata, ())
         sources = self.root / "sources"
         with patch(
             "paper_clustering.extract.extract_text.get_paper", return_value=paper
         ) as fetch:
-            self.assertTrue(pipeline.download_papers(metadata_path, output_path=sources))
+            self.assertIsNone(pipeline.download_papers(metadata_path, output_path=sources))
             self.assertEqual(
                 self.storage.load_source_paper(sources, self.metadata.arxiv_id, False), paper
             )
-            self.assertTrue(pipeline.download_papers(
+            self.assertIsNone(pipeline.download_papers(
                 metadata_path, output_path=sources, resume=True
             ))
             fetch.assert_called_once()
@@ -106,6 +106,44 @@ class PipelineStorageTests(unittest.TestCase):
                 )
                 self.assertEqual(self.storage.read_manifest(batch)["status"], "completed")
 
+    def test_upload_replay_requires_exact_unambiguous_id_coverage(self):
+        cases = (
+            (["a", "b"], ["a"], False),
+            (["a"], [], False),
+            (["a", "b"], ["a", "a"], False),
+            (["a", "b"], ["av1", "av2"], False),
+            (["a", "av1"], ["a", "av1"], False),
+            (["av1"], ["av2"], False),
+            (["a"], ["other"], False),
+            (["a", "b"], ["bv2", "av1"], True),
+            (["av1"], ["av1"], True),
+        )
+        for index, (expected, saved, valid) in enumerate(cases):
+            with self.subTest(expected=expected, saved=saved):
+                root = self.root / str(index)
+                batch = root / "batch_0001"
+                batch.mkdir(parents=True)
+                settings = {"batch_size": len(expected), "upload": True}
+                self.storage.write_manifest(batch, {
+                    **settings, "arxiv_ids": expected, "status": "uploading",
+                })
+                with patch.object(self.storage, "validate_embedding_batch_files"), patch.object(
+                    self.storage, "load_embedding_batch",
+                    return_value=[SimpleNamespace(arxiv_id=item) for item in saved],
+                ), patch.object(pipeline, "_upload_embedding_batch") as upload:
+                    if valid:
+                        self.assertEqual(
+                            pipeline._resume_embedding_offset(expected, root, settings, True),
+                            len(expected),
+                        )
+                        upload.assert_called_once()
+                        self.assertEqual(self.storage.read_manifest(batch)["status"], "completed")
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Saved paper IDs"):
+                            pipeline._resume_embedding_offset(expected, root, settings, True)
+                        upload.assert_not_called()
+                        self.assertEqual(self.storage.read_manifest(batch)["status"], "uploading")
+
     def test_label_checkpoint_survives_failure_and_is_reused(self):
         module = ModuleType("paper_clustering.cluster")
         module.validate_clustering_options = Mock()
@@ -122,23 +160,69 @@ class PipelineStorageTests(unittest.TestCase):
         module.label_clusters = Mock(side_effect=interrupted_labeling)
         client = Mock()
         client.transaction.side_effect = lambda: nullcontext()
-        client.insert.return_value = True
+        client.insert.return_value = None
         record = {**asdict(self.metadata), "embedding_dim": 2, "model_name": "test"}
         with patch.dict(sys.modules, {module.__name__: module}), patch.object(
             pipeline, "_embedding_rows", return_value=[(record, [1.0, 0.0])]
         ), patch.object(pipeline, "_database_client", return_value=nullcontext(client)):
-            with self.assertLogs(pipeline.logger, level="ERROR"):
-                self.assertFalse(pipeline.cluster_papers(self.root))
+            with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                pipeline.cluster_papers(self.root)
             self.assertEqual(self.storage.load_clusters(self.root), (records, labelled))
             client.insert.assert_not_called()
             module.label_clusters.side_effect = lambda records, clusters, papers, **kw: clusters
-            self.assertTrue(pipeline.cluster_papers(self.root))
+            self.assertIsNone(pipeline.cluster_papers(self.root))
             module.generate_clusters.assert_called_once()
             self.assertEqual(module.label_clusters.call_args.args[1], labelled)
             self.assertEqual(client.insert.call_count, 2)
+            self.assertEqual(self.storage.read_manifest(self.root)["status"], "completed")
+            pipeline.cluster_papers(self.root)
+            self.assertEqual(client.insert.call_count, 2)
+            self.assertEqual(module.label_clusters.call_count, 2)
+            for changes in ({"min_cluster_size": 7}, {"model": "different"}, {"seed": 10}):
+                with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, "differs"):
+                    pipeline.cluster_papers(self.root, **changes)
+            for changed_record, vector in (
+                ({**record, "abstract": "changed"}, [1.0, 0.0]),
+                (record, [0.0, 1.0]),
+            ):
+                with patch.object(pipeline, "_embedding_rows", return_value=[(changed_record, vector)]):
+                    with self.assertRaisesRegex(ValueError, "input_fingerprint differs"):
+                        pipeline.cluster_papers(self.root)
+
+    def test_interrupted_clustering_recomputes_partial_exports(self):
+        module = ModuleType("paper_clustering.cluster")
+        module.validate_clustering_options = Mock()
+        module.validate_labelling_options = Mock()
+        module.generate_clusters = Mock(return_value=([], {}))
+        module.label_clusters = Mock()
+        with patch.dict(sys.modules, {module.__name__: module}), patch.object(
+            pipeline, "_embedding_rows", return_value=[]
+        ):
+            with patch.object(self.storage, "save_clusters", side_effect=RuntimeError("disk failed")):
+                with self.assertRaisesRegex(RuntimeError, "disk failed"):
+                    pipeline.cluster_papers(self.root)
+            self.assertEqual(self.storage.read_manifest(self.root)["status"], "clustering")
+            (self.root / "memberships.csv.gz").write_bytes(b"incomplete")
+            pipeline.cluster_papers(self.root)
+            self.assertEqual(module.generate_clusters.call_count, 2)
+            self.assertEqual(self.storage.read_manifest(self.root)["status"], "completed")
+            module.label_clusters.assert_not_called()
+
+    def test_legacy_cluster_files_require_new_output_directory(self):
+        module = ModuleType("paper_clustering.cluster")
+        module.validate_clustering_options = Mock()
+        module.validate_labelling_options = Mock()
+        module.generate_clusters = Mock()
+        module.label_clusters = Mock()
+        self.storage.save_clusters(self.root, [], {})
+        with patch.dict(sys.modules, {module.__name__: module}), patch.object(
+            pipeline, "_embedding_rows", return_value=[]
+        ), self.assertRaisesRegex(ValueError, "no manifest"):
+            pipeline.cluster_papers(self.root)
+        module.generate_clusters.assert_not_called()
 
     def test_cli_keeps_embedding_defaults(self):
-        with patch.object(pipeline, "embed_papers", return_value=True) as embed:
+        with patch.object(pipeline, "embed_papers", return_value=None) as embed:
             self.assertEqual(pipeline.main([
                 "embed", "--input-filepath", "papers.jsonl", "--output-path", "out"
             ]), 0)
