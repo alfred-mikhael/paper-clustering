@@ -23,11 +23,9 @@ Database operations use DATABASE_URL or the standard PostgreSQL PG* variables.
 
 import argparse
 from collections.abc import Iterator
-from contextlib import contextmanager
-import csv
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
-import gzip
 import json
 import logging
 import os
@@ -36,16 +34,15 @@ import re
 import tempfile
 from time import perf_counter
 from typing import Any
-from urllib.parse import quote
 
 from paper_clustering.data_models import (
-    ArxivSection,
     ClusterMetadata,
     EmbeddedPaper,
     Paper,
     PaperMetadata,
 )
 from paper_clustering.interfaces import DatabaseClient
+from paper_clustering.local_storage import LocalStorage
 
 from paper_clustering.extract.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
@@ -54,6 +51,11 @@ from paper_clustering.extract.extract_metadata import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+DEFAULT_TECHNIQUE_K = 3.0
+DEFAULT_POOLING = "max"
+
+local_storage = LocalStorage()
 
 
 def get_relevant(
@@ -73,7 +75,6 @@ def get_relevant(
     leave an existing output file intact.
     """
     total_started = perf_counter()
-    temporary_path = None
     try:
         if days_back < 0:
             raise ValueError("days_back must be non-negative")
@@ -92,16 +93,7 @@ def get_relevant(
         )
         logger.info("Metadata selection took %.3fs", perf_counter() - stage_started)
         stage_started = perf_counter()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=output_path.parent, delete=False
-        ) as handle:
-            temporary_path = Path(handle.name)
-            for paper in papers:
-                record = asdict(paper)
-                record["publication_date"] = paper.publication_date.isoformat()
-                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        temporary_path.replace(output_path)
+        local_storage.save_paper_metadata(output_path, papers)
         logger.info("Metadata export took %.3fs", perf_counter() - stage_started)
         dates = [paper.publication_date.date() for paper in papers]
         logger.info(
@@ -117,8 +109,6 @@ def get_relevant(
         return False
     finally:
         logger.info("Selection finished in %.3fs", perf_counter() - total_started)
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink()
 
 
 def get_month_from_batch_api():
@@ -151,68 +141,11 @@ def _embedding_rows(
     *,
     full_metadata: bool = False,
 ) -> Iterator[tuple[dict[str, Any], Any]]:
-    """Read aligned metadata/vectors from batch folders, files, or the client."""
+    """Select local artifacts or database records for a pipeline workflow."""
     if (input_filepath is None) != (metadata_filepath is None):
         raise ValueError("Supply both --input-filepath and --metadata-filepath")
-    if input_filepath is not None and (
-        input_filepath.is_dir() or metadata_filepath.is_dir()
-    ):
-        if not input_filepath.is_dir() or not metadata_filepath.is_dir():
-            raise ValueError(
-                "Input and metadata paths must both be folders or both files"
-            )
-        vector_batches = {
-            path.name
-            for path in input_filepath.iterdir()
-            if path.is_dir() and re.fullmatch(r"batch_\d+", path.name)
-        }
-        metadata_batches = {
-            path.name
-            for path in metadata_filepath.iterdir()
-            if path.is_dir() and re.fullmatch(r"batch_\d+", path.name)
-        }
-        if not vector_batches or vector_batches != metadata_batches:
-            raise ValueError("Input and metadata folders must contain matching batches")
-        for name in sorted(vector_batches, key=lambda name: int(name.split("_")[1])):
-            yield from _embedding_rows(
-                input_filepath / name / "embeddings.pt.gz",
-                metadata_filepath / name / "metadata.csv.gz",
-                full_metadata=full_metadata,
-            )
-        return
-
     if input_filepath is not None:
-        import torch
-
-        if input_filepath.suffix == ".gz":
-            with gzip.open(input_filepath, "rb") as handle:
-                vectors = torch.load(handle, map_location="cpu", weights_only=True)
-        else:
-            vectors = torch.load(
-                input_filepath, map_location="cpu", weights_only=True, mmap=True
-            )
-        if (
-            not isinstance(vectors, torch.Tensor)
-            or vectors.layout != torch.strided
-            or vectors.ndim != 2
-            or vectors.shape[1] == 0
-            or not vectors.is_floating_point()
-        ):
-            raise ValueError("Input must contain a dense 2D floating-point tensor")
-        with gzip.open(metadata_filepath, "rt", encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
-            if not {"arxiv_id", "title"}.issubset(reader.fieldnames or []):
-                raise ValueError("Metadata CSV requires arxiv_id and title headers")
-            count = 0
-            for index, row in enumerate(reader):
-                if index >= len(vectors):
-                    raise ValueError("Metadata has more rows than the vector tensor")
-                if not row["arxiv_id"] or row["title"] is None or None in row:
-                    raise ValueError(f"Invalid metadata CSV row {index + 2}")
-                count += 1
-                yield row, vectors[index].detach().float().numpy()
-            if count != len(vectors):
-                raise ValueError("Metadata has fewer rows than the vector tensor")
+        yield from local_storage.iter_embedding_rows(input_filepath, metadata_filepath)
         return
 
     with _database_client() as client:
@@ -285,12 +218,9 @@ def generate_coordinates(
             save_weights_path=save_umap_weights,
             batch_size=batch_size,
         )
-        output_filepath.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(output_filepath, "wt", encoding="utf-8", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(("arxiv_id", "title", "umap_x", "umap_y"))
-            for (arxiv_id, title, _), (x, y) in zip(rows, coordinates, strict=True):
-                writer.writerow((arxiv_id, title, x, y))
+        local_storage.save_coordinates(
+            output_filepath, ((row[0], row[1]) for row in rows), coordinates
+        )
         logger.info(
             "UMAP and coordinate CSV export took %.3fs", perf_counter() - stage_started
         )
@@ -302,56 +232,6 @@ def generate_coordinates(
     finally:
         logger.info("Coordinates finished in %.3fs", perf_counter() - total_started)
 
-
-def _save_embeddings(
-    papers: list[EmbeddedPaper], output_path: Path, *, overwrite: bool = False
-) -> None:
-    """Save four gzip files; overwrite only a validated interrupted batch."""
-    import numpy as np
-    import torch
-
-    output_path.mkdir(parents=True, exist_ok=overwrite)
-    techniques = [technique for paper in papers for technique in paper.techniques]
-    embeddings = torch.from_numpy(np.stack([paper.area_vector for paper in papers]))
-    technique_vectors = (
-        torch.from_numpy(np.stack([technique.embedding for technique in techniques]))
-        if techniques
-        else torch.empty((0, papers[0].embedding_dim))
-    )
-    with gzip.open(output_path / "embeddings.pt.gz", "wb") as handle:
-        torch.save(embeddings, handle)
-    with gzip.open(output_path / "techniques.pt.gz", "wb") as handle:
-        torch.save(technique_vectors, handle)
-
-    metadata = []
-    for paper in papers:
-        record = asdict(paper.metadata)
-        record["authors"] = json.dumps(record["authors"], ensure_ascii=False)
-        record["publication_date"] = record["publication_date"].isoformat()
-        record["embedding_dim"] = paper.embedding_dim
-        record["model_name"] = paper.model_name
-        metadata.append(record)
-    with gzip.open(
-        output_path / "metadata.csv.gz", "wt", encoding="utf-8", newline=""
-    ) as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(metadata[0]))
-        writer.writeheader()
-        writer.writerows(metadata)
-    with gzip.open(
-        output_path / "techniques.csv.gz", "wt", encoding="utf-8", newline=""
-    ) as handle:
-        writer = csv.writer(handle)
-        writer.writerow(("arxiv_id", "text", "score"))
-        writer.writerows(
-            (technique.arxiv_id, technique.text, technique.score)
-            for technique in techniques
-        )
-    logger.info(
-        "Saved %d papers and %d techniques to %s",
-        len(papers),
-        len(techniques),
-        output_path,
-    )
 
 
 def generate_centroids(
@@ -376,48 +256,18 @@ def generate_centroids(
             Path(coordinates_filepath).resolve(),
         }:
             raise ValueError("Centroid output must differ from input files")
-        with gzip.open(
-            memberships_filepath, "rt", encoding="utf-8", newline=""
-        ) as handle:
-            reader = csv.DictReader(handle)
-            if not {"cluster_id", "arxiv_id"}.issubset(reader.fieldnames or []):
-                raise ValueError(
-                    "Membership CSV requires cluster_id and arxiv_id columns"
-                )
-            memberships = list(reader)
-        with gzip.open(
-            coordinates_filepath, "rt", encoding="utf-8", newline=""
-        ) as handle:
-            reader = csv.DictReader(handle)
-            if not {"arxiv_id", "umap_x", "umap_y"}.issubset(reader.fieldnames or []):
-                raise ValueError(
-                    "Coordinate CSV requires arxiv_id, umap_x, umap_y columns"
-                )
-            coordinates = list(reader)
+        memberships = local_storage.load_memberships(memberships_filepath)
+        coordinates = local_storage.load_coordinates(coordinates_filepath)
         centroids = approximate_centroid(
             memberships, coordinates, num_samples=num_samples, random_state=random_state
         )
-        output_filepath.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(output_filepath, "wt", encoding="utf-8", newline="") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(("cluster_id", "centroid"))
-            writer.writerows((cid, json.dumps(point)) for cid, point in centroids)
+        local_storage.save_centroids(output_filepath, centroids)
         logger.info("Wrote %d cluster centroids to %s", len(centroids), output_filepath)
         return True
     except Exception:
         logger.exception("Cluster centroid generation failed")
         return False
 
-
-def _save_clusters(clusters: dict[int, ClusterMetadata], filepath: Path) -> None:
-    """Write the cluster hierarchy with its current labels."""
-    with gzip.open(filepath, "wt", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(("cluster_id", "parent_cluster_id", "size", "label"))
-        writer.writerows(
-            (cid, cluster.parent_cluster_id, cluster.size, cluster.label)
-            for cid, cluster in clusters.items()
-        )
 
 
 def cluster_papers(
@@ -440,6 +290,8 @@ def cluster_papers(
     File input uses the metadata exported by embed. Database input uses stored
     paper metadata; model consistency can only be checked when model_name exists.
     A labelling failure leaves the unlabelled hierarchy and memberships on disk.
+    Reuse clusters.csv.gz and memberships.csv.gz when both exist in output_path,
+    skipping clustering and generating only missing labels from the supplied papers.
     """
     total_started = perf_counter()
     try:
@@ -498,31 +350,35 @@ def cluster_papers(
 
         logger.info("Cluster input loading took %.3fs", perf_counter() - stage_started)
         stage_started = perf_counter()
-        records, clusters = generate_clusters(
-            papers,
-            min_cluster_size=min_cluster_size,
-            min_samples=min_samples,
-            metric=metric,
-            umap_dim=umap_dim,
-        )
-        logger.info("Clustering took %.3fs", perf_counter() - stage_started)
-        stage_started = perf_counter()
-        output_path.mkdir(parents=True, exist_ok=True)
-        with gzip.open(
-            output_path / "memberships.csv.gz", "wt", encoding="utf-8", newline=""
-        ) as handle:
-            writer = csv.writer(handle)
-            writer.writerow(("cluster_id", "arxiv_id", "title", "certainty"))
-            writer.writerows(
-                (record.cluster_id, record.arxiv_id, record.title, record.certainty)
-                for record in records
+        memberships_path = output_path / "memberships.csv.gz"
+        clusters_path = output_path / "clusters.csv.gz"
+        if memberships_path.is_file() and clusters_path.is_file():
+            records, clusters = local_storage.load_clusters(output_path)
+            logger.info(
+                "Loaded %d existing clusters from %s in %.3fs",
+                len(clusters), output_path, perf_counter() - stage_started,
             )
-        _save_clusters(clusters, output_path / "clusters.csv.gz")
-        logger.info(
-            "Unlabelled cluster export took %.3fs", perf_counter() - stage_started
-        )
-        logger.info("Saved %d clusters for %d papers", len(clusters), len(papers))
+        else:
+            records, clusters = generate_clusters(
+                papers,
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+                metric=metric,
+                umap_dim=umap_dim,
+            )
+            logger.info("Clustering took %.3fs", perf_counter() - stage_started)
+            stage_started = perf_counter()
+            local_storage.save_clusters(output_path, records, clusters)
+            logger.info(
+                "Unlabelled cluster export took %.3fs", perf_counter() - stage_started
+            )
+            logger.info("Saved %d clusters for %d papers", len(clusters), len(papers))
         if clusters:
+            def save_label_progress(completed: dict[int, ClusterMetadata]) -> None:
+                local_storage.save_cluster_metadata(
+                    clusters_path, clusters | completed, checkpoint=True
+                )
+
             stage_started = perf_counter()
             labelled = label_clusters(
                 records,
@@ -533,30 +389,33 @@ def cluster_papers(
                 model=model,
                 request_timeout=request_timeout,
                 num_samples=num_samples,
+                on_label=save_label_progress,
             )
             logger.info("Cluster labelling took %.3fs", perf_counter() - stage_started)
             stage_started = perf_counter()
-            _save_clusters(labelled, output_path / "clusters.csv.gz")
+            local_storage.save_cluster_metadata(clusters_path, labelled)
             logger.info(
                 "Labelled cluster export took %.3fs", perf_counter() - stage_started
             )
             logger.info("Labelled %d clusters", len(labelled))
             stage_started = perf_counter()
+            from itertools import islice
+
             with _database_client() as client:
-                with client.transaction():
-                    if not client.insert(
-                        table="cluster_metadata",
-                        records=[
+                for table, rows in (
+                    (
+                        "cluster_metadata",
+                        (
                             {"id": cid, **asdict(cluster)}
                             for cid, cluster in labelled.items()
-                        ],
-                    ):
-                        raise RuntimeError("Cluster metadata insertion failed")
-                    if not client.insert(
-                        table="clusters",
-                        records=[asdict(record) for record in records],
-                    ):
-                        raise RuntimeError("Cluster membership insertion failed")
+                        ),
+                    ),
+                    ("clusters", (asdict(record) for record in records)),
+                ):
+                    while batch := list(islice(rows, 10_000)):
+                        with client.transaction():
+                            if not client.insert(table=table, records=batch):
+                                raise RuntimeError(f"{table} insertion failed")
             logger.info(
                 "Cluster database upload took %.3fs", perf_counter() - stage_started
             )
@@ -576,7 +435,7 @@ def _validate_embedding_options(
     output_path: Path | None,
     batch_size: int,
     merge_threshold: float,
-    technique_k: int,
+    technique_k: float,
     pooling: str | None,
     technique_batch_size: int = 32,
     embedding_batch_size: int | None = None,
@@ -597,12 +456,6 @@ def _validate_embedding_options(
     if pooling not in (None, "mean", "max"):
         raise ValueError("--pooling must be either None, 'mean' or 'max'")
 
-
-def _write_batch_manifest(batch_path: Path, manifest: dict[str, Any]) -> None:
-    """Replace the manifest atomically so interruption preserves the old status."""
-    pending = batch_path / "manifest.json.tmp"
-    pending.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    pending.replace(batch_path / "manifest.json")
 
 
 def _resume_embedding_offset(
@@ -628,13 +481,12 @@ def _resume_embedding_offset(
         if batch_path.name != f"batch_{number:04d}" or not batch_path.is_dir():
             raise ValueError(f"Expected consecutive batch folders; found {batch_path}")
         manifest_path = batch_path / "manifest.json"
-        if not manifest_path.is_file():
-            raise ValueError(f"Missing manifest: {manifest_path}; cannot safely resume")
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = local_storage.read_manifest(batch_path)
         # Older exports used a fixed 500-paper batch size.
         manifest.setdefault("batch_size", 500)
         manifest.setdefault("source_path", None)
         manifest.setdefault("semchunk", False)
+        manifest.setdefault("areas_only", False)
         expected_ids = ids[offset : offset + settings["batch_size"]]
         if not expected_ids or manifest.get("arxiv_ids") != expected_ids:
             raise ValueError(f"Input paper IDs differ from {manifest_path}")
@@ -651,19 +503,12 @@ def _resume_embedding_offset(
             return offset
         if status not in ("completed", "uploading"):
             raise ValueError(f"Unknown batch status in {manifest_path}: {status!r}")
-        for filename in (
-            "embeddings.pt.gz",
-            "techniques.pt.gz",
-            "metadata.csv.gz",
-            "techniques.csv.gz",
-        ):
-            if not (batch_path / filename).is_file():
-                raise ValueError(f"Saved batch is missing {batch_path / filename}")
+        local_storage.validate_embedding_batch_files(batch_path)
         if status == "uploading":
             if not settings["upload"] or batch_path != batches[-1]:
                 raise ValueError(f"Invalid pending upload batch: {batch_path}")
             logger.info("Retrying saved batch upload: %s", batch_path)
-            papers = _load_saved_embeddings(batch_path)
+            papers = local_storage.load_embedding_batch(batch_path)
             saved_ids = [paper.arxiv_id for paper in papers]
             expected_id_set = set(expected_ids)
             # API metadata may resolve an unversioned request to a versioned ID.
@@ -676,65 +521,13 @@ def _resume_embedding_offset(
                 raise ValueError(f"Saved paper IDs do not match {manifest_path}")
             _upload_embedding_batch(papers)
             manifest["status"] = "completed"
-            _write_batch_manifest(batch_path, manifest)
+            local_storage.write_manifest(batch_path, manifest)
         offset += len(expected_ids)
         logger.info(
             "Skipping completed batch %s (%d papers)", batch_path, len(expected_ids)
         )
     return offset
 
-
-def _load_saved_embeddings(batch_path: Path) -> list[EmbeddedPaper]:
-    """Restore a batch's paper and technique vectors for upload replay."""
-    import torch
-    from paper_clustering.data_models import Technique
-
-    papers = {}
-    for record, vector in _embedding_rows(
-        batch_path / "embeddings.pt.gz",
-        batch_path / "metadata.csv.gz",
-        full_metadata=True,
-    ):
-        embedding_dim = int(record.pop("embedding_dim"))
-        model_name = record.pop("model_name")
-        record["authors"] = tuple(json.loads(record["authors"]))
-        record["publication_date"] = datetime.fromisoformat(record["publication_date"])
-        metadata = PaperMetadata(**record)
-        if metadata.arxiv_id in papers or len(vector) != embedding_dim:
-            raise ValueError(f"Invalid paper metadata in {batch_path}")
-        papers[metadata.arxiv_id] = EmbeddedPaper(
-            metadata=metadata,
-            sections=(),
-            embedding_dim=embedding_dim,
-            model_name=model_name,
-            arxiv_id=metadata.arxiv_id,
-            area_vector=vector,
-            techniques=[],
-        )
-    with gzip.open(batch_path / "techniques.pt.gz", "rb") as handle:
-        vectors = torch.load(handle, map_location="cpu", weights_only=True)
-    if (
-        not isinstance(vectors, torch.Tensor)
-        or vectors.ndim != 2
-        or not vectors.is_floating_point()
-    ):
-        raise ValueError(f"Invalid technique vectors in {batch_path}")
-    with gzip.open(
-        batch_path / "techniques.csv.gz", "rt", encoding="utf-8", newline=""
-    ) as handle:
-        for record, vector in zip(csv.DictReader(handle), vectors, strict=True):
-            paper = papers[record["arxiv_id"]]
-            if len(vector) != paper.embedding_dim:
-                raise ValueError(f"Invalid technique dimension in {batch_path}")
-            paper.techniques.append(
-                Technique(
-                    arxiv_id=paper.arxiv_id,
-                    text=record["text"],
-                    embedding=vector.numpy(),
-                    score=float(record["score"]),
-                )
-            )
-    return list(papers.values())
 
 
 def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
@@ -748,71 +541,7 @@ def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
         logger.info("Database upload took %.3fs", perf_counter() - stage_started)
 
 
-def _read_paper_input(
-    input_filepath: Path | None, ids_filepath: Path | None
-) -> dict[str, PaperMetadata | None]:
-    """Read the shared selection/ID input, preserving order and deduplicating IDs."""
-    if (input_filepath is None) == (ids_filepath is None):
-        raise ValueError("Supply exactly one of --input-filepath or --ids-filepath")
-    metadata_by_id = {}
-    source_path = input_filepath if input_filepath is not None else ids_filepath
-    with source_path.open(encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            if ids_filepath is not None:
-                metadata_by_id.setdefault(line.strip(), None)
-                continue
-            try:
-                record = json.loads(line)
-                if not isinstance(record, dict):
-                    raise ValueError("Expected a paper metadata object")
-                if not isinstance(record.get("authors"), list) or not all(
-                    isinstance(author, str) for author in record["authors"]
-                ):
-                    raise ValueError("authors must be a list of strings")
-                record["authors"] = tuple(record["authors"])
-                record["publication_date"] = datetime.fromisoformat(
-                    record["publication_date"]
-                )
-                if isinstance(record.get("arxiv_id"), str):
-                    record["arxiv_id"] = re.sub(r"v[0-9]+$", "", record["arxiv_id"])
-                metadata = PaperMetadata(**record)
-                if not isinstance(metadata.arxiv_id, str) or not metadata.arxiv_id:
-                    raise ValueError("arxiv_id must be a nonempty string")
-            except (ValueError, TypeError, KeyError) as error:
-                raise ValueError(
-                    f"Invalid paper metadata at line {line_number}; "
-                    "use the JSON Lines output from select"
-                ) from error
-            metadata_by_id.setdefault(metadata.arxiv_id, metadata)
-    return metadata_by_id
 
-
-def _source_filepath(source_path: Path, arxiv_id: str) -> Path:
-    """Encode IDs, including old-style IDs containing slashes, as filenames."""
-    return source_path / f"{quote(arxiv_id, safe='')}.json.gz"
-
-
-def _load_source_paper(source_path: Path, arxiv_id: str, include_proofs: bool) -> Paper:
-    """Restore downloaded text and reject incompatible extraction settings."""
-    filepath = _source_filepath(source_path, arxiv_id)
-    with gzip.open(filepath, "rt", encoding="utf-8") as handle:
-        record = json.load(handle)
-    if record["requested_arxiv_id"] != arxiv_id:
-        raise ValueError(f"Paper ID differs from {filepath}")
-    if record["include_proofs"] != include_proofs:
-        raise ValueError(f"--include-proofs differs from {filepath}")
-    metadata = record["metadata"]
-    metadata["authors"] = tuple(metadata["authors"])
-    metadata["publication_date"] = datetime.fromisoformat(metadata["publication_date"])
-    return Paper(
-        metadata=PaperMetadata(**metadata),
-        sections=tuple(
-            ArxivSection(**{**section, "text": tuple(section["text"])})
-            for section in record["sections"]
-        ),
-    )
 
 
 def download_papers(
@@ -828,12 +557,11 @@ def download_papers(
     Empty sections are saved too, matching embed's metadata-only fallback when
     source text is unavailable. Remove such a file before resuming to retry it.
     """
-    temporary_path = None
     try:
-        metadata_by_id = _read_paper_input(input_filepath, ids_filepath)
+        metadata_by_id = local_storage.load_paper_input(input_filepath, ids_filepath)
         output_path.mkdir(parents=True, exist_ok=True)
         if not resume and any(
-            _source_filepath(output_path, arxiv_id).exists()
+            local_storage.source_filepath(output_path, arxiv_id).exists()
             for arxiv_id in metadata_by_id
         ):
             raise ValueError("Saved sources already exist; use --resume or a new path")
@@ -842,9 +570,9 @@ def download_papers(
 
         with requests.Session() as session:
             for index, (arxiv_id, metadata) in enumerate(metadata_by_id.items(), 1):
-                filepath = _source_filepath(output_path, arxiv_id)
+                filepath = local_storage.source_filepath(output_path, arxiv_id)
                 if resume and filepath.exists():
-                    _load_source_paper(output_path, arxiv_id, include_proofs)
+                    local_storage.load_source_paper(output_path, arxiv_id, include_proofs)
                     logger.info("Skipping saved paper %s", arxiv_id)
                     continue
                 logger.info(
@@ -859,28 +587,13 @@ def download_papers(
                 )
                 if not any(section.text for section in paper.sections):
                     logger.warning("No usable source paragraphs for %s", arxiv_id)
-                record = asdict(paper)
-                record["metadata"][
-                    "publication_date"
-                ] = paper.metadata.publication_date.isoformat()
-                record.update(
-                    requested_arxiv_id=arxiv_id, include_proofs=include_proofs
+                local_storage.save_source_paper(
+                    output_path, paper, requested_id=arxiv_id, include_proofs=include_proofs
                 )
-                with tempfile.NamedTemporaryFile(
-                    dir=output_path, delete=False
-                ) as handle:
-                    temporary_path = Path(handle.name)
-                with gzip.open(temporary_path, "wt", encoding="utf-8") as handle:
-                    json.dump(record, handle, ensure_ascii=False)
-                temporary_path.replace(filepath)
-                temporary_path = None
         return True
     except Exception:
         logger.exception("Paper download failed")
         return False
-    finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink()
 
 
 def embed_papers(
@@ -899,9 +612,10 @@ def embed_papers(
     embedding_batch_size: int | None = None,
     include_proofs: bool = False,
     merge_threshold: float = 0.9,
-    technique_k: float = 3.0,
-    pooling: str | None = None,
+    technique_k: float = DEFAULT_TECHNIQUE_K,
+    pooling: str | None = DEFAULT_POOLING,
     semchunk: bool = False,
+    areas_only: bool = False,
 ) -> bool:
     """Embed selected papers, optionally reading saved text from source_path.
 
@@ -909,10 +623,14 @@ def embed_papers(
     Missing/invalid saved sources fail rather than falling back to downloading.
     With semchunk enabled, split cleaned sections into SciBERT-sized chunks.
     Saved sources are chunked into temporary files before either model loads.
+    With areas_only, embed titles/abstracts from input metadata without sources
+    or technique extraction; exported technique collections are empty.
     """
     total_started = perf_counter()
     chunked_sources = None
     try:
+        if areas_only and (input_filepath is None or ids_filepath is not None):
+            raise ValueError("--areas-only requires --input-filepath metadata")
         _validate_embedding_options(
             upload=upload,
             output_path=output_path,
@@ -927,7 +645,7 @@ def embed_papers(
             8 if embedding_batch_size is None else embedding_batch_size
         )
         stage_started = perf_counter()
-        metadata_by_id = _read_paper_input(input_filepath, ids_filepath)
+        metadata_by_id = local_storage.load_paper_input(input_filepath, ids_filepath)
         ids = list(metadata_by_id)
         logger.info("Metadata loading took %.3fs", perf_counter() - stage_started)
         settings = {
@@ -936,6 +654,7 @@ def embed_papers(
             "classifier_weights": str(classifier_weights.resolve()),
             "pooling": pooling,
             "semchunk": semchunk,
+            "areas_only": areas_only,
             "metadata_filename": "metadata.csv.gz",
             "include_proofs": include_proofs,
             "merge_threshold": merge_threshold,
@@ -945,7 +664,7 @@ def embed_papers(
                 str(source_path.resolve()) if source_path is not None else None
             ),
         }
-        if source_path is not None and not source_path.is_dir():
+        if not areas_only and source_path is not None and not source_path.is_dir():
             raise ValueError("--source-path must be a saved-source directory")
         start_offset = _resume_embedding_offset(ids, output_path, settings, resume)
         if not ids:
@@ -957,19 +676,21 @@ def embed_papers(
         # Keep model/database dependencies out of archive selection and CLI help.
         import numpy as np
         from tqdm import tqdm
-        import requests
         from sentence_transformers import SentenceTransformer
 
         from paper_clustering.embedding import _choose_device, embed
-        from paper_clustering.extract.extract_techniques import (
-            extract_techniques_and_embed_batch,
-        )
-        from paper_clustering.extract.extract_text import get_paper
-        from paper_clustering.technique_classifier import SciBERTClassifier
+
+        if not areas_only:
+            import requests
+            from paper_clustering.extract.extract_techniques import (
+                extract_techniques_and_embed_batch,
+            )
+            from paper_clustering.extract.extract_text import get_paper
+            from paper_clustering.technique_classifier import SciBERTClassifier
 
         device = _choose_device(device)
         chunker = None
-        if semchunk:
+        if semchunk and not areas_only:
             from semchunk import chunkerify
             from transformers import AutoTokenizer
 
@@ -994,7 +715,7 @@ def embed_papers(
             )
             paper_source_path = Path(chunked_sources.name)
             for arxiv_id in tqdm(ids[start_offset:], desc="Chunking saved papers"):
-                paper = _load_source_paper(source_path, arxiv_id, include_proofs)
+                paper = local_storage.load_source_paper(source_path, arxiv_id, include_proofs)
                 paper = replace(
                     paper,
                     sections=tuple(
@@ -1002,26 +723,20 @@ def embed_papers(
                         for section in paper.sections
                     ),
                 )
-                record = asdict(paper)
-                record["metadata"][
-                    "publication_date"
-                ] = paper.metadata.publication_date.isoformat()
-                record.update(
-                    requested_arxiv_id=arxiv_id, include_proofs=include_proofs
+                local_storage.save_source_paper(
+                    paper_source_path,
+                    paper,
+                    requested_id=arxiv_id,
+                    include_proofs=include_proofs,
                 )
-                with gzip.open(
-                    _source_filepath(paper_source_path, arxiv_id),
-                    "wt",
-                    encoding="utf-8",
-                ) as handle:
-                    json.dump(record, handle, ensure_ascii=False)
-                del paper, record
+                del paper
             chunker = None
             gc.collect()
             logger.info("Source chunking took %.3fs", perf_counter() - stage_started)
-        stage_started = perf_counter()
-        classifier = SciBERTClassifier(weights_path=classifier_weights).to(device)
-        logger.info("Classifier loading took %.3fs", perf_counter() - stage_started)
+        if not areas_only:
+            stage_started = perf_counter()
+            classifier = SciBERTClassifier(weights_path=classifier_weights).to(device)
+            logger.info("Classifier loading took %.3fs", perf_counter() - stage_started)
         stage_started = perf_counter()
         encoder = SentenceTransformer(
             embedding_model, trust_remote_code=True, device=device
@@ -1030,7 +745,7 @@ def embed_papers(
             "Embedding model loading took %.3fs", perf_counter() - stage_started
         )
         embedded_count = start_offset
-        with requests.Session() as session:
+        with nullcontext() if areas_only else requests.Session() as session:
             for offset in range(start_offset, len(ids), batch_size):
                 batch_started = perf_counter()
                 batch_ids = ids[offset : offset + batch_size]
@@ -1042,7 +757,7 @@ def embed_papers(
                 manifest = {**settings, "arxiv_ids": batch_ids, "status": "processing"}
                 if batch_path is not None:
                     batch_path.mkdir(parents=True, exist_ok=True)
-                    _write_batch_manifest(batch_path, manifest)
+                    local_storage.write_manifest(batch_path, manifest)
                 logger.info(
                     "Processing batch %d: %d papers",
                     offset // batch_size + 1,
@@ -1054,8 +769,10 @@ def embed_papers(
                     enumerate(batch_ids, start=offset + 1), total=len(batch_ids)
                 ):
                     logger.info("Loading paper %d/%d: %s", index, len(ids), arxiv_id)
-                    if paper_source_path is not None:
-                        paper = _load_source_paper(
+                    if areas_only:
+                        paper = Paper(metadata=metadata_by_id[arxiv_id], sections=())
+                    elif paper_source_path is not None:
+                        paper = local_storage.load_source_paper(
                             paper_source_path, arxiv_id, include_proofs
                         )
                     else:
@@ -1067,7 +784,7 @@ def embed_papers(
                             retries=1,
                             chunker=chunker,
                         )
-                    if not any(section.text for section in paper.sections):
+                    if not areas_only and not any(section.text for section in paper.sections):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
                     papers.append(paper)
                 logger.info(
@@ -1086,21 +803,23 @@ def embed_papers(
                     device=device,
                 )
                 logger.info("Area embedding took %.3fs", perf_counter() - stage_started)
-                stage_started = perf_counter()
-                techniques = extract_techniques_and_embed_batch(
-                    papers,
-                    classifier,
-                    encoder,
-                    threshold=merge_threshold,
-                    k=technique_k,
-                    pooling=pooling,
-                    technique_batch_size=technique_batch_size,
-                    embedding_batch_size=embedding_batch_size,
-                )
-                logger.info(
-                    "Technique extraction/embedding took %.3fs",
-                    perf_counter() - stage_started,
-                )
+                techniques = [[] for _ in papers]
+                if not areas_only:
+                    stage_started = perf_counter()
+                    techniques = extract_techniques_and_embed_batch(
+                        papers,
+                        classifier,
+                        encoder,
+                        threshold=merge_threshold,
+                        k=technique_k,
+                        pooling=pooling,
+                        technique_batch_size=technique_batch_size,
+                        embedding_batch_size=embedding_batch_size,
+                    )
+                    logger.info(
+                        "Technique extraction/embedding took %.3fs",
+                        perf_counter() - stage_started,
+                    )
                 stage_started = perf_counter()
                 embedded_papers = [
                     EmbeddedPaper(
@@ -1122,9 +841,9 @@ def embed_papers(
                 )
                 if output_path is not None:
                     stage_started = perf_counter()
-                    _save_embeddings(
-                        embedded_papers,
+                    local_storage.save_embedding_batch(
                         batch_path,
+                        embedded_papers,
                         overwrite=True,
                     )
                     logger.info(
@@ -1133,11 +852,11 @@ def embed_papers(
                 if upload:
                     if batch_path is not None:
                         manifest["status"] = "uploading"
-                        _write_batch_manifest(batch_path, manifest)
+                        local_storage.write_manifest(batch_path, manifest)
                     _upload_embedding_batch(embedded_papers)
                 if batch_path is not None:
                     manifest["status"] = "completed"
-                    _write_batch_manifest(batch_path, manifest)
+                    local_storage.write_manifest(batch_path, manifest)
                 logger.info(
                     "Embedding batch %d took %.3fs",
                     offset // batch_size + 1,
@@ -1200,6 +919,11 @@ def main(argv: list[str] | None = None) -> int:
     embed_parser = commands.add_parser(
         "embed", help="Embed papers for file export or upload"
     )
+    embed_parser.add_argument(
+        "--areas-only",
+        action="store_true",
+        help="Embed only titles/abstracts from --input-filepath; skip sources and techniques",
+    )
     embed_input = embed_parser.add_mutually_exclusive_group(required=True)
     embed_input.add_argument(
         "--input-filepath",
@@ -1260,8 +984,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Chunk cleaned sections with semchunk and SciBERT's tokenizer before classification",
     )
     embed_parser.add_argument("--merge-threshold", type=float, default=0.9)
-    embed_parser.add_argument("--technique-k", type=float, default=2.2)
-    embed_parser.add_argument("--pooling", type=str, default="max")
+    embed_parser.add_argument("--technique-k", type=float, default=DEFAULT_TECHNIQUE_K)
+    embed_parser.add_argument("--pooling", type=str, default=DEFAULT_POOLING)
     coords_parser = commands.add_parser(
         "generate_coords", help="Fit/save UMAP or apply a saved reducer"
     )
@@ -1427,6 +1151,7 @@ def main(argv: list[str] | None = None) -> int:
             technique_k=args.technique_k,
             pooling=args.pooling,
             semchunk=args.semchunk,
+            areas_only=args.areas_only,
         )
         else 1
     )

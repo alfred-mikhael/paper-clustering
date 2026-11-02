@@ -38,12 +38,15 @@ class DatabaseClient(Protocol):
         """Commit grouped operations on success; roll back on an exception."""
         ...
 
-    def insert(table: str, records: list[dict[str, Any]]) -> bool: ...
+    def insert(self, table: str, records: list[dict[str, Any]]) -> bool: ...
 
     def select(
-        table: str, cols: list[str], where=list[tuple[str, str, Any]]
-    ) -> list[list]: ...
+        self,
+        table: str,
+        cols: list[str],
+        where: list[tuple[str, str, Any]] | None = None,
+    ) -> list[dict[str, Any]]: ...
 
     def execute_rpc(
-        rpc_name: str, arguments: dict[str, Any]
+        self, rpc_name: str, args: dict[str, Any]
     ) -> list[dict[str, Any]]: ...
