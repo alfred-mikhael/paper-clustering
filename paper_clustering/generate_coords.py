@@ -1,12 +1,12 @@
 """Generate 2d coordinates for visualizing a set of high-dimensional vectors."""
 
 from collections.abc import Iterable
-from itertools import islice
 from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 from paper_clustering.data_models import EmbeddedPaper
+from paper_clustering.utils import iter_batches
 
 
 class UMAPReducer(Protocol):
@@ -74,10 +74,9 @@ def generate_umap(
         import joblib
 
         reducer = joblib.load(Path(weights_path))
-    items = iter(data)
+    batches = [list(data)] if fitting else iter_batches(data, batch_size or 1000)
     vector_dim = None
-    while True:
-        batch = list(items) if fitting else list(islice(items, batch_size or 1000))
+    for batch in batches:
         if not batch:
             if fitting and save_weights_path is not None:
                 raise ValueError("Fitting UMAP requires at least four papers")

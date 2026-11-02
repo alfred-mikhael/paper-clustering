@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 from paper_clustering.data_models import ArxivSection, Paper
 from paper_clustering.llama import LlamaConnector
+from paper_clustering.utils import retry
 
 LABELS = ("A", "B", "C", "D", "E")
 MODEL_ID = "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M"
@@ -214,24 +215,26 @@ class SLMWeakLabelGen:
         try:
             token_data = response["choices"][0]["logprobs"]["content"][0]
             candidates = token_data.get("top_probs") or token_data["top_logprobs"]
-        except (IndexError, KeyError, TypeError) as exc:
-            raise RuntimeError(
-                "llama.cpp response did not contain token probabilities"
-            ) from exc
+            label_probabilities = {label: 0.0 for label in LABELS}
+            for candidate in candidates:
+                label = candidate.get("token", "").strip()
+                if label not in label_probabilities:
+                    continue
+                if "prob" in candidate:
+                    probability = float(candidate["prob"])
+                elif "logprob" in candidate:
+                    probability = math.exp(float(candidate["logprob"]))
+                else:
+                    continue
+                # More than one token ID can theoretically decode to the same text.
+                label_probabilities[label] += probability
 
-        label_probabilities = {label: 0.0 for label in LABELS}
-        for candidate in candidates:
-            label = candidate.get("token", "").strip()
-            if label not in label_probabilities:
-                continue
-            if "prob" in candidate:
-                probability = float(candidate["prob"])
-            elif "logprob" in candidate:
-                probability = math.exp(float(candidate["logprob"]))
-            else:
-                continue
-            # More than one token ID can theoretically decode to the same text.
-            label_probabilities[label] += probability
+        except (
+            IndexError, KeyError, TypeError, ValueError, AttributeError, OverflowError
+        ) as exc:
+            raise RuntimeError(
+                "llama.cpp response did not contain valid token probabilities"
+            ) from exc
 
         probabilities = torch.tensor(
             [label_probabilities[label] for label in LABELS], dtype=torch.float32
@@ -340,6 +343,30 @@ class SLMWeakLabelGen:
         temporary_path.replace(cache_path)
         logging.info("Cached %d paragraph labels at %s", len(labels), cache_path)
 
+    @retry()
+    def _label_paragraph(self, message: list[dict[str, str]]) -> torch.Tensor:
+        """Retry one request and its response validation without repeating earlier labels."""
+        response = self.connector.complete(
+            message,
+            grammar=LABEL_GRAMMAR,
+            max_tokens=1,
+            stream=False,
+            cache_prompt=True,
+            # Neutral sampling gives a softmax over the five allowed labels.
+            temperature=1.0,
+            top_k=0,
+            top_p=1.0,
+            min_p=0.0,
+            typical_p=1.0,
+            repeat_penalty=1.0,
+            presence_penalty=0.0,
+            frequency_penalty=0.0,
+            logprobs=True,
+            top_logprobs=20,
+            post_sampling_probs=True,
+        )
+        return self._probabilities_from_response(response)
+
     def label_paper(self, paper: Paper) -> list[torch.Tensor]:
         """Return an A-E probability vector for every paragraph, in paper order."""
         sections = paper.sections
@@ -356,27 +383,7 @@ class SLMWeakLabelGen:
         results = []
         for message in tqdm(messages, desc="Labeling paragraphs"):
             start = time.perf_counter()
-            response = self.connector.complete(
-                message,
-                grammar=LABEL_GRAMMAR,
-                max_tokens=1,
-                stream=False,
-                cache_prompt=True,
-                # Neutral sampling gives a softmax over the five allowed labels.
-                temperature=1.0,
-                top_k=0,
-                top_p=1.0,
-                min_p=0.0,
-                typical_p=1.0,
-                repeat_penalty=1.0,
-                presence_penalty=0.0,
-                frequency_penalty=0.0,
-                logprobs=True,
-                top_logprobs=20,
-                post_sampling_probs=True,
-            )
-
-            results.append(self._probabilities_from_response(response))
+            results.append(self._label_paragraph(message))
             logging.debug(
                 "Labeled one paragraph through llama.cpp in %.3fs",
                 time.perf_counter() - start,

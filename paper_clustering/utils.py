@@ -22,7 +22,11 @@ def iter_batches(items: Iterable[T], batch_size: int) -> Iterator[list[T]]:
     Consume at most one batch at a time. An empty input yields no batches.
     Validation occurs when iteration starts.
     """
-    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+    if (
+        isinstance(batch_size, bool)
+        or not isinstance(batch_size, int)
+        or batch_size < 1
+    ):
         raise ValueError("batch_size must be a positive integer")
     iterator = iter(items)
     while batch := list(islice(iterator, batch_size)):

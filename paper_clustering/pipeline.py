@@ -26,6 +26,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
+import hashlib
+from itertools import tee
 import json
 import logging
 import os
@@ -43,6 +45,7 @@ from paper_clustering.data_models import (
 )
 from paper_clustering.interfaces import DatabaseClient
 from paper_clustering.local_storage import LocalStorage
+from paper_clustering.utils import iter_batches, retry
 
 from paper_clustering.extract.extract_metadata import (
     DEFAULT_ARCHIVE_PATH,
@@ -54,6 +57,7 @@ logger.setLevel(logging.DEBUG)
 
 DEFAULT_TECHNIQUE_K = 3.0
 DEFAULT_POOLING = "max"
+CLUSTER_UPLOAD_BATCH_SIZE = 10_000
 
 local_storage = LocalStorage()
 
@@ -65,13 +69,13 @@ def get_relevant(
     categories: list[str] | None = None,
     keywords: list[str] | None = None,
     input_archive: str | Path = DEFAULT_ARCHIVE_PATH,
-) -> bool:
-    """Write complete paper metadata as JSON Lines, returning selection success.
+) -> None:
+    """Write complete paper metadata as JSON Lines; raise on failure.
 
     Dates are inclusive UTC calendar days, based on the first arXiv version.
     Match any category AND any keyword (in title/abstract); empty filters are
     unrestricted. Keep archive order and select at most ``max_results`` papers.
-    A successful empty selection writes an empty file. Failures are logged and
+    A successful empty selection writes an empty file. Failures propagate and
     leave an existing output file intact.
     """
     total_started = perf_counter()
@@ -103,10 +107,7 @@ def get_relevant(
             max(dates) if dates else "N/A",
             output_path,
         )
-        return True
-    except Exception:
-        logger.exception("Paper selection failed")
-        return False
+        return
     finally:
         logger.info("Selection finished in %.3fs", perf_counter() - total_started)
 
@@ -135,6 +136,19 @@ def _database_client() -> Iterator[DatabaseClient]:
         yield client
 
 
+@retry()
+def _read_database_embeddings(full_metadata: bool) -> list[dict[str, Any]]:
+    """Retry the entire read with a fresh connection on each attempt."""
+    with _database_client() as client:
+        stage_started = perf_counter()
+        records = client.select(
+            table="papers",
+            cols=["*"] if full_metadata else ["arxiv_id", "title", "area_embedding"],
+        )
+        logger.info("Database read took %.3fs", perf_counter() - stage_started)
+        return records
+
+
 def _embedding_rows(
     input_filepath: Path | None,
     metadata_filepath: Path | None,
@@ -148,14 +162,7 @@ def _embedding_rows(
         yield from local_storage.iter_embedding_rows(input_filepath, metadata_filepath)
         return
 
-    with _database_client() as client:
-        stage_started = perf_counter()
-        records = client.select(
-            table="papers",
-            cols=["*"] if full_metadata else ["arxiv_id", "title", "area_embedding"],
-        )
-        logger.info("Database read took %.3fs", perf_counter() - stage_started)
-    for record in records:
+    for record in _read_database_embeddings(full_metadata):
         yield record, record["area_embedding"]
 
 
@@ -176,12 +183,12 @@ def generate_coordinates(
     input_filepath: Path | None = None,
     metadata_filepath: Path | None = None,
     batch_size: int | None = None,
-) -> bool:
+) -> None:
     """Read embeddings, generate coordinates, and write a gzipped CSV directly.
 
     Input paths can be batch roots or a tensor and gzipped arxiv_id,title CSV
-    in matching row order. Input rows are collected in memory; coordinates
-    are consumed as generate_umap yields them and written directly to the CSV.
+    in matching row order. Pretrained transforms consume local input in batches;
+    fitting and database reads still load the full input into memory.
     """
     total_started = perf_counter()
     try:
@@ -207,31 +214,32 @@ def generate_coordinates(
         from paper_clustering.generate_coords import generate_umap
 
         stage_started = perf_counter()
-        rows = list(_coordinate_rows(input_filepath, metadata_filepath))
-        logger.info(
-            "Coordinate input loading took %.3fs", perf_counter() - stage_started
-        )
+        rows = _coordinate_rows(input_filepath, metadata_filepath)
+        if umap_weights is None:
+            rows = list(rows)
+            logger.info(
+                "Coordinate input loading took %.3fs", perf_counter() - stage_started
+            )
+        # save_coordinates alternates these iterators. generate_umap reads at
+        # most one transform batch ahead, so tee buffers at most that batch.
+        paper_rows, vector_rows = tee(rows)
         stage_started = perf_counter()
         coordinates = generate_umap(
-            (row[2] for row in rows),
+            (row[2] for row in vector_rows),
             weights_path=umap_weights,
             save_weights_path=save_umap_weights,
             batch_size=batch_size,
         )
         local_storage.save_coordinates(
-            output_filepath, ((row[0], row[1]) for row in rows), coordinates
+            output_filepath, ((row[0], row[1]) for row in paper_rows), coordinates
         )
         logger.info(
             "UMAP and coordinate CSV export took %.3fs", perf_counter() - stage_started
         )
-        logger.info("Wrote %d coordinate rows to %s", len(rows), output_filepath)
-        return True
-    except Exception:
-        logger.exception("Coordinate generation failed")
-        return False
+        logger.info("Wrote coordinates to %s", output_filepath)
+        return
     finally:
         logger.info("Coordinates finished in %.3fs", perf_counter() - total_started)
-
 
 
 def generate_centroids(
@@ -241,33 +249,54 @@ def generate_centroids(
     *,
     num_samples: int = 100,
     random_state: int | None = None,
-) -> bool:
+) -> None:
     """Read gzipped memberships/coordinates and write cluster_id,centroid CSV.
 
-    Centroids are JSON arrays [x, y] inside the CSV field. Return success;
-    input and calculation errors are logged before the output is opened.
+    Centroids are JSON arrays [x, y] inside the CSV field. Input and calculation
+    errors propagate before the output is opened.
     """
-    try:
-        from paper_clustering.cluster import approximate_centroid
+    from paper_clustering.cluster import approximate_centroid
 
-        output_filepath = Path(output_filepath)
-        if output_filepath.resolve() in {
-            Path(memberships_filepath).resolve(),
-            Path(coordinates_filepath).resolve(),
-        }:
-            raise ValueError("Centroid output must differ from input files")
-        memberships = local_storage.load_memberships(memberships_filepath)
-        coordinates = local_storage.load_coordinates(coordinates_filepath)
-        centroids = approximate_centroid(
-            memberships, coordinates, num_samples=num_samples, random_state=random_state
-        )
-        local_storage.save_centroids(output_filepath, centroids)
-        logger.info("Wrote %d cluster centroids to %s", len(centroids), output_filepath)
-        return True
-    except Exception:
-        logger.exception("Cluster centroid generation failed")
-        return False
+    output_filepath = Path(output_filepath)
+    if output_filepath.resolve() in {
+        Path(memberships_filepath).resolve(),
+        Path(coordinates_filepath).resolve(),
+    }:
+        raise ValueError("Centroid output must differ from input files")
+    memberships = local_storage.load_memberships(memberships_filepath)
+    coordinates = local_storage.load_coordinates(coordinates_filepath)
+    centroids = approximate_centroid(
+        memberships, coordinates, num_samples=num_samples, random_state=random_state
+    )
+    local_storage.save_centroids(output_filepath, centroids)
+    logger.info("Wrote %d cluster centroids to %s", len(centroids), output_filepath)
+    return
 
+
+def _cluster_input_fingerprint(papers: list[EmbeddedPaper]) -> str:
+    """Identify the ordered inputs, including vectors and labelling context."""
+    digest = hashlib.sha256()
+    for paper in papers:
+        record = {
+            **asdict(paper.metadata),
+            "publication_date": paper.metadata.publication_date.isoformat(),
+            "model_name": paper.model_name,
+            "embedding_dim": paper.embedding_dim,
+            "vector_shape": list(paper.area_vector.shape),
+            "vector_hash": hashlib.sha256(
+                paper.area_vector.astype("<f8").tobytes()
+            ).hexdigest(),
+        }
+        digest.update(json.dumps(record, sort_keys=True).encode("utf-8") + b"\n")
+    return digest.hexdigest()
+
+
+@retry()
+def _upload_cluster_batch(table: str, records: list[dict[str, Any]]) -> None:
+    """Replay a cluster upsert batch with a fresh connection and transaction."""
+    with _database_client() as client:
+        with client.transaction():
+            client.insert(table=table, records=records)
 
 
 def cluster_papers(
@@ -284,14 +313,15 @@ def cluster_papers(
     num_samples: int = 10,
     seed: int | None = None,
     request_timeout: float = 120,
-) -> bool:
+) -> None:
     """Cluster area embeddings, label them, and save files and database records.
 
     File input uses the metadata exported by embed. Database input uses stored
     paper metadata; model consistency can only be checked when model_name exists.
     A labelling failure leaves the unlabelled hierarchy and memberships on disk.
-    Reuse clusters.csv.gz and memberships.csv.gz when both exist in output_path,
-    skipping clustering and generating only missing labels from the supplied papers.
+    A manifest validates inputs and settings before reusing saved progress.
+    Interrupted clustering restarts; completed sibling groups retain their labels.
+    Legacy exports without a manifest require a new output directory.
     """
     total_started = perf_counter()
     try:
@@ -352,11 +382,48 @@ def cluster_papers(
         stage_started = perf_counter()
         memberships_path = output_path / "memberships.csv.gz"
         clusters_path = output_path / "clusters.csv.gz"
-        if memberships_path.is_file() and clusters_path.is_file():
+        settings = {
+            "kind": "clustering",
+            "format_version": 1,
+            "input_fingerprint": _cluster_input_fingerprint(papers),
+            "min_cluster_size": min_cluster_size,
+            "min_samples": min_samples,
+            "metric": metric,
+            "umap_dim": umap_dim,
+            "model": model,
+            "num_samples": num_samples,
+            "seed": seed,
+            # Bump when the label prompt or sampling policy changes.
+            "label_prompt_version": 1,
+        }
+        if (output_path / "manifest.json").exists():
+            manifest = local_storage.read_manifest(output_path)
+            for key, value in settings.items():
+                if key not in manifest or manifest[key] != value:
+                    raise ValueError(f"{key} differs from cluster manifest in {output_path}")
+            if manifest.get("status") not in ("clustering", "labelling", "uploading", "completed"):
+                raise ValueError(f"Invalid cluster checkpoint status in {output_path}")
+            if type(manifest.get("label_seed")) is not int:
+                raise ValueError(f"Invalid cluster label seed in {output_path}")
+        else:
+            if memberships_path.exists() or clusters_path.exists():
+                raise ValueError("Cluster files have no manifest; use a new output directory")
+            output_path.mkdir(parents=True, exist_ok=True)
+            manifest = {
+                **settings,
+                "label_seed": seed if seed is not None else int.from_bytes(os.urandom(8), "big"),
+                "status": "clustering",
+                "uploaded_rows": {"cluster_metadata": 0, "clusters": 0},
+            }
+            local_storage.write_manifest(output_path, manifest)
+
+        if manifest["status"] != "clustering":
             records, clusters = local_storage.load_clusters(output_path)
             logger.info(
                 "Loaded %d existing clusters from %s in %.3fs",
-                len(clusters), output_path, perf_counter() - stage_started,
+                len(clusters),
+                output_path,
+                perf_counter() - stage_started,
             )
         else:
             records, clusters = generate_clusters(
@@ -373,7 +440,13 @@ def cluster_papers(
                 "Unlabelled cluster export took %.3fs", perf_counter() - stage_started
             )
             logger.info("Saved %d clusters for %d papers", len(clusters), len(papers))
-        if clusters:
+            manifest["status"] = "labelling"
+            local_storage.write_manifest(output_path, manifest)
+        if manifest["status"] == "completed":
+            logger.info("Skipping completed clustering run in %s", output_path)
+            return
+        if clusters and manifest["status"] == "labelling":
+
             def save_label_progress(completed: dict[int, ClusterMetadata]) -> None:
                 local_storage.save_cluster_metadata(
                     clusters_path, clusters | completed, checkpoint=True
@@ -384,7 +457,7 @@ def cluster_papers(
                 records,
                 clusters,
                 [paper.metadata for paper in papers],
-                random_state=seed,
+                random_state=manifest["label_seed"],
                 server_url=server_url,
                 model=model,
                 request_timeout=request_timeout,
@@ -393,36 +466,53 @@ def cluster_papers(
             )
             logger.info("Cluster labelling took %.3fs", perf_counter() - stage_started)
             stage_started = perf_counter()
-            local_storage.save_cluster_metadata(clusters_path, labelled)
+            local_storage.save_cluster_metadata(clusters_path, labelled, checkpoint=True)
             logger.info(
                 "Labelled cluster export took %.3fs", perf_counter() - stage_started
             )
             logger.info("Labelled %d clusters", len(labelled))
+            clusters = labelled
+            manifest["status"] = "uploading"
+            local_storage.write_manifest(output_path, manifest)
+        if clusters:
+            if any(not cluster.label.strip() for cluster in clusters.values()):
+                raise ValueError("Upload checkpoint contains unlabelled clusters")
+            uploaded = manifest.get("uploaded_rows")
+            totals = {"cluster_metadata": len(clusters), "clusters": len(records)}
+            if (
+                not isinstance(uploaded, dict)
+                or set(uploaded) != set(totals)
+                or any(
+                    type(uploaded[table]) is not int or not 0 <= uploaded[table] <= total
+                    for table, total in totals.items()
+                )
+                or (uploaded["clusters"] > 0 and uploaded["cluster_metadata"] != len(clusters))
+            ):
+                raise ValueError("Invalid cluster upload progress in manifest")
             stage_started = perf_counter()
             from itertools import islice
 
-            with _database_client() as client:
-                for table, rows in (
+            for table, rows in (
+                (
+                    "cluster_metadata",
                     (
-                        "cluster_metadata",
-                        (
-                            {"id": cid, **asdict(cluster)}
-                            for cid, cluster in labelled.items()
-                        ),
+                        {"id": cid, **asdict(cluster)}
+                        for cid, cluster in sorted(clusters.items())
                     ),
-                    ("clusters", (asdict(record) for record in records)),
-                ):
-                    while batch := list(islice(rows, 10_000)):
-                        with client.transaction():
-                            if not client.insert(table=table, records=batch):
-                                raise RuntimeError(f"{table} insertion failed")
+                ),
+                ("clusters", (asdict(record) for record in records)),
+            ):
+                remaining = islice(rows, uploaded[table], None)
+                for batch in iter_batches(remaining, CLUSTER_UPLOAD_BATCH_SIZE):
+                    _upload_cluster_batch(table, batch)
+                    uploaded[table] += len(batch)
+                    local_storage.write_manifest(output_path, manifest)
             logger.info(
                 "Cluster database upload took %.3fs", perf_counter() - stage_started
             )
-        return True
-    except Exception:
-        logger.exception("Clustering or cluster labelling failed")
-        return False
+        manifest["status"] = "completed"
+        local_storage.write_manifest(output_path, manifest)
+        return
     finally:
         logger.info(
             "Clustering pipeline finished in %.3fs", perf_counter() - total_started
@@ -455,7 +545,6 @@ def _validate_embedding_options(
         raise ValueError("--technique-k must be non-negative")
     if pooling not in (None, "mean", "max"):
         raise ValueError("--pooling must be either None, 'mean' or 'max'")
-
 
 
 def _resume_embedding_offset(
@@ -511,14 +600,20 @@ def _resume_embedding_offset(
             papers = local_storage.load_embedding_batch(batch_path)
             saved_ids = [paper.arxiv_id for paper in papers]
             expected_id_set = set(expected_ids)
-            # API metadata may resolve an unversioned request to a versioned ID.
-            # Explicitly requested versions must still match exactly.
-            if len(set(saved_ids)) != len(saved_ids) or any(
-                saved_id not in expected_id_set
-                and re.sub(r"v[0-9]+$", "", saved_id) not in expected_id_set
-                for saved_id in saved_ids
-            ):
-                raise ValueError(f"Saved paper IDs do not match {manifest_path}")
+            matched_ids = set()
+            for saved_id in saved_ids:
+                # An unversioned request may resolve to a versioned ID, but
+                # every saved paper must identify exactly one requested paper.
+                candidates = {saved_id, re.sub(r"v[0-9]+$", "", saved_id)} & expected_id_set
+                if len(candidates) != 1 or candidates & matched_ids:
+                    raise ValueError(f"Saved paper IDs do not match {manifest_path}: {saved_id!r}")
+                matched_ids.update(candidates)
+            if len(saved_ids) != len(expected_ids) or matched_ids != expected_id_set:
+                raise ValueError(
+                    f"Saved paper IDs do not match {manifest_path}: "
+                    f"missing IDs={sorted(expected_id_set - matched_ids)}; "
+                    f"expected {len(expected_ids)} papers, found {len(saved_ids)}"
+                )
             _upload_embedding_batch(papers)
             manifest["status"] = "completed"
             local_storage.write_manifest(batch_path, manifest)
@@ -529,19 +624,45 @@ def _resume_embedding_offset(
     return offset
 
 
-
+@retry()
 def _upload_embedding_batch(papers: list[EmbeddedPaper]) -> None:
-    """Use the existing transactional upserts for new and resumed batches."""
-    from paper_clustering.upload import upload
+    """Retry both upserts together, using a fresh connection and transaction."""
+    if not papers:
+        return
+
+    records: list[dict[str, Any]] = []
+    techniques: list[dict[str, Any]] = []
+    for paper in papers:
+        metadata = paper.metadata
+
+        for technique in paper.techniques:
+            techniques.append(
+                {
+                    "arxiv_id": metadata.arxiv_id,
+                    "embedding": technique.embedding,
+                    "passage": technique.text,
+                    "score": technique.score,
+                }
+            )
+
+        record: dict[str, Any] = {
+            "arxiv_id": metadata.arxiv_id,
+            "authors": list(metadata.authors),
+            "publication_date": metadata.publication_date.isoformat(),
+            "title": metadata.title,
+            "abstract": metadata.abstract,
+            "url": metadata.url,
+            "primary_category": metadata.primary_category,
+            "area_embedding": paper.area_vector,
+        }
+        records.append(record)
 
     with _database_client() as client:
         stage_started = perf_counter()
-        if upload(papers, client) != (True, True):
-            raise RuntimeError("Upload did not complete successfully")
+        with client.transaction():
+            client.insert(table="papers", records=records)
+            client.insert(table="techniques", records=techniques)
         logger.info("Database upload took %.3fs", perf_counter() - stage_started)
-
-
-
 
 
 def download_papers(
@@ -551,49 +672,45 @@ def download_papers(
     output_path: Path,
     include_proofs: bool = False,
     resume: bool = False,
-) -> bool:
+) -> None:
     """Save extracted papers individually; resume reuses complete saved files.
 
     Empty sections are saved too, matching embed's metadata-only fallback when
     source text is unavailable. Remove such a file before resuming to retry it.
     """
-    try:
-        metadata_by_id = local_storage.load_paper_input(input_filepath, ids_filepath)
-        output_path.mkdir(parents=True, exist_ok=True)
-        if not resume and any(
-            local_storage.source_filepath(output_path, arxiv_id).exists()
-            for arxiv_id in metadata_by_id
-        ):
-            raise ValueError("Saved sources already exist; use --resume or a new path")
-        import requests
-        from paper_clustering.extract.extract_text import get_paper
+    metadata_by_id = local_storage.load_paper_input(input_filepath, ids_filepath)
+    output_path.mkdir(parents=True, exist_ok=True)
+    if not resume and any(
+        local_storage.source_filepath(output_path, arxiv_id).exists()
+        for arxiv_id in metadata_by_id
+    ):
+        raise ValueError("Saved sources already exist; use --resume or a new path")
+    import requests
+    from paper_clustering.extract.extract_text import get_paper
 
-        with requests.Session() as session:
-            for index, (arxiv_id, metadata) in enumerate(metadata_by_id.items(), 1):
-                filepath = local_storage.source_filepath(output_path, arxiv_id)
-                if resume and filepath.exists():
-                    local_storage.load_source_paper(output_path, arxiv_id, include_proofs)
-                    logger.info("Skipping saved paper %s", arxiv_id)
-                    continue
-                logger.info(
-                    "Downloading paper %d/%d: %s", index, len(metadata_by_id), arxiv_id
-                )
-                paper = get_paper(
-                    session,
-                    arxiv_id,
-                    metadata=metadata,
-                    include_proofs=include_proofs,
-                    retries=1,
-                )
-                if not any(section.text for section in paper.sections):
-                    logger.warning("No usable source paragraphs for %s", arxiv_id)
-                local_storage.save_source_paper(
-                    output_path, paper, requested_id=arxiv_id, include_proofs=include_proofs
-                )
-        return True
-    except Exception:
-        logger.exception("Paper download failed")
-        return False
+    with requests.Session() as session:
+        for index, (arxiv_id, metadata) in enumerate(metadata_by_id.items(), 1):
+            filepath = local_storage.source_filepath(output_path, arxiv_id)
+            if resume and filepath.exists():
+                local_storage.load_source_paper(output_path, arxiv_id, include_proofs)
+                logger.info("Skipping saved paper %s", arxiv_id)
+                continue
+            logger.info(
+                "Downloading paper %d/%d: %s", index, len(metadata_by_id), arxiv_id
+            )
+            paper = get_paper(
+                session,
+                arxiv_id,
+                metadata=metadata,
+                include_proofs=include_proofs,
+                retries=1,
+            )
+            if not any(section.text for section in paper.sections):
+                logger.warning("No usable source paragraphs for %s", arxiv_id)
+            local_storage.save_source_paper(
+                output_path, paper, requested_id=arxiv_id, include_proofs=include_proofs
+            )
+    return
 
 
 def embed_papers(
@@ -616,7 +733,7 @@ def embed_papers(
     pooling: str | None = DEFAULT_POOLING,
     semchunk: bool = False,
     areas_only: bool = False,
-) -> bool:
+) -> None:
     """Embed selected papers, optionally reading saved text from source_path.
 
     Saved sources supply both metadata and sections; input selects their IDs.
@@ -669,10 +786,10 @@ def embed_papers(
         start_offset = _resume_embedding_offset(ids, output_path, settings, resume)
         if not ids:
             logger.info("No arXiv IDs to embed")
-            return True
+            return
         if start_offset == len(ids):
             logger.info("All requested papers are already complete")
-            return True
+            return
         # Keep model/database dependencies out of archive selection and CLI help.
         import numpy as np
         from tqdm import tqdm
@@ -715,7 +832,9 @@ def embed_papers(
             )
             paper_source_path = Path(chunked_sources.name)
             for arxiv_id in tqdm(ids[start_offset:], desc="Chunking saved papers"):
-                paper = local_storage.load_source_paper(source_path, arxiv_id, include_proofs)
+                paper = local_storage.load_source_paper(
+                    source_path, arxiv_id, include_proofs
+                )
                 paper = replace(
                     paper,
                     sections=tuple(
@@ -784,7 +903,9 @@ def embed_papers(
                             retries=1,
                             chunker=chunker,
                         )
-                    if not areas_only and not any(section.text for section in paper.sections):
+                    if not areas_only and not any(
+                        section.text for section in paper.sections
+                    ):
                         logger.warning("No usable source paragraphs for %s", arxiv_id)
                     papers.append(paper)
                 logger.info(
@@ -866,10 +987,7 @@ def embed_papers(
                 logger.info("Embedded %d/%d papers", embedded_count, len(ids))
                 del papers, area_vectors, techniques
                 del embedded_papers
-        return True
-    except Exception:
-        logger.exception("Pipeline embedding failed")
-        return False
+        return
     finally:
         if chunked_sources is not None:
             chunked_sources.cleanup()
@@ -1057,36 +1175,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     logging.getLogger("psycopg").setLevel(logging.DEBUG)
 
-    if args.command == "download":
-        return (
-            0
-            if download_papers(
+    try:
+        if args.command == "download":
+            download_papers(
                 args.input_filepath,
                 ids_filepath=args.ids_filepath,
                 output_path=args.output_path,
                 include_proofs=args.include_proofs,
                 resume=args.resume,
             )
-            else 1
-        )
+            return 0
 
-    if args.command == "generate_centroids":
-        return (
-            0
-            if generate_centroids(
+        if args.command == "generate_centroids":
+            generate_centroids(
                 args.memberships_filepath,
                 args.coordinates_filepath,
                 args.output_filepath,
                 num_samples=args.num_samples,
                 random_state=args.seed,
             )
-            else 1
-        )
+            return 0
 
-    if args.command == "select":
-        return (
-            0
-            if get_relevant(
+        if args.command == "select":
+            get_relevant(
                 days_back=args.days_back,
                 output_filepath=args.output_filepath,
                 max_results=args.max_results,
@@ -1094,13 +1205,10 @@ def main(argv: list[str] | None = None) -> int:
                 keywords=args.keywords,
                 input_archive=args.input_archive,
             )
-            else 1
-        )
+            return 0
 
-    if args.command == "generate_coords":
-        return (
-            0
-            if generate_coordinates(
+        if args.command == "generate_coords":
+            generate_coordinates(
                 output_filepath=args.output_filepath,
                 umap_weights=args.umap_weights,
                 save_umap_weights=args.save_umap_weights,
@@ -1108,13 +1216,10 @@ def main(argv: list[str] | None = None) -> int:
                 metadata_filepath=args.metadata_filepath,
                 batch_size=args.batch_size,
             )
-            else 1
-        )
+            return 0
 
-    if args.command == "cluster":
-        return (
-            0
-            if cluster_papers(
+        if args.command == "cluster":
+            cluster_papers(
                 args.output_path,
                 input_filepath=args.input_filepath,
                 metadata_filepath=args.metadata_filepath,
@@ -1128,12 +1233,9 @@ def main(argv: list[str] | None = None) -> int:
                 seed=args.seed,
                 request_timeout=args.request_timeout,
             )
-            else 1
-        )
+            return 0
 
-    return (
-        0
-        if embed_papers(
+        embed_papers(
             args.input_filepath,
             ids_filepath=args.ids_filepath,
             source_path=args.source_path,
@@ -1153,8 +1255,10 @@ def main(argv: list[str] | None = None) -> int:
             semchunk=args.semchunk,
             areas_only=args.areas_only,
         )
-        else 1
-    )
+        return 0
+    except Exception:
+        logger.exception("Pipeline command %s failed", args.command)
+        return 1
 
 
 if __name__ == "__main__":

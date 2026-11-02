@@ -1,13 +1,12 @@
 """Describe the role of a statement using a paper's proof overview."""
 
 import json
-import logging
 import re
 
 from paper_clustering.data_models import ArxivSection, Paper, Statement
 from paper_clustering.llama import LlamaConnector
+from paper_clustering.utils import retry
 
-logger = logging.getLogger(__name__)
 PROOF_OVERVIEW_RE = re.compile(
     r"\b(?:overviews?|contributions?|techniques?|methods?|methodolog(?:y|ies)"
     r"|approach(?:es)?|strateg(?:y|ies)|ideas?|insights?|intuitions?"
@@ -20,12 +19,10 @@ PROOF_OVERVIEW_RE = re.compile(
 def _select_proof_overview(sections: list[ArxivSection]) -> ArxivSection | None:
     """Return the first matching major section, falling back to the first section."""
     if not sections:
-        # logger.warning("No sections available, using abstract")
         return None
     for section in sections:
         if PROOF_OVERVIEW_RE.search(section.major_section_header):
             return section
-    # logger.warning("No proof overview was found; using the first section instead")
     return sections[0]
 
 
@@ -45,6 +42,18 @@ def _paper_context(paper: Paper) -> str:
     )
 
 
+def _response_content(response: dict) -> str:
+    """Extract text from a model response, raising on malformed server output."""
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("llama.cpp response did not contain message content") from exc
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("llama.cpp response did not contain nonempty text")
+    return content.strip()
+
+
+@retry()
 def contextualize(
     connector: LlamaConnector,
     statement: Statement,
@@ -83,18 +92,10 @@ def contextualize(
         stream=False,
         cache_prompt=True,
     )
-    try:
-        summary = response["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("llama.cpp response did not contain a summary") from exc
-    if not isinstance(summary, str) or not summary.strip():
-        logging.exception(
-            f"llama.cpp did not contain a nonempty summary {response['choices'][0]['message']}"
-        )
-        raise RuntimeError("llama.cpp response did not contain a nonempty summary")
-    return summary.strip()
+    return _response_content(response)
 
 
+@retry()
 def select_relevant_statements(
     connector: LlamaConnector,
     statements: list[Statement],
@@ -140,12 +141,10 @@ def select_relevant_statements(
         stream=False,
         cache_prompt=True,
     )
+    content = _response_content(response)
     try:
-        selected = json.loads(response["choices"][0]["message"]["content"])
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        logger.exception(
-            f"llama.cpp response did not contain a JSON selection {response['choices'][0]['message']}"
-        )
+        selected = json.loads(content)
+    except json.JSONDecodeError as exc:
         raise RuntimeError(
             "llama.cpp response did not contain a JSON selection"
         ) from exc

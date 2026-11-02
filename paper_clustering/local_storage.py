@@ -34,8 +34,7 @@ class LocalStorage:
     """
 
     def load_paper_input(
-        self,
-        input_filepath: Path | None, ids_filepath: Path | None
+        self, input_filepath: Path | None, ids_filepath: Path | None
     ) -> dict[str, PaperMetadata | None]:
         """Read the shared selection/ID input, preserving order and deduplicating IDs."""
         if (input_filepath is None) == (ids_filepath is None):
@@ -74,7 +73,9 @@ class LocalStorage:
                 metadata_by_id.setdefault(metadata.arxiv_id, metadata)
         return metadata_by_id
 
-    def save_paper_metadata(self, filepath: Path, papers: Iterable[PaperMetadata]) -> None:
+    def save_paper_metadata(
+        self, filepath: Path, papers: Iterable[PaperMetadata]
+    ) -> None:
         """Write selection JSONL, preserving an existing file if serialization fails."""
         filepath.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = None
@@ -109,7 +110,9 @@ class LocalStorage:
             raise ValueError(f"--include-proofs differs from {filepath}")
         metadata = record["metadata"]
         metadata["authors"] = tuple(metadata["authors"])
-        metadata["publication_date"] = datetime.fromisoformat(metadata["publication_date"])
+        metadata["publication_date"] = datetime.fromisoformat(
+            metadata["publication_date"]
+        )
         return Paper(
             metadata=PaperMetadata(**metadata),
             sections=tuple(
@@ -130,7 +133,9 @@ class LocalStorage:
         source_path.mkdir(parents=True, exist_ok=True)
         filepath = self.source_filepath(source_path, requested_id)
         record = asdict(paper)
-        record["metadata"]["publication_date"] = paper.metadata.publication_date.isoformat()
+        record["metadata"][
+            "publication_date"
+        ] = paper.metadata.publication_date.isoformat()
         record.update(requested_arxiv_id=requested_id, include_proofs=include_proofs)
         temporary_path = None
         try:
@@ -165,8 +170,12 @@ class LocalStorage:
                 if path.is_dir() and re.fullmatch(r"batch_\d+", path.name)
             }
             if not vector_batches or vector_batches != metadata_batches:
-                raise ValueError("Input and metadata folders must contain matching batches")
-            for name in sorted(vector_batches, key=lambda name: int(name.split("_")[1])):
+                raise ValueError(
+                    "Input and metadata folders must contain matching batches"
+                )
+            for name in sorted(
+                vector_batches, key=lambda name: int(name.split("_")[1])
+            ):
                 yield from self.iter_embedding_rows(
                     input_filepath / name / "embeddings.pt.gz",
                     metadata_filepath / name / "metadata.csv.gz",
@@ -218,7 +227,9 @@ class LocalStorage:
             embedding_dim = int(record.pop("embedding_dim"))
             model_name = record.pop("model_name")
             record["authors"] = tuple(json.loads(record["authors"]))
-            record["publication_date"] = datetime.fromisoformat(record["publication_date"])
+            record["publication_date"] = datetime.fromisoformat(
+                record["publication_date"]
+            )
             metadata = PaperMetadata(**record)
             if metadata.arxiv_id in papers or len(vector) != embedding_dim:
                 raise ValueError(f"Invalid paper metadata in {batch_path}")
@@ -257,8 +268,7 @@ class LocalStorage:
         return list(papers.values())
 
     def save_embedding_batch(
-        self,
-        output_path: Path, papers: list[EmbeddedPaper], *, overwrite: bool = False
+        self, output_path: Path, papers: list[EmbeddedPaper], *, overwrite: bool = False
     ) -> None:
         """Save four gzip files; overwrite only a validated interrupted batch."""
         import numpy as np
@@ -268,7 +278,9 @@ class LocalStorage:
         techniques = [technique for paper in papers for technique in paper.techniques]
         embeddings = torch.from_numpy(np.stack([paper.area_vector for paper in papers]))
         technique_vectors = (
-            torch.from_numpy(np.stack([technique.embedding for technique in techniques]))
+            torch.from_numpy(
+                np.stack([technique.embedding for technique in techniques])
+            )
             if techniques
             else torch.empty((0, papers[0].embedding_dim))
         )

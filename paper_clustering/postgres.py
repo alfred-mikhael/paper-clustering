@@ -19,10 +19,10 @@ class PostgresClient:
         """Group operations atomically, even with autocommit enabled."""
         return self.conn.transaction()
 
-    def insert(self, table: str, records: list[dict[str, Any]]) -> bool:
-        """Upsert papers and techniques; insert other tables normally."""
+    def insert(self, table: str, records: list[dict[str, Any]]) -> None:
+        """Upsert paper, technique, and cluster records; ignore empty input."""
         if not records:
-            return True
+            return
 
         columns = list(records[0])
         if not columns:
@@ -48,6 +48,14 @@ class PostgresClient:
             "techniques": (
                 sql.SQL("(md5((arxiv_id || ':'::text) || passage))"),
                 ["embedding", "score"],
+            ),
+            "cluster_metadata": (
+                sql.Identifier("id"),
+                [column for column in columns if column != "id"],
+            ),
+            "clusters": (
+                sql.SQL(", ").join(map(sql.Identifier, ("arxiv_id", "cluster_id"))),
+                [column for column in columns if column not in ("arxiv_id", "cluster_id")],
             ),
         }
         config = upsert_config.get(table)
@@ -76,7 +84,6 @@ class PostgresClient:
             len(records),
             table,
         )
-        return True
 
     def select(
         self,

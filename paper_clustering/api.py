@@ -28,6 +28,7 @@ from paper_clustering.postgres import PostgresClient
 from paper_clustering.query import SearchResult, rank_candidates, retrieve_candidates
 from paper_clustering.reranker import SLMReranker
 from paper_clustering.interfaces import DatabaseClient
+from paper_clustering.utils import retry
 
 # Inherit Uvicorn's configured INFO handler when running the documented command.
 logger = logging.getLogger("uvicorn.error").getChild(__name__)
@@ -118,6 +119,13 @@ def get_database_client(request: Request) -> Iterator[DatabaseClient]:
         raise HTTPException(status_code=503, detail="Database unavailable") from error
 
 
+@retry()
+def _retrieve_candidates(request: Request, arxiv_id: str, k: int) -> list[SearchResult]:
+    """Acquire a pooled connection for each attempt at the read-only search."""
+    with get_database_client(request) as client:
+        return retrieve_candidates(arxiv_id, client, k=k)
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -144,16 +152,15 @@ def query_papers(
     # the response_model above, which also documents the result fields in /docs.
     total_started = perf_counter()
     try:
-        with get_database_client(request) as client:
-            stage_started = perf_counter()
-            try:
-                candidates = retrieve_candidates(arxiv_id.strip(), client, k=k)
-            finally:
-                logger.info(
-                    "Query %s retrieval took %.3fs",
-                    arxiv_id,
-                    perf_counter() - stage_started,
-                )
+        stage_started = perf_counter()
+        try:
+            candidates = _retrieve_candidates(request, arxiv_id.strip(), k)
+        finally:
+            logger.info(
+                "Query %s retrieval took %.3fs",
+                arxiv_id,
+                perf_counter() - stage_started,
+            )
         # Return the connection before waiting for the GPU; only ranking is serialized.
         if not candidates:
             return {}

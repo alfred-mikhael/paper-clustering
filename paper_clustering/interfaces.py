@@ -38,7 +38,9 @@ class DatabaseClient(Protocol):
         """Commit grouped operations on success; roll back on an exception."""
         ...
 
-    def insert(self, table: str, records: list[dict[str, Any]]) -> bool: ...
+    def insert(self, table: str, records: list[dict[str, Any]]) -> None:
+        """Insert records or raise on failure; empty input is a successful no-op."""
+        ...
 
     def select(
         self,

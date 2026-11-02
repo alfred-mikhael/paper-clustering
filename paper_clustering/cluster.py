@@ -225,8 +225,8 @@ def label_clusters(
     by arxiv_id. A seed makes sampling reproducible.
     Preserve existing nonempty labels and request only missing labels. Saved
     sibling labels provide comparison context but are never regenerated.
-    After validating a complete response, call ``on_label`` after each accepted
-    label with all labels completed so far. Persistence errors propagate.
+    After validating a complete response, call ``on_label`` once per sibling
+    group with all labels completed so far. Persistence errors propagate.
 
     Use the local llama.cpp chat endpoint (or ``LLAMA_CPP_SERVER_URL``).
     Alternatively, ``generate(prompt)`` can call any LLM and must return a
@@ -242,7 +242,6 @@ def label_clusters(
     }
     if len(result) == len(clusters):
         return result
-    rng = random.Random(random_state)
     papers_by_id = {paper.arxiv_id: paper for paper in papers}
     children = defaultdict(list)
     for cid, cluster in clusters.items():
@@ -271,8 +270,13 @@ def label_clusters(
             f"{url}/v1/chat/completions", json=payload, timeout=request_timeout
         )
         response.raise_for_status()
-        logger.debug(response.json())
-        return response.json()["choices"][0]["message"]["content"]
+        try:
+            content = response.json()["choices"][0]["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError) as error:
+            raise RuntimeError("Labelling response did not contain message content") from error
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("Labelling response did not contain nonempty text")
+        return content
 
     generate = generate or request_label
     parents = deque([-1])
@@ -301,7 +305,9 @@ def label_clusters(
                     else {
                         "papers": [
                             {"title": paper.title, "abstract": paper.abstract}
-                            for paper in rng.sample(
+                            for paper in random.Random(
+                                None if random_state is None else f"{random_state}:{cid}"
+                            ).sample(
                                 members[cid], min(num_samples, len(members[cid]))
                             )
                         ]
@@ -346,9 +352,12 @@ def label_clusters(
             for attempt in range(3):
                 try:
                     resp = generate(prompt)
-                    labels = json.loads(resp)
+                    try:
+                        labels = json.loads(resp)
+                    except (ValueError, TypeError) as error:
+                        raise RuntimeError("Cluster labels must be valid JSON") from error
                     if not isinstance(labels, dict):
-                        raise ValueError(
+                        raise RuntimeError(
                             "Expected a JSON object mapping cluster IDs to labels"
                         )
                     missing_ids = sorted(set(samples) - set(labels))
@@ -359,7 +368,7 @@ def label_clusters(
                         if not isinstance(label, str) or not label.strip()
                     )
                     if missing_ids or hallucinated_ids or invalid_ids:
-                        raise ValueError(
+                        raise RuntimeError(
                             f"Invalid cluster labels: missing IDs={missing_ids}; "
                             f"hallucinated IDs={hallucinated_ids}; "
                             f"IDs with empty or non-string labels={invalid_ids}"
@@ -367,10 +376,7 @@ def label_clusters(
                     break
                 except (
                     requests.RequestException,
-                    ValueError,
-                    KeyError,
-                    IndexError,
-                    TypeError,
+                    RuntimeError,
                 ) as error:
                     if isinstance(error, requests.HTTPError):
                         response = error.response
@@ -394,7 +400,7 @@ def label_clusters(
                     size=clusters[cid].size,
                     parent_cluster_id=parent_id,
                 )
-                if on_label is not None:
-                    on_label(result)
+            if on_label is not None:
+                on_label(result)
             progress.update(len(pending_ids))
     return result
