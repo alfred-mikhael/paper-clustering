@@ -2,7 +2,7 @@
 
 Launch llama.ccp server by navigating to the llama.ccpp folder and running
 
-`build/bin/llama-server -hf [model-name] -ngl 99 --cont-batching --cache-prompt --cache-reuse 256 --ctx-size 32768 --no-mmproj`
+`build/bin/llama-server -hf [unsloth/gemma-4-E4B-it-GGUF:Q4_K_M] -ngl 99 --cont-batching --cache-prompt --cache-reuse 256 --ctx-size 32768 --no-mmproj`
 
 You can use `-m [model name]` if the model is already cached
 """
@@ -21,7 +21,7 @@ import torch
 from tqdm import tqdm
 
 from paper_clustering.data_models import ArxivSection, Paper
-from paper_clustering.llama import LlamaConnector
+from paper_clustering.connector import LlamaConnector
 from paper_clustering.utils import retry
 
 LABELS = ("A", "B", "C", "D", "E")
@@ -230,7 +230,12 @@ class SLMWeakLabelGen:
                 label_probabilities[label] += probability
 
         except (
-            IndexError, KeyError, TypeError, ValueError, AttributeError, OverflowError
+            IndexError,
+            KeyError,
+            TypeError,
+            ValueError,
+            AttributeError,
+            OverflowError,
         ) as exc:
             raise RuntimeError(
                 "llama.cpp response did not contain valid token probabilities"

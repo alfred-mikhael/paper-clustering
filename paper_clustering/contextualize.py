@@ -4,7 +4,7 @@ import json
 import re
 
 from paper_clustering.data_models import ArxivSection, Paper, Statement
-from paper_clustering.llama import LlamaConnector
+from paper_clustering.connector import Connector
 from paper_clustering.utils import retry
 
 PROOF_OVERVIEW_RE = re.compile(
@@ -55,7 +55,7 @@ def _response_content(response: dict) -> str:
 
 @retry()
 def contextualize(
-    connector: LlamaConnector,
+    connector: Connector,
     statement: Statement,
     paper: Paper,
     enrichment: str | None = None,
@@ -97,7 +97,7 @@ def contextualize(
 
 @retry()
 def select_relevant_statements(
-    connector: LlamaConnector,
+    connector: Connector,
     statements: list[Statement],
     paper: Paper,
 ) -> list[Statement]:

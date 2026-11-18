@@ -11,9 +11,9 @@ import requests
 @unittest.skipIf(importlib.util.find_spec("dotenv") is None, "python-dotenv is not installed")
 class LlamaConnectorTests(unittest.TestCase):
     def setUp(self):
-        from paper_clustering.llama import LlamaConnector
+        from paper_clustering.connector import LlamaConnector
         self.connector_type = LlamaConnector
-        for target in ("paper_clustering.llama.load_dotenv", "paper_clustering.llama.requests.Session"):
+        for target in ("paper_clustering.connector.load_dotenv", "paper_clustering.connector.requests.Session"):
             patcher = patch(target)
             mocked = patcher.start()
             self.addCleanup(patcher.stop)
