@@ -1,0 +1,10 @@
+condition,class,support,predicted_count,precision,recall
+paragraph,cross_field,3,1,1.0,0.3333333333333333
+paragraph,same_field,0,0,,
+paragraph,no_connection,0,0,,
+abstract_introduction,cross_field,3,2,1.0,0.6666666666666666
+abstract_introduction,same_field,0,0,,
+abstract_introduction,no_connection,0,0,,
+whole_paper,cross_field,3,1,1.0,0.3333333333333333
+whole_paper,same_field,0,0,,
+whole_paper,no_connection,0,0,,

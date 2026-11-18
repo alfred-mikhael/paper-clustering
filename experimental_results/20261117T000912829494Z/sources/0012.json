@@ -1,0 +1,625 @@
+{
+  "arxiv_id": "1510.00571",
+  "title": "Electrical Reduction, Homotopy Moves, and Defect",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "We prove the first nontrivial worst-case lower bounds for two closely related problems. First, $Ω(n^{3/2})$ degree-1 reductions, series-parallel reductions, and $Δ$Y transformations are required in the worst case to reduce an $n$-vertex plane graph to a single vertex or edge. The lower bound is achieved by any planar graph with treewidth $Θ(\\sqrt{n})$. Second, $Ω(n^{3/2})$ homotopy moves are required in the worst case to reduce a closed curve in the plane with $n$ self-intersection points to a simple closed curve. For both problems, the best upper bound known is $O(n^2)$, and the only lower bound previously known was the trivial $Ω(n)$. The first lower bound follows from the second using medial graph techniques ultimately due to Steinitz, together with more recent arguments of Noble and Welsh [J. Graph Theory 2000]. The lower bound on homotopy moves follows from an observation by Haiyashi et al. [J. Knot Theory Ramif. 2012] that the standard projections of certain torus knots have large defect, a topological invariant of generic closed curves introduced by Aicardi and Arnold. Finally, we prove that every closed curve in the plane with $n$ crossings has defect $O(n^{3/2})$, which implies that better lower bounds for our algorithmic problems will require different techniques."
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "Consider the following set of local operations on plane graphs: start-of-itemize:. sep0pt. leaf reduction: contract the edge incident to a vertex of degree 1. loop reduction: delete the edge incident to a face of degree 1. series reduction: contract either edge incident to a vertex of degree 2. parallel reduction: delete either edge incident to a face of degree 2. Y (Δ) transformation: delete a vertex of degree 3 and connect its neighbors with three new edges. Δ (Y) transformation: delete the edges bounding a face of degree 3 and join the vertices of that face to a new vertex end-of-itemize These six operations consist of three dual pairs, as shown in Figure; for example, any series reduction in a plane graph G is equivalent to a parallel reduction in the dual graph G^*. We refer to leaf reductions and loop reductions as degree-1 reductions, series reductions and parallel reductions as series-parallel reductions, and Y (Δ) and Δ (Y) transformations as ΔY transformations. Following Colin de Verdière, we collectively refer to these operations and their inverses as electrical transformations"
+    },
+    {
+      "block_id": "s1_p1",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "Electrical transformations have been used since the end of the 19th century [k-etscn-1899, r-md-1904] to analyze resistor networks and other electrical circuits. Akers [a-wtns-60] used the same transformations to compute shortest paths and maximum flows (but see also Hobbs [h-rns-67] ); Lehman [l-wtpn-63] used them to estimate network reliability. Akers and Lehman both conjectured that any planar graph, two of whose vertices are marked as terminals, can be reduced to a single edge between the terminals using a finite number of electrical transformations. This conjecture was first proved by Epifanov [e-rpges-66] using a nonconstructive argument; simpler constructive proofs were later given by Feo [f-erpns-85], Truemper [t-drpg-89, t-md-92], Feo and Provan [fp-dtert-93], and Nakahara and Takahashi [nt-aafts-96]"
+    },
+    {
+      "block_id": "s1_p2",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "For the simpler problem of reducing a planar graph without terminals to a single vertex, a constructive proof is already implicit in Steinitz's 1916 proof that every 3-connected planar graph is the 1-skeleton of a 3-dimensional convex polytope [s-pr-1916, sr-vtp-34]. Grünbaum [g-cp-67] describes Steinitz's proof in more detail; indeed, Steinitz's proof is often incorrectly attributed to Grünbaum"
+    },
+    {
+      "block_id": "s1_p3",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "These results were later extended to planar graphs with more than two terminals. Gitler [g-dtaa-91] and Gitler and Sagols [gs-tdrpg-11] proved that any three-terminal planar graph can be reduced to a graph with three vertices. Archdeacon and Demasi and Mohar [dm-ftpdw-15] characterized the four-terminal planar graphs that can be reduced to just four vertices. Gitler [g-dtaa-91, cgv-rep-96] proved that for any integer k, any planar graph with k terminals on a common face can be reduced to a planar graph with O(k^2) vertices. Gitler's results were significantly extended by Colin de Verdière and Curtis to the theory of circular planar networks; see also Kenyon [k-lpggs-11]. Similar results have also been proved for several classes of non-planar graphs [g-dtaa-91, w-drag-15, y-mfmw-06, y-fmwr-04] and matroids [t-dtm6a-92, w-drag-15]"
+    },
+    {
+      "block_id": "s1_p4",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "Algorithms for reducing planar graphs using electrical transformations have been applied to several combinatorial problems, including estimating network reliability [cfp-daptr-96, t-sdtnr-93, sa-refnu-86, gs-dtare-78, t-ndrpg-02];"
+    },
+    {
+      "block_id": "s1_p5",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "multicommodity flows [f-erpns-85]; flow estimation from noisy measurements [zg-effn-07]; counting spanning trees, perfect matchings, and cuts [cpv-nastc-95, cs-cr-04]; evaluation of spin models in statistical mechanics [cpv-nastc-95, j-smtra-95]; kinematic analysis of robot manipulators [st-afkrm-02]; and solving generalized Laplacian linear systems [g-cpssd-96, nt-aafts-96]"
+    },
+    {
+      "block_id": "s1_p6",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "In light of these numerous applications, it is natural to ask how many electrical transformations are required in the worst case to reduce an arbitrary planar graph to a single vertex or edge. Steinitz's proof [s-pr-1916, sr-vtp-34, g-cp-67] implies an upper bound of O(n^2), which is the best bound known solely in terms of n. Feo [f-erpns-85] and Feo and Provan [fp-dtert-93] describe reduction algorithms for two-terminal planar graphs that use O(n^2) moves. In fact, Feo and Provan's algorithm requires at most O(nD) moves, where D is the diameter of the vertex-face incidence graph (otherwise known as the radial graph ) of the input graph; D = Ω(n) in the worst case. Feo and Provan [fp-dtert-93] suggested that “there are compelling reasons to think that O( V ^(3/2)) is the smallest possible order”, possibly referring to earlier empirical results of Feo [Chapter 6, f-erpns-85]. Gitler [g-dtaa-91] conjectured that a simple modification of Feo and Provan's algorithm requires only O(n^(3/2)) time. Finally, Song [s-iifpd-01] observed that a naïve implementation of Feo and Provan's algorithm can actually require Omega(n^2) time, even for graphs that can be reduced using only O(n) steps"
+    },
+    {
+      "block_id": "s1_p7",
+      "heading": "Electrical Transformations",
+      "major_heading": "Introduction",
+      "text": "Even the special case of regular grids is open and interesting. Truemper [t-drpg-89, t-md-92] describes a method to reduce the ptimes p grid, or any minor thereof, in O(p^3) steps. Nakahara and Takahashi [nt-aafts-96] prove an upper bound of O(min pq^2, p^2q ) for any minor of the ptimes q cylindrical grid. Since every n -vertex planar graph is a minor of an O(n)times O(n) grid [v-ucvc-81, s-mncpe-84], both of these results imply an O(n^3) -time algorithm for arbitrary planar graphs; Feo and Provan [fp-dtert-93] claim without proof that Truemper's algorithm actually performs only O(n^2) electrical transformations. On the other hand, the smallest (cylindrical) grid containing every n -vertex planar graph as a minor has size Ω(n) times Ω(n) [v-ucvc-81]. Archdeacon asked whether the upper bound for square grids can be improved: start-of-quote: It is possible that a careful implementation and analysis of the grid-embedding schemes can lead to an O(n n ) -time algorithm for the general planar case. It would be interesting to obtain a near-linear algorithm for the grid. However, it may well be that reducing planar grids is Ω(n n ). end-of-quote"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Homotopy Moves",
+      "major_heading": "Introduction",
+      "text": "Now consider instead the following set of local operations on closed curves in the plane: start-of-itemize:. sep0pt. 1 (0): Remove an empty loop. 2 (0): Separate two subpaths that bound an empty bigon. 3 (3): Flip an empty triangle by moving one subpath over the opposite intersection point end-of-itemize Our notation is nonstandard but mnemonic; the numbers before and after each arrow indicate the number of local vertices before and after the move. See Figure. Each of these operations can be performed by continuously deforming the curve within a small neighborhood of one face; consequently, we call these transformations and their inverses homotopy moves. Homotopy moves are “shadows” of the classical Reidemeister moves used to manipulate knot and link diagrams [ab-tkc-26, r-ebk-27]. A compactness argument, first explicitly given by Titus [t-ctafb-61] and Francis [f-thnc-71, f-ghi-71] but implicit in earlier work of Alexander and Briggs [ab-tkc-26] and Reidemeister [r-ebk-27], implies that any continuous deformation between two generic closed curves in the plane—or on any other surface—is equivalent to a finite sequence of homotopy moves"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Homotopy Moves",
+      "major_heading": "Introduction",
+      "text": "It is natural to ask how many homotopy moves are required to transform a given closed curve in the plane into a simple closed curve. An O(n^2) upper bound follows by suitable modifications of the Steinitz-Grünbaum and Feo-Provan algorithms for electrical reduction, where n is the number of self-intersection points of the given curve. (See Lemma. ) The same O(n^2) bound also follows from algorithms for regular homotopy, which allows only biarc20 and arc33 homotopy moves, by Francis [f-frtcs-69], Vegter [v-kfdp-89] (for polygonal curves), and Nowik [n-cpsc-09]"
+    },
+    {
+      "block_id": "s2_p2",
+      "heading": "Homotopy Moves",
+      "major_heading": "Introduction",
+      "text": "Tight bounds are known for two restrictions of this question, where some types of homotopy moves are forbidden. First, Nowik [n-cpsc-09] proved that Ω(n^2) moves are necessary in the worst case to connect two regularly homotopic curves with n vertices. Second, Khovanov [k-dg-97] defines two curves to be doodle equivalent if one can be transformed into the other using biarc10 and biarc20 homotopy moves. Khovanov [k-dg-97] and Ito and Takimura [it-whkp-13] independently proved that each doodle-equivalence class contains a unique representative with the smallest number of vertices, and that any curve can be transformed into the simplest doodle equivalent curve using only arc10 and arc20 moves. It follows that two doodle equivalent curves are connected by a sequence of only O(n) homotopy moves. Looser bounds are also known for the minimum number of Reidemeister moves needed to reduce a diagram of the unknot [hn-udrqn-10, l-pubrm-15], to separate the components of a split link [hhn-unnrm-12], or to move between two equivalent knot diagrams [hh-msrmd-11, cl-ubrm-14]"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "In this paper, we prove the first non-trivial lower bounds for both of these problems. Specifically: start-of-itemize:. Omega(n^(3/2)) electrical transformations are required in the worst case to reduce a plane graph with n vertices, with or without terminals, to a single vertex (or any constant number of vertices).. Omega(n^(3/2)) homotopy moves are required in the worst case to reduce a generic closed curve in the plane with n self-intersection points to a simple closed curve. end-of-itemize"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "Like many other authors, starting with Steinitz [s-pr-1916, sr-vtp-34] and Grünbaum [g-cp-67], we study electrical transformations indirectly, through the lens of medial graphs. By refining arguments of Noble and Welsh [nw-kg-00] and others, we prove in Section that the minimum number of electrical transformations needed to completely reduce a plane graph G to a single vertex is no smaller than the minimum number of homotopy moves required to transform its medial graph into a simple closed curve. Thus, our first lower bound follows immediately from the second"
+    },
+    {
+      "block_id": "s3_p2",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "Our lower bound for homotopy moves relies on a topological invariant called defect, which was introduced by Arnold [a-tipcc-94, a-pctip-94] and Aicardi [a-tc-94]. Every simple closed curve has defect zero, and any homotopy move changes the defect of a curve by -2, 0, or 2; the various cases are illustrated in Figure. In Section, we compute the defect of the standard planar projection of any ptimes q torus knot where either pbmod q = 1 or qbmod p = 1, generalizing earlier results of Hayashi and Even-Zohar. In particular, we show that the standard projection of the ptimes (p+1) torus knot, which has p^2-1 vertices, has defect 2 p+1 (3)"
+    },
+    {
+      "block_id": "s3_p3",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "Putting all the pieces together, we conclude that for any integer k, reducing the k times (2k+1) cylindrical grid requires at least 2k+1 (3) ge ( 2 /(3))n^(3/2) - O(n) electrical transformations. An argument of Truemper [Lemma 4, t-drpg-89] implies that if H is any minor of a planar graph G, then H requires no more electrical transformations to reduce than G; see Lemma. It follows that our lower bound applies to any planar graph with treewidth Ω( n ) [rst-qepg-94]; in particular, Truemper's O(p^3) bound for the ptimes p grid [t-drpg-89, t-md-92] is tight. Our analysis also implies that for any integers p and q, electrically reducing the ptimes q cylindrical grid requires Omega(min p^2q, pq^2 ) moves, matching Nakahara and Takahashi’s upper bound [nt-aafts-96]"
+    },
+    {
+      "block_id": "s3_p4",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "Finally, in Section, we prove that the defect of any generic closed curve γ with n vertices has absolute value at most O(n^(3/2)). Unlike most O(n^(3/2)) upper bounds involving planar graphs, our proof does not use the planar separator theorem [lt-stpg-79]. Feo and Provan's electrical reduction algorithm [fp-dtert-93] and our electrical-to-homotopy reduction (Section ) imply an upper bound of O(nD), where D is the diameter of the dual graph of γ; we give a simpler self-contained proof of this upper bound in Section. Thus, if D=O( n ), we are done. Otherwise, we prove that there is a simple closed curve σ with at least s^2 vertices of γ on either side, where s is the number of times σ crosses γ. In Section we establish an inclusion-exclusion relationship between the defects of the given curve γ, the curves obtained by simplifying γ either inside or outside σ, and the curve obtained by simplifying γ on both sides of σ. This relationship implies an unbalanced “divide-and-conquer” recurrence whose solution is O(n^(3/2))"
+    },
+    {
+      "block_id": "s3_p5",
+      "heading": "Our Results",
+      "major_heading": "Introduction",
+      "text": "Our upper bound on defect implies that better worst-case lower bounds on the number of electrical transformations or homotopy moves would require new techniques. Like Gitler [g-dtaa-91], Feo and Provan [fp-dtert-93], and Archdeacon, we conjecture that the correct worst-case bound for both problems is Θ(n^(3/2))"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "Saving Face",
+      "major_heading": "Introduction",
+      "text": "Electrical transformations are usually defined more generally, without references to a planar embedding of the underlying graph. In this more general setting, a loop reduction deletes any loop (even if it does not bound a face), a parallel reduction deletes any edge parallel to another edge (even if those two edges do not bound a face), and a Δ (Y) transformation removes the edges of any 3-cycle (even if it does not bound a face) and connects its vertices to a new vertex. Our lower bound technique requires our more restrictive definitions; on the other hand, all published algorithms for reducing planar graphs also require only electrical transformations meeting our definition"
+    },
+    {
+      "block_id": "s4_p1",
+      "heading": "Saving Face",
+      "major_heading": "Introduction",
+      "text": "Our argument can be extended to allow non-facial loop reductions (or, by duality, contraction of any bridge) and non-facial parallel reductions (or, by duality, contraction of either edge in an edge cut of size 2 ). However, non-facial Δ (Y) transformations are more problematic, because they can destroy the planarity of the graph. For example, a single Δ (Y) transformation transforms the planar graph obtained from K_5 by deleting one edge into the non-planar graph K_(3, 3). It is an interesting open problem whether our Ω(n^(3/2)) lower bound holds even when non-planar Δ (Y) transformations are permitted"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Closed Curves",
+      "major_heading": "Definitions",
+      "text": "A (generic) closed curve is a continuous map γcolon S^1 to Real^2 that is injective except at a finite number of self-intersections, each of which is a transverse double point. More concisely, we consider only generic immersions of the circle into the plane. A closed curve is simple if it is injective"
+    },
+    {
+      "block_id": "s6_p1",
+      "heading": "Closed Curves",
+      "major_heading": "Definitions",
+      "text": "The image of any non-simple closed curve has a natural structure as a 4-regular plane graph. Thus, we refer to the self-intersection points of a curve as its vertices, the maximal subpaths between vertices as edges, and the components of the complement of the curve as its faces. In particular, to avoid trivial boundary cases, we consider a simple closed curve to be a single edge with no vertices. Conversely, every 4-regular planar graph is the image of a generic immersion of one or more disjoint circles. We call a 4-regular plane graph unicursal if it is the image of a generic closed curve"
+    },
+    {
+      "block_id": "s6_p2",
+      "heading": "Closed Curves",
+      "major_heading": "Definitions",
+      "text": "Intuitively, the winding number of a closed curve γ around a point x, which we denote Wind(γ, x), is the number of times γ travels counterclockwise around x. Winding numbers are characterized by the following combinatorial rule, first proposed by Möbius [m-ubiep-1865] but widely known as Alexander numbering [a-tikl-28]: The winding numbers of γ around any two points in the same face of γ are equal; the winding number around any point in the outer face is zero; and winding numbers around points in adjacent faces differ by 1, with the larger winding number appearing on the left side of the curve. See Figure for an example. By convention, the winding number around any point x in the image of γ is the average of the winding numbers around all faces incident to x. The winding number around any vertex is still an integer; the winding number around any regular point of γ is a half-integer"
+    },
+    {
+      "block_id": "s6_p3",
+      "heading": "Closed Curves",
+      "major_heading": "Definitions",
+      "text": "We adopt a standard sign convention for vertices originally proposed by Gauss [g-n1gs-00]. A vertex is positive if the first traversal through the vertex crosses the second traversal from right to left, and negative otherwise. Equivalently, a vertex x is positive if the winding number of a point moving along the curve increases the first time it reaches x after leaving the basepoint. We define sgn(x) = +1 for every positive vertex x and sgn(x) = -1 for every negative vertex x. Again, see Figure"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Medial Graphs",
+      "major_heading": "Definitions",
+      "text": "The medial graph of a plane graph G, which we denote G^times, is another plane graph whose vertices correspond to the edges of G and whose edges correspond to incidences between vertices of G and faces of G. Two vertices of G^times are connected by an edge if and only if the corresponding edges in G are consecutive in cyclic order around some vertex, or equivalently, around some face in G. The medial graph G^times may contain loops and parallel edges even if the original graph G is simple. The medial graphs of any plane graph G and its dual G^* are identical. Every vertex in every medial graph has degree 4, and every 4-regular plane graph is a medial graph. To avoid trivial boundary cases, we define the medial graph of an isolated vertex to be a circle, which we regard as an edge with no vertices"
+    },
+    {
+      "block_id": "s7_p1",
+      "heading": "Medial Graphs",
+      "major_heading": "Definitions",
+      "text": "Electrical transformations in any planar graph G correspond to local transformations in the medial graph G^times, which are almost identical to homotopy moves. Each leaf or loop reduction in G corresponds to to a arc10 homotopy move in G^times, and each Δ (Y) or Y (Δ) transformation in G corresponds to a arc33 homotopy move in G^times. A series-parallel reduction in G contracts an empty bigon in G^times to a single vertex. Extending our earlier notation, we call this transformation a arc21 move. We collectively refer to these transformations and their inverses as medial electrical moves"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "We say that a sequence of elementary moves (of either type) reduces a 4-regular plane graph γ if it transforms γ into a collection of disjoint simple closed curves. We define two functions describing the minimum number of moves required to reduce γ: start-of-itemize:. sep0pt. X(γ) is the minimum number of medial electrical moves required to reduce γ.. H(γ) is the minimum number of homotopy moves required to reduce γ. end-of-itemize The main result of this section is that the first function is always an upper bound on the second when γ is a generic closed curve. This result is already implicit in the work of Noble and Welsh [nw-kg-00], and most of our proofs closely follow theirs. We include the proofs here to make the inequalities explicit and to keep the paper self-contained"
+    },
+    {
+      "block_id": "s8_p1",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "Smoothing a 4-regular plane graph γ at a vertex x means replacing the intersection of γ with a small neighborhood of x with two disjoint simple paths, so that the result is another 4-regular plane graph. (There are two possible smoothings at each vertex; see Figure. A smoothing of γ is any graph obtained by smoothing zero or more vertices of γ, and a proper smoothing of γ is any smoothing other than gamma itself. For any plane graph G, the (proper) smoothings of the medial graph G^times are precisely the medial graphs of (proper) minors of G"
+    },
+    {
+      "block_id": "s8_p2",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "The next lemma follows from close reading of proofs by Truemper [Lemma 4, t-drpg-89] and several others [g-dtaa-91, nt-aafts-96, acgp-frpwg-00, nw-kg-00] that every minor of a ΔY-reducible graph is also ΔY-reducible. Our proof most closely resembles an argument of Gitler [Lemma 2.3.3, g-dtaa-91], but restated in terms of medial electrical moves"
+    },
+    {
+      "block_id": "s8_p3",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-lemma: X( γ ) < X(γ) for every connected proper smoothing γ of every connected 4-regular plane graph γ. end-of-lemma"
+    },
+    {
+      "block_id": "s8_p4",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-proof: Let γ be a connected 4-regular plane graph, and let γ be a connected proper smoothing of γ. If γ is already simple, the lemma is vacuously true. Otherwise, the proof proceeds by induction on X(γ). We first consider the special case where γ is obtained from γ by smoothing a single vertex x. Let γ' be the result of the first medial electrical move in the minimum-length sequence that reduces γ. We immediately have X(γ) = Χ(γ')+1. There are two nontrivial cases to consider. First, suppose the move from γ to γ' does not involve the smoothed vertex x. Then we can apply the same move to γ to obtain a new graph γ '; the same graph can also be obtained from γ' by smoothing x. We immediately have X( γ ) le X( γ ') + 1, and the inductive hypothesis implies X( γ ') < X(γ'). Now suppose the first move in Σ does involve x. In this case, we can apply at most one medial electrical move to γ to obtain a (possibly trivial) smoothing γ ' of γ'. There are eight subcases to consider, shown in Figure. One subcase for the arc01 move is impossible, because γ is connected. In the remaining arc01 subcase and one arc21 subcase, the curves γ, γ ' and γ' are all isomorphic, which implies X( γ ) = X( γ ') = X(γ') = X(γ)-1. In all remaining subcases, γ ' is a connected proper smoothing of γ', so the inductive hypothesis implies X( γ ) ≤ X( γ ')+1 < X(γ')+1 = X(γ). Finally, we consider the more general case where γ is obtained from γ by smoothing more than one vertex. Let γ be any intermediate curve, obtained from γ by smoothing just one of the vertices that were smoothed to obtain γ. Our earlier argument implies that X( γ ) < X(γ). Thus, the inductive hypothesis implies X( γ ) < X( γ ), which completes the proof. end-of-proof"
+    },
+    {
+      "block_id": "s8_p5",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-lemma: For every connected 4-regular plane graph γ, there is a minimum-length sequence of medial electrical moves that reduces γ and that does not contain arc01 or arc12 moves. end-of-lemma"
+    },
+    {
+      "block_id": "s8_p6",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-proof: Our proof follows an argument of Noble and Welsh [Lemma 3.2, nw-kg-00]. Consider a minimum-length sequence of medial electrical moves that reduces an arbitrary connected 4 -regular planar graph γ. For any integer i ≥ 0, let γ_i denote the result of the first i moves in this sequence; in particular, γ_0 = γ and γ_(X(γ)) is a set of disjoint circles. Minimality of the reduction sequence implies that X(γ_i) = X(γ)-i for all i. Now let i be an arbitrary index such that γ_i has one more vertex than γ_(i-1). Then γ_(i-1) is a connected proper smoothing of γ_i, so Lemma implies that X(γ_(i-1)) < X(γ_i), giving us a contradiction. end-of-proof"
+    },
+    {
+      "block_id": "s8_p7",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-theorem: X(γ) ≥ H(γ) for every closed curve γ. end-of-theorem"
+    },
+    {
+      "block_id": "s8_p8",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-proof: The proof proceeds by induction on X(γ), following an argument of Noble and Welsh [Proposition 3.3, nw-kg-00] Let γ be a closed curve. If X(γ) = 0, then γ is already simple, so H(γ) = 0. Otherwise, let Σ be a minimum-length sequence of medial electrical moves that reduces γ to a circle. Lemma implies that we can assume that the first move in Σ is neither arc01 nor arc12. If the first move is 1arcto 0 or 3arcto 3, the theorem immediately follows by induction. The only interesting first move is 2arcto 1. Let γ' be the result of this arc21 move, and let γ be the result of the corresponding arc20 homotopy move. The minimality of Σ implies that X(γ) = X(γ')+1, and we trivially have H(γ) le H( γ ) + 1. The curve γ is a connected proper smoothing of γ', so the Lemma implies X( γ ) < X(γ') < X(γ). Finally, the inductive hypothesis implies that X( γ ) ge H( γ ), which completes the proof. end-of-proof"
+    },
+    {
+      "block_id": "s8_p9",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "Finally, Theorem and Lemma immediately imply the following useful corollary"
+    },
+    {
+      "block_id": "s8_p10",
+      "heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "major_heading": "Electrical Reduction is No Shorter than Homotopy Reduction",
+      "text": "start-of-corollary: X(γ) ≥ H( γ ) for every connected 4-regular plane graph γ and every unicursal smoothing γ of γ. end-of-corollary"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "To complete our lower bound proof, we consider an invariant of closed curves in the plane introduced by Arnold [a-tipcc-94, a-pctip-94] and Aicardi [a-tc-94] called defect. (Some readers may be more comfortable thinking of defect as a potential function for 4-regular plane graphs. ) There are several equivalent definitions and closed-form formulas for defect and other closely related curve invariants [a-tipcc-94, a-pctip-94, v-gicsc-95, s-efspc-95, lw-igopc-96, cd-efagci-97, l-nicsp-97, ao-gasi-99, p-icfgd-98, p-nwfpc-99]; the most useful formula for our purposes is due to Polyak [p-icfgd-98]"
+    },
+    {
+      "block_id": "s10_p1",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "Two vertices xne y of a closed curve γ are interleaved if they alternate in cyclic order along γ, either as x, y, x, y or as y, x, y, x; we write xbetween y to denote that vertices x and y are interleaved. Polyak's formula for defect is δ(γ) coloneqq -2 sum_(xbetween y) sgn(x)cdotsgn(y), where the sum is taken over all interleaved pairs of vertices. The factor of -2 is a historical artifact, which we retain only to be consistent with Arnold's original definitions [a-tipcc-94, a-pctip-94]. See Figure for an example. Even though the signs of individual vertices depend on the basepoint and orientation of the curve, the defect of a curve is independent of those choices. Moreover, the defect of any curve is preserved by any homeomorphism from the plane to itself, or even from the sphere to itself, including reflection"
+    },
+    {
+      "block_id": "s10_p2",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "#1 1 |c Green #1 #1 1 |c Red #1"
+    },
+    {
+      "block_id": "s10_p3",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "Trivially, every simple closed curve has defect zero. Straightforward case analysis [p-icfgd-98] implies that any single homotopy move changes the defect of a curve by at most 2: start-of-itemize:. sep0pt. A arc10 move leaves the defect unchanged.. A arc20 move decreases the defect by 2 if the two disappearing vertices are interleaved, and leaves the defect unchanged otherwise.. A arc33 move increases the defect by 2 if the three vertices before the move contain an even number of interleaved pairs, and decreases the defect by 2 otherwise. end-of-itemize The various cases are illustrated in Figure. Theorem now has the following immediate corollary:"
+    },
+    {
+      "block_id": "s10_p4",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: X(γ) ≥ H(γ) ≥ δ(γ) /2 for every closed curve γ. end-of-corollary"
+    },
+    {
+      "block_id": "s10_p5",
+      "heading": "Defect",
+      "major_heading": "Lower Bounds",
+      "text": "Arnold [a-tipcc-94, a-pctip-94] originally defined two related curve invariants St (“strangeness”) and J^+ by their changes under arc20 and arc33 homotopy moves, without giving explicit formulas. Specifically, arc33 moves change strangeness by pm 1 as shown in Figure but do not affect J^+; arc20 moves change J^+ by either 0 or 2 as shown in Figure but do not affect strangeness. Aicardi [a-tc-94] later proved that the linear combination 2 St + J^+ is unchanged under arc10 moves; Arnold dubbed this linear combination “defect”. Shumakovich [s-efspc-95, s-efspc-96] proved that the strangeness of an n -vertex planar curve lies between - n(n-1)/6 and n(n+1)/2, and that these bounds are exact. (Nowik's Ω(n^2) lower bound for regular homotopy moves [n-cpsc-09] follows immediately from Shumakovich's construction. ) However, the curves with extremal strangeness actually have defect zero"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "Following Hayashi and Even-Zohar, we now describe an infinite family of curves with absolute defect Ω(n^(3/2)). For any relatively prime positive integers p and q, let T(p, q) denote the curve with the following parametrization, where θ runs from 0 to 2π: T(p, q)(θ) = big((cos (qθ)+2) cos(pθ), (cos (qθ)+2) sin(pθ)big). The curve T(p, q) winds around the origin p times, oscillating q times between two concentric circles and crossing itself exactly (p-1)q times. We call these curves flat torus knots. The flat torus knot T(p, q) is also the medial graph of the p/2 times q cylindrical grid, with an additional central vertex if p is odd. For any ple q/2, the flat torus knot T(p, q) is isomorphic to the regular star polygon with Schläfli symbol q/p"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "Hayashi proved that for any integer q, the flat torus knot T(q+1, q) has defect -2 q (3). Even-Zohar used a star-polygon representation of the curve T(p, 2p+1) as the basis for a universal model of random knots; using our terminology and notation, they proved that δ(T(p, 2p+1)) = 4 p+1 (3) for any integer p. Our results in this section simplify and generalize both of these results"
+    },
+    {
+      "block_id": "s11_p2",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "For purposes of illustration, we cut each torus knot T(p, q) open into a “flat braid” consisting of p x -monotone paths, which we call strands, between two fixed diagonal lines. All strands are directed from left to right"
+    },
+    {
+      "block_id": "s11_p3",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-lemma: δ(T(p, ap+1)) = 2a p+1 (3) for all positive integers a and p. end-of-lemma"
+    },
+    {
+      "block_id": "s11_p4",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: The curve T(p, 1) can be reduced using only arc10 moves, so its defect is zero. For any integer age 0, we can reduce T(p, ap-1) to T(p, ((a-1))p-1) by straightening the leftmost block of p(p-1) crossings in the flat braid representation, one strand at a time. Within this block, each pair of strands in the flat braid intersect twice. Straightening the bottom strand of this block requires the following p (2) moves, as shown in Figure. start-of-itemize:. sep0pt. p-1 (2) arc33 moves pull the bottom strand downward over one intersection point of every other pair of strands. Just before each arc33 move, every pair of the three relevant vertices is interleaved, so each move decreases the defect by 2.. (p-1) arc20 moves eliminate a pair of intersection points between the bottom strand and every other strand. Each of these moves also decreases the defect by 2. end-of-itemize Altogether, straightening one strand decreases the defect by smash(2 p (2)). Proceeding similarly with the other strands, we conclude that δ(T(p, ap+1)) = δ(T(p, ((a-1)p+1))) + 2 p+1 (3). The lemma follows immediately by induction. end-of-proof"
+    },
+    {
+      "block_id": "s11_p5",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-lemma: δ(T(aq+1, q)) = -2a q (3) for all positive integers a and q. end-of-lemma"
+    },
+    {
+      "block_id": "s11_p6",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: The curve T(1, q) is simple, so its defect is trivially zero. For any positive integer a, we can transform T(aq+1, q) into T((a-1)q+1, q) by incrementally removing the innermost q loops. We can remove the first loop using q (2) homotopy moves, as shown in Figure. (The first transition in Figure just reconnects the top left and top right endpoints of the flat braid. ) start-of-itemize:. q-1 (2) arc33 moves pull the left side of the loop to the right, over the crossings inside the loop. Just before each arc33 move, the three relevant vertices contain two interleaved pairs, so each move increases the defect by 2.. q-1 arc20 moves pull the loop over q-1 strands. The strands involved in each move are oriented in opposite directions, so these moves leave the defect unchanged.. Finally, we can remove the loop with a single arc10 move, which does not change the defect. end-of-itemize Altogether, removing one loop increases the defect by smash(2 q-1 (2)). Proceeding similarly with the other loops, we conclude that δ(T(aq+1, q)) = δ(T((a-1)q+1, q)) - 2 q (3). The lemma follows immediately by induction. end-of-proof"
+    },
+    {
+      "block_id": "s11_p7",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For every positive integer n, there are closed curves with n vertices whose defects are n^(3/2)/3 - O(n) and -n^(3/2)/3 + O(n). end-of-corollary"
+    },
+    {
+      "block_id": "s11_p8",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: The lower bound follows from the previous lemmas by setting a=1. If n is a prefect square, then the flat torus knot T( n +1, n ) has n vertices and defect smash(-2 n (3)). If n is not a perfect square, we can achieve defect (-2 n (3)) by applying arc01 moves to the curve T( n +1, n ). Similarly, we obtain an n -vertex curve with defect smash(2 n+1 +1 (3)) by adding loops to the curve T( n+1, n+1 +1). end-of-proof"
+    },
+    {
+      "block_id": "s11_p9",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "Corollary now immediately implies the following lower bounds:"
+    },
+    {
+      "block_id": "s11_p10",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For every positive integer n, there is a closed curve with n vertices that requires at least n^(3/2)/6 - O(n) homotopy moves to reduce to a simple closed curve. end-of-corollary"
+    },
+    {
+      "block_id": "s11_p11",
+      "heading": "Flat Torus Knots",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For every positive integer n, there is a plane graph with n edges that requires at least n^(3/2)/6 - O(n) electrical transformations to reduce to a single vertex. end-of-corollary"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "Finally, we derive tight lower bounds on the number of electrical transformations required to reduce arbitrary rectangular or cylindrical grids. In particular, we show that Truemper's O(p^3) upper bound for the ptimes p square grid [t-drpg-89, t-md-92] and Nakahara and Takahashi's O(min pq^2, p^2q ) upper bound for the ptimes q cylindrical grid [nt-aafts-96] are both tight up to constant factors"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For all positive integers p and q, the ptimes q cylindrical grid requires Ω(min p^2 q, p q^2 ) electrical transformations to reduce to a single vertex. end-of-corollary"
+    },
+    {
+      "block_id": "s12_p2",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: Let G denote the ptimes q cylindrical grid; we need to prove that X(G^times) = Ω(min p^2 q, p q^2 ). First suppose 2p < q. Let γ denote the flat torus knot T(2p, 2ap+1), where a = (q-1)/2p. This curve is a connected smoothing of G^times, so Lemma implies X(G^times) ge X(H^times). Lemma gives us δ(γ) = 2a 2p+1 (3) = Ω(ap^3) = Ω(p^2q). The lower bound X(H^times) = Ω(p^2q) now follows by Corollary. The case q le 2p is similar. Let γ denote the flat torus knot T(2aq+1, q), where a = p/q. This curve is a connected smoothing of G^times, so Lemma implies X(G^times) ge X(H^times). Lemma gives us strut δ(γ) = 2a q (3) = Ω(aq^3) = Ω(pq^2). The lower bound X(H^times) = Ω(pq^2) now follows by Corollary. end-of-proof"
+    },
+    {
+      "block_id": "s12_p3",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For all positive integers p and q, the ptimes q rectangular grid requires Ω(min p^2 q, p q^2 ) electrical transformations to reduce to a single vertex. end-of-corollary"
+    },
+    {
+      "block_id": "s12_p4",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: The p/3 times q/3 cylindrical grid is a minor of the ptimes q rectangular grid, so this lower bound follows from Corollary and Lemma. end-of-proof"
+    },
+    {
+      "block_id": "s12_p5",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-corollary: For every positive integer t, every planar graph with treewidth t requires Ω(t^3) electrical transformations to reduce to a single vertex. end-of-corollary"
+    },
+    {
+      "block_id": "s12_p6",
+      "heading": "Tight Bounds for Grids",
+      "major_heading": "Lower Bounds",
+      "text": "start-of-proof: Every planar graph with treewidth t contains an Ω(t)times Ω(t) grid minor [rst-qepg-94], so this lower bound also follows from Corollary and Lemma. end-of-proof"
+    },
+    {
+      "block_id": "s13_p0",
+      "heading": "Defect Upper Bound",
+      "major_heading": "Defect Upper Bound",
+      "text": "In this section, we prove a matching O(n^(3/2)) upper bound on the absolute value of the defect, using a recursive inclusion-exclusion argument. Throughout this section, let γ be an arbitrary non-simple closed curve, and let n be the number of vertices of γ"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "First we derive an upper bound in terms of the diameter of the dual graph γ^*. (If γ is the medial graph of a plane graph G, then γ^* is the vertex-face incidence graph of G, otherwise known as the radial graph of G. ) The upper bound δ(γ) = O(ncdotDiam(γ^*)) follows from Corollary and the electrical reduction algorithm of Feo and Provan [fp-dtert-93]; here we give a simpler direct proof"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "We parametrize γ as a function γcolon [0,1]toReal^2, where γ(0) = γ(1) is an arbitrarily chosen basepoint. For each vertex x of γ, let Loopx denote the closed subpath of γ from the first occurrence of x to the second. More formally, if x = γ(u) = γ(v) where 0 < u < v < 1, then Loopx is the closed curve defined by setting Loopx(t) coloneqq γ((1-t)u + tv) for all 0 ≤ t ≤ 1"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-lemma: For every vertex x, we have sum_(ybetween x) sgn(y) = 2Wind(Loopx, x) - 2Wind(Loopx, γ(0)) - sgn(x). end-of-lemma"
+    },
+    {
+      "block_id": "s14_p3",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: Our proof follows an argument of Titus [Theorem 1, t-tncsa-60]. Fix a vertex x = γ(u) = γ(v), where 0<u<v<1. Let Beforex denote the subpath of γ from γ(0) to γ(u-ε), and let Afterx denote the subpath of γ from γ(v+ε) to γ(1) = γ(0), for some sufficiently small ε>0. Specifically, we choose ε such that there are no vertices γ(t) where u-ε≤t<u or v<t≤v+ε. (See Figure. ) A vertex y interleaves with x if and only if y is an intersection point of Loopx with either Beforex or Afterx, so sum_(ybetween x) sgn(y) = sum_( y in Beforex cap Loopx between ) sgn(y) + sum_( y in Loopx cap Afterx between ) sgn(y). Now suppose we move a point p continuously along the path α_x, starting at the basepoint γ(0). The winding number Wind(Loopx, p) changes by 1 each time this point Loopx. Each such crossing happens at a vertex of γ that lies on both Beforex and Loopx; if this vertex is positive, Wind(Loopx, p) increases by 1, and if this vertex is negative, Wind(Loopx, p) decreases by 1. It follows that sum_( y in Beforex cap Loopx between ) sgn(y) = Wind(Loopx, γ(u-ε)) - Wind(Loopx, γ(0)). Symmetrically, if we move a point p backward along Afterx from the basepoint, the winding number Wind(Loopx, p) increases (resp. decreases) by 1 whenever γ(t) passes through a positive (resp. negative) vertex in Afterx cap Loopx; see the red path in Figure. Thus, sum_( y in Afterx cap Loopx between ) sgn(y) = Wind(Loopx, γ(v+ε)) - Wind(Loopx, γ(0)). Finally, our sign convention for vertices implies Wind(Loopx, γ(u-ε)) = Wind(Loopx, γ(v+ε)) = Wind(Loopx, x) - sgn(x)/2, which completes the proof. end-of-proof"
+    },
+    {
+      "block_id": "s14_p4",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-lemma: For any closed curve γ, we have δ(γ) ≤ 2ncdotDiam(γ^*) + n. end-of-lemma"
+    },
+    {
+      "block_id": "s14_p5",
+      "heading": "Winding Numbers and Diameter",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: Polyak's defect formula can be rewritten as δ(γ) = -sum_x sgn(x) left(sum_(ybetween x) sgn(y) right). (This sum actually considers every pair of interleaved vertices twice, which is why the factor 2 is omitted. ) Assume without loss of generality that the basepoint γ(0) lies on the outer face of γ, so that Wind(Loopx, γ(0)) = 0 for every vertex x. Then the previous lemma implies δ(γ) = sum_x sgn(x) left(sgn(x) - 2Wind(Loopx, x) strut right) = n - 2sum_x sgn(x) cdot Wind(Loopx, x), and therefore δ(γ) le n + 2sum_x Wind(Loopx, x). We easily observe that Wind(Loopx, x) le Diam(Loopx^*) ≤ Diam(γ^*) for every vertex x; the second inequality follows from the fact that no path crosses Loopx more times than it crosses γ. The lemma now follows immediately. end-of-proof"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "Let σ be an arbitrary simple closed curve that intersects γ only transversely and away from its vertices. Let s be the number of intersection points between γ and σ; the Jordan curve theorem implies that s must be even. Let z_0, z_1, dots, z_(s-1) be the points in σcap γ in order along γ ( not in order along σ ). These intersection points decompose γ into a sequence of s subpaths γ_1, γ_2, dots, γ_s; specifically, γ_i is the subpath of γ from z_(i-1) to z_(ibmod s), for each index i. Without loss of generality, every odd-indexed path γ_(2i+1) lies outside σ, and every even-indexed path γ_(2i) lies inside σ"
+    },
+    {
+      "block_id": "s15_p1",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "Let γSimpBelow σ denote a regular curve obtained from γ by continuously deforming all subpaths γ_i outside σ, keeping their endpoints fixed and never moving across σ, to minimize the number of intersections. (There may be several curves that satisfy the minimum-intersection condition; choose one arbitrarily. ) Similarly, let γSimpAbove σ denote any regular curve obtained by continuously deforming the subpaths γ_i inside σ to minimize intersections. Finally, let γ Simplify σ denote the curve obtained by deforming all subpaths γ_i to minimize intersections; in other words, γ Simplify σ coloneqq (γSimpAbove σ)SimpBelow σ = (γSimpBelow σ)SimpAbove σ. See Figure"
+    },
+    {
+      "block_id": "s15_p2",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "To simplify notation, we define δ(x, y) coloneqq [xbetween y] cdot sgn(x)cdotsgn(y) for any two vertices x and y, where [xbetween y] = 1 if x and y are interleaved and [xbetween y] = 0 otherwise. Then we can define the defect of γ as δ(γ) = -2 sum_(x, y) δ(x, y)"
+    },
+    {
+      "block_id": "s15_p3",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "Every vertex of γ lies at the intersection of two (not necessarily distinct) subpaths. For any index i, let X(i, i) denote the set of self-intersection points of γ_i, and for any indices i<j, let X(i, j) be the set of points where γ_i intersects γ_j"
+    },
+    {
+      "block_id": "s15_p4",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "If two vertices x in X(i, k) and y in X(j, l) are interleaved, then we must have i ≤ j ≤ k ≤ l. Thus, we can express the defect of γ in terms of crossings between subpaths γ_i as follows. δ(γ) = -2 sum_(i ≤ j ≤ k ≤ l) sum_(xin X(i, k)) sum_(yin X(j, l)) δ(x, y)"
+    },
+    {
+      "block_id": "s15_p5",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "On the other hand, if i<j<k<l, then every vertex x in γ_i cap γ_k is interleaved with every vertex of y in γ_j cap γ_l. Thus, we can express the contribution to the defect from pairs of vertices on four distinct subpaths as follows: EMPH(δ^(#)(γ, σ)) coloneqq -2 sum_(i < j < k < l) sum_(xin X(i, k)) sum_(yin X(j, l)) sgn(x)cdotsgn(y) We can express this function more succinctly as δ^(#)(γ, σ) = -2 sum_(i<j<k<l) δ(i, k)cdot δ(j, l) by defining δ(i, j) coloneqq sum_(xin X(i, j)) sgn(x) for all indices i < j"
+    },
+    {
+      "block_id": "s15_p6",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "The following lemma implies that continuously deforming the subpaths γ_i without crossing σ leaves the value δ^(#)(γ, σ) unchanged, even though such a deformation may change the defect δ(γ)"
+    },
+    {
+      "block_id": "s15_p7",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-lemma: The value δ(i, j) depends only on the parity of i+j and the cyclic order of the endpoints of γ_i and γ_j around σ. end-of-lemma"
+    },
+    {
+      "block_id": "s15_p8",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: There are only three cases to consider. If i+j is odd, then γ_i and γ_j lie on opposite sides of σ and therefore do not intersect, so δ(i, j)=0. For all other cases, i+j is even, which implies without loss of generality that j ≥ i+2. Suppose the endpoints of γ_i and γ_j do not alternate in cyclic order around σ, or equivalently, that the corresponding subpaths of γSimplify σ are disjoint. The Jordan curve theorem implies that there must be equal numbers of positive and negative intersections between γ_i and γ_j, and therefore δ(i, j) = 0. Finally, suppose the endpoints of γ_i and γ_j alternate in cyclic order around σ, or equivalently, that the corresponding subpaths of γSimplify σ intersect exactly once. Then δ(i, j) = 1 if the endpoints z_i, z_j, z_(i-1), z_(j-1) appear in clockwise order around σ and δ(i, j) = -1 otherwise. end-of-proof"
+    },
+    {
+      "block_id": "s15_p9",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "Now consider an interleaved pair of vertices xin X(i, k) and yin X(j, l) where at least two of the indices i, j, k, l are equal. Trivially, i and k have the same parity, and j and l also have the same parity. If i=j or i=l or j=k or j=l, then all four indices have the same parity. If i=k, then we must also have i=j or i=l (or both), so again, all four indices have the same parity. We conclude that x and y are either both inside σ or both outside σ"
+    },
+    {
+      "block_id": "s15_p10",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-lemma: For any regular closed curve γ and any simple closed curve σ that intersects γ only transversely and away from its vertices, we have δ(γ) = δ(γSimpAbove σ) + δ(γSimpBelow σ) - δ(γ Simplify σ). end-of-lemma"
+    },
+    {
+      "block_id": "s15_p11",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: Let us write δ(γ) = δ^(#)(γ, σ) + δ^(uparrow)(γ, σ) + δ^(downarrow)(γ, σ), where start-of-itemize:. sep0pt. δ^(#)(γ, σ) considers pairs of vertices on four different subpaths γ_i, as above,. δ^(uparrow)(γ, σ) considers pairs of vertices outside σ on at most three different subpaths γ_i, and. δ^(downarrow)(γ, σ) considers pairs of vertices inside σ on at most three different subpaths γ_i. end-of-itemize Lemma implies that δ^(#)(γ, σ) = δ^(#)(γSimpAbove σ, σ) = δ^(#)(γSimpBelow σ, σ) = δ^(#)(γ Simplify σ, σ). The definitions of γSimpAbove σ and γSimpBelow σ immediately imply the following: δ^(uparrow)(γSimpAbove σ, σ) & = δ^(uparrow)(γ Simplify σ, σ) & δ^(downarrow)(γSimpAbove σ, σ) &= δ^(downarrow)(γ, σ) δ^(uparrow)(γSimpBelow σ, σ) & = δ^(uparrow)(γ, σ) & δ^(downarrow)(γSimpBelow σ, σ) &= δ^(downarrow)(γ Simplify σ, σ) The lemma now follows from straightforward substitution. end-of-proof"
+    },
+    {
+      "block_id": "s15_p12",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-lemma: For any closed curve γ and any simple closed curve σ that intersects γ only transversely and away from its vertices, we have δ(γSimplify σ) = O( γcap σ ^3). end-of-lemma"
+    },
+    {
+      "block_id": "s15_p13",
+      "heading": "Inclusion-Exclusion",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: Fix an arbitrary reference point z in σsetminus γ. For any point p in the plane, there is a path from p to z that crosses γSimplify σ at most O(s) times. Specifically, move from p to the nearest point on γSimplify σ, then follow γSimplify σ to σ, and finally follow σ to the reference point z. It follows that Diam((γSimplify σ)^*) = O(s). The curve γSimplify σ has at most smash(2 s/2 (2)) = O(s^2) vertices. The bound δ(γSimplify σ) = O(s^3) now immediately follows from Lemma. end-of-proof"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Divide and Conquer",
+      "major_heading": "Defect Upper Bound",
+      "text": "We call a simple closed curve σ useful for γ if σ intersects γ, but only transversely and away from the vertices of γ, and there are at least γcap σ ^2 vertices of γ on both sides of σ. In particular, a simple closed curve that is disjoint from γ is not useful. start-of-lemma: If no simple closed curve is useful for γ, then Diam(γ^*) = O( n ). end-of-lemma"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Divide and Conquer",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: To simplify notation, let D = Diam(γ^*). Let a and z be any two points in Real^2setminus γ such that any path from a to z crosses γ at least D times. We construct a nested sequence σ_1, σ_2, cdots, σ_D of disjoint simple closed curves as follows. For each integer j, let R_j denote the set of all points reachable from a by a path that crosses γ less than j times, and let R _j be an arbitrarily small open neighborhood of the closure of R_j cup R _(j-1). For all 1le jle D, the boundary of R _j is the disjoint union of simple closed curves, each of which intersect γ transversely away from its vertices (or not at all). Let σ_j be the unique boundary component of R _j that separates a and z. See Figure. For each index j, let A_j denote the component of Real^2setminus R _j that contains the point z; let n_j denote the number of vertices of γ that lie in A_j; and let s_j = γ cap σ_j. For notational convenience, we define A_0 = varnothing and thus n_0=0. Finally, let L be the largest index such that n_L ≤ n/2; without loss of generality, we can assume L ≥ D/2. To prove the lemma, it suffices to show that if no curve σ_j with j ≤ L is useful, then L = O( n ). If an edge of γ crosses σ_j, then at least one of its endpoints lies in the annulus A_jsetminus A_(j-1). Moreover, if the edge crosses σ_j twice, then both endpoints lie in A_jsetminus A_(j-1). Exhaustive case analysis implies that n_j ≥ n_(j-1) + s_j/2, and therefore by induction n_j ge 1 (2) sum_(i < j) s_i, for every index j>1. Trivially, n_1 ge 1 unless γ is simple, and s_1ge 2 unless D = 1. Now suppose no curve σ_j with 1≤ j ≤ L is useful. Then we must have s_j^2 > n_j and therefore s_j^2 > 1 (2) sum_(i < j) s_i for all j. An easy induction argument implies that s_j > j/5, and therefore n (2) ≥ n_L > 1 (2) sum_(i < L) i (5) = 1 (10) L (2). We conclude that L le 10n. end-of-proof"
+    },
+    {
+      "block_id": "s16_p2",
+      "heading": "Divide and Conquer",
+      "major_heading": "Defect Upper Bound",
+      "text": "We are now finally ready to prove our main upper bound"
+    },
+    {
+      "block_id": "s16_p3",
+      "heading": "Divide and Conquer",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-theorem: δ(γ) = O(n^(3/2)) for every generic closed curve γ with n vertices. end-of-theorem"
+    },
+    {
+      "block_id": "s16_p4",
+      "heading": "Divide and Conquer",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-proof: Let Δ(n) denote the maximum absolute defect of any closed curve with n vertices. We prove by induction on n that Δ(n) ≤ C cdot n^(3/2), for some absolute constant C to be determined. (The base case Δ(1) = 2 implies that C ≥ 2. ) Let γ be an arbitrary closed curve with n vertices. Let σ be a simple closed curve that is useful for γ. (If there are no useful curves, then Lemmas and imply that δ(γ) = O(n^(3/2)). ) Let s = γcap σ. Lemmas and imply δ(γ) = δ(γSimpAbove σ) + δ(γSimpBelow σ) + O(s^3). Suppose m vertices of γ lie in the interior of σ; without loss of generality, we can assume m ≤ n/2. The curve γSimpBelow σ has at most m + s/2 (2) < m + s^2/8 vertices; symmetrically, the curve γSimpAbove σ has at most n - m + s^2/8 vertices. It follows that δ(γ) ≤ Δ(m + s^2/8) + Δ(n - m + s^2/8) + ccdot s^3 for some constant c. Because σ is useful, we have m ≥ s^2, so both arguments of Δ on the right side of this inequality are smaller than n. Thus, the inductive hypothesis implies δ(γ) ≤ Cleft(m + s^2/8right)^(3/2) + Cleft(n - m + s^2/8right)^(3/2) + ccdot s^3. For any fixed s, the convexity of the function xmapsto x^(3/2) implies that right side of this inequality is maximized when m = s^2, so δ(γ) ≤ Cleft(9s^2/8 right)^(3/2) + Cleft(n - 7s^2/8right)^(3/2) + ccdot s^3. The inequality (x - y)^(3/2) ≤ (x-y)x^(1/2) = x^(3/2) - yx^(1/2) now implies δ(γ) ≤ Cn^(3/2) + Cleft(9s^2/8 right)^(3/2) - Cleft(7s^2/8right)n^(1/2) + ccdot s^3. Finally, because σ is useful, we must have n ge 2 cdot s, which implies Abs(δ(γ)) & ≤ Cn^(3/2) + C left( left(9/8 right)^(3/2) - 7sqrt(2)/8 right) s^3 + ccdot s^3 & = Cn^(3/2) - left(sqrt(2)C/32 - cright) s^3. Provided C/c > 16 2, then δ(γ) ≤ Cn^(3/2), as required. end-of-proof"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "Finally, we describe some interesting implications of our results on the expected behavior of random knots, following earlier results of Lin and Wang [lw-igopc-96], Polyak [p-icfgd-98] and Even-Zohar. We refer the reader to Burde and Zieschang [bz-k-03] or Kauffman [k-k-87] for further background on knot theory, and to Chmutov for a detailed overview of finite-type knot invariants; we include only a few elementary definitions to keep the paper self-contained"
+    },
+    {
+      "block_id": "s17_p1",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "A knot is (the image of) a continuous injective map from the circle into Real^3. Two knots are considered equivalent (more formally, ambient isotopic ) if there is a continuous deformation of Real^3 that deforms one knot into the other. Knots are often represented by knot diagrams, which are 4-regular plane graphs defined by a generic projection of the knot onto the plane, with an annotation at each vertex indicating which branch of the knot is “over” or “under” the other. Call any crossing x in a knot diagram ascending if the first branch through x after the basepoint passes over the second, and descending otherwise"
+    },
+    {
+      "block_id": "s17_p2",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "The Casson invariant c_2 is the simplest finite-type knot invariant; it is also equal to the second coefficient of the Conway polynomial [bl-kpvi-93, pv-cki-01]. Polyak and Viro [pv-gdfvi-94, pv-cki-01] derived the following combinatorial formula for the Casson invariant of a knot diagram κ: c_2(κ) = - sum_( descending x ) sum_( ascending y ) [xbetween y] cdot sgn(x) cdot sgn(y). Like defect, the value of c_2(κ) is independent of the choice of basepoint or orientation of the underlying curve γ; moreover, if the knots represented by diagrams κ and κ' are equivalent, then c_2(κ) = c_2(κ')"
+    },
+    {
+      "block_id": "s17_p3",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "Polyak [Theorem 7, p-icfgd-98] observed that if a knot diagram κ is obtained from an arbitrary closed curve γ by independently resolving each crossing as ascending or descending with equal probability, then one can relate the expectation of Casson invariant c_2(κ) and the defect of γ by E[c_2(κ)] = δ(γ)/8. The same observation is implicit in earlier results of Lin and Wang [lw-igopc-96]; and (for specific curves) in the later results of Even-Zohar"
+    },
+    {
+      "block_id": "s17_p4",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "Even-Zohar studied the distribution of the Casson invariant for two models of random knots, the Petaluma model of Adams, which uses singular one-vertex diagrams consisting of 2p+1 disjoint non-nested loops for some integer p, and the star model, which uses (a polygonal version of) the flat torus knot T(p, 2p+1) for some integer p. Even-Zohar prove that the expected value of the Casson invariant is p (2)/12 in the Petaluma model and p+1 (3)/2 approx 0. 03 n^(3/2) in the star model"
+    },
+    {
+      "block_id": "s17_p5",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "Our defect analysis implies an upper bound on the Casson invariant for knot diagrams generated from any family of generic closed curves"
+    },
+    {
+      "block_id": "s17_p6",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "start-of-corollary: Let γ be any generic closed curve with n vertices, and let κ be a knot diagram obtained by resolving each vertex of γ independently and uniformly at random. Then E[c_2(κ)]strut = O(n^(3/2)). end-of-corollary"
+    },
+    {
+      "block_id": "s17_p7",
+      "heading": "Implications for Random Knots",
+      "major_heading": "Defect Upper Bound",
+      "text": "Our results also imply that the distribution of the Casson invariant depends strongly on the precise parameters of the random model; even the sign and growth rate of E[c_2] depend on which curves are used to generate knot diagrams. For example: start-of-itemize:. For random diagrams over the flat torus knot T((p+1), p), we have E[c_2(κ)] = - p (3)/4 = -n^(3/2)/24 + Θ(n).. For random diagrams over the connected sum T(p, p+1) mathbin# T(p+1, p), we have E[c_2(κ)] = left( p+1 (3)- p (3)right)/4 = p (2)/4 = n/16 - Θ( n ).. For random diagrams over the connected sum T(p-1, p) mathbin# T(p+1, p), we have E[c_2(κ)] = 0. end-of-itemize We hope to expand on these initial observations in a future paper"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "Like Gitler [g-dtaa-91], Feo and Provan [fp-dtert-93], and Archdeacon, we conjecture that any n -vertex planar graph G can be reduced to a single vertex using only O(n^(3/2)) electrical transformations. Our divide-and-proof of Theorem suggests a natural divide-and-conquer strategy: Find a useful vertex-cut (a cycle in the radial graph), reduce the graph on one side of the cut treating the cut vertices as terminals, and then recursively reduce the remaining graph. If the reduction on one side of the cut can be carried out in O(nD) steps, perhaps using a variant of Feo and Provan's algorithm [fp-dtert-93], then the algorithm would reduce G in O(n^(3/2)) time. Unfortunately, the fastest algorithms currently known for reducing planar graphs with arbitrarily many terminals on the outer face otherwise known as circular planar graphs [cgv-rep-96, cim-cpgrn-98, cm-ipen-00, k-lpggs-11] only imply an overall running time of O(n^2)"
+    },
+    {
+      "block_id": "s18_p1",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "Because our lower bound applies to any planar graph with treewidth Omega( n ), it is natural to conjecture that every planar graph with treewidth t can be electrically reduced in at most O(nt) steps. Of course such an algorithm would immediately imply an O(n^(3/2)) -time algorithm for arbitrary planar graphs"
+    },
+    {
+      "block_id": "s18_p2",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "Another interesting open question is whether our Ω(n^(3/2)) lower bound can be extended to electrical transformations that ignore the planarity of the graph. Such an extension would imply that reducing K_5 - or K_(3, 3) -minor-free graphs would require Ω(n^(3/2)) steps in the worst case. As we mentioned in the introduction, our argument can be extended to allow non-facial loop reductions and non-facial parallel reductions; the difficulty lies entirely with non-facial Δ (Y) transformations"
+    },
+    {
+      "block_id": "s18_p3",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "There are also several natural open questions involving combinatorial homotopy. For example: How many homotopy moves are required in the worst case to transform an arbitrary n -vertex 4-regular plane graph into a collection of disjoint simple closed curves? Equivalently, how many moves are required to transform any generic immersion of circles into an embedding? Our Ω(n^(3/2)) lower bound for homotopy moves trivially extends to this more general problem; however, an O(n^(3/2)) -step electrical reduction algorithm would not immediately imply the corresponding upper bound for homotopy moves of arbitrary immersions, because of a subtlety in the definition of a planar embedding of disconnected graphs. In the homotopy problem, if the image of an immersion becomes disconnected, we must still keep track of how the various components are nested; on the other hand, in the electrical reduction problem, it is most natural to embed each component on its own sphere. If we insist on keeping everything embedded on the same plane, there are disconnected 4-regular plane graphs that cannot be reduced to disjoint circles by medial electrical moves; see Figure"
+    },
+    {
+      "block_id": "s18_p4",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "How many homotopy moves are required to connect two homotopic closed curves on a surface of higher genus? In particular, how many homotopy moves are required to transform a contractible closed curve into a simple closed curve? Polyak's formula for defect extends immediately to curves on arbitrary orientable surfaces, even though other invariants like winding number do not. There are curves on the torus with quadratic defect, but we have been unable to construct any such curve that is contractible. For the more general problem of transforming one arbitrary curve into another, we are not even aware of a polynomial upper bound!"
+    },
+    {
+      "block_id": "s18_p5",
+      "heading": "Open Problems",
+      "major_heading": "Open Problems",
+      "text": "Finally, our upper and lower bounds for worst-case defect differ by roughly a factor of 20. In light of the complexity of our upper bound argument, we expect that our lower bounds are closer to the correct answer. Are the flat torus knots T(q+1, q) and T(p, p+1) the curves with minimum and maximum defect for their number of vertices?"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Acknowledgements.",
+      "major_heading": "Open Problems",
+      "text": "We would like to thank Bojan Mohar and Nathan Dunfield for encouragement and helpful discussions"
+    }
+  ],
+  "load_seconds": 4.605535531998612
+}

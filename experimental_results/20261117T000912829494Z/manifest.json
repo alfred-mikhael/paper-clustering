@@ -1,0 +1,92 @@
+{
+  "run_id": "20261117T000912829494Z",
+  "prompt_version": "connection-context-v1",
+  "seed": 42,
+  "prompt_sha256": "b7449fdf1ee8c54c78f04255ca9cf26d015fb70a1be72b5f9a6f961bdaf799fd",
+  "context_window_tokens": 32768,
+  "max_output_tokens": 8192,
+  "token_margin": 256,
+  "temperature": 0,
+  "cache_prompt": false,
+  "conditions": [
+    "paragraph",
+    "abstract_introduction",
+    "whole_paper"
+  ],
+  "include_proofs": true,
+  "condition_orders": {
+    "2212.14041": [
+      "abstract_introduction",
+      "paragraph",
+      "whole_paper"
+    ],
+    "2609.30752": [
+      "whole_paper",
+      "abstract_introduction",
+      "paragraph"
+    ],
+    "2204.00042": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ],
+    "0801.3143": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ],
+    "2211.09075": [
+      "abstract_introduction",
+      "paragraph",
+      "whole_paper"
+    ],
+    "2606.06272": [
+      "paragraph",
+      "abstract_introduction",
+      "whole_paper"
+    ],
+    "1510.00571": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ],
+    "2406.04056": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ],
+    "2507.23618": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ],
+    "1509.04927": [
+      "abstract_introduction",
+      "paragraph",
+      "whole_paper"
+    ],
+    "2410.20959": [
+      "paragraph",
+      "abstract_introduction",
+      "whole_paper"
+    ],
+    "2611.04847": [
+      "whole_paper",
+      "abstract_introduction",
+      "paragraph"
+    ],
+    "2003.13065": [
+      "paragraph",
+      "abstract_introduction",
+      "whole_paper"
+    ],
+    "2304.09092": [
+      "abstract_introduction",
+      "whole_paper",
+      "paragraph"
+    ]
+  },
+  "status": "complete",
+  "thinking": "server default; held constant across conditions",
+  "total_wall_seconds": 17084.020720208006
+}

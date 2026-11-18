@@ -1,0 +1,265 @@
+{
+  "arxiv_id": "2410.20959",
+  "title": "A Simple Parallel Algorithm with Near-Linear Work for Negative-Weight Single-Source Shortest Paths",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "We give the first parallel algorithm with optimal $\\tilde{O}(m)$ work for the classical problem of computing Single-Source Shortest Paths in general graphs with negative-weight edges. In graphs without negative edges, Dijkstra's algorithm solves the Single-Source Shortest Paths (SSSP) problem with optimal $\\tilde O(m)$ work, but is inherently sequential. A recent breakthrough by Bernstein, Nanongkai, Wulff-Nilsen; FOCS '22 achieves the same for general graphs. Parallel shortest path algorithms are more difficult and have been intensely studied for decades. Only very recently, multiple lines of research culminated in parallel algorithms with optimal work $\\tilde O(m)$ for various restricted settings, such as approximate or exact algorithms for directed or undirected graphs without negative edges. For general graphs, the best known algorithm by [shvinkumar, Bernstein, Cao, Grunau, Haeupler, Jiang, Nanongkai, Su; ESA '24 still requires $m^{1+o(1)}$ work. This paper presents a randomized parallel algorithm for SSSP in general graphs with near-linear work $\\tilde O(m)$ and state-of-the-art span $n^{1/2 + o(1)}$. We follow a novel bottom-up approach leading to a particularly clean and simple algorithm. Our algorithm can be seen as a \\emph{near-optimal parallel black-box reduction} from SSSP in general graphs to graphs without negative edges. In contrast to prior works, the reduction in this paper is both parallel and essentially without overhead, only affecting work and span by polylogarithmic factors."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "This paper provides a parallel algorithm with O (m) work and state-of-the-art span n^(1/2 + o(1)) for the classical SSSP problem in general graphs with negative-weight edges"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The Single-Source Shortest Paths (SSSP) problem is one of the most fundamental problems in algorithmic graph theory, and among the most difficult and well-studied problems in parallel computing. The input consists of a directed graph with n nodes, m edges and integer edge weights (which in general may be negative), and a designated source vertex. The goal is to compute a shortest-path tree from the source to all other vertices (or find a negative cycle if one exists)"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Without negative edges, shortest paths can be computed in near-linear time O(m + n log n) = O (m) by the classical algorithm of Dijkstra [Dijkstra59, Williams64, FredmanT84]. Unfortunately Dijkstra's algorithm is inherently sequential and inherently requires nonnegative edge weights. Lifting these constraints poses two algorithmic barriers that have been the subject of intense study in recent years"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "On the one hand, achieving any parallel algorithm has been a major open problem, even for unweighted, undirected graphs (i. e, even for simply computing a Breadth First Search tree). Indeed, no parallel shortest path or breadth first search algorithm with sub-linear n^(1-Theta(1)) span without a polynomial increase in work was known until 2023 [RozhovnHMGZ23, CaoF23]. While exact parallel algorithms for general graphs remained out of reach until recently, parallel algorithms for (approximate) shortest paths in (undirected) graphs without negative edges have been intensely studied for decades and have been a driving force for discovery of new algorithmic techniques. Here, we give a short list of highlights among parallel shortest path algorithms over the last three decades, restricted to algorithms achieving at least roughly linear work and a state-of-the-art span, that is, polylogarithmic for undirected graphs and n^(1/2 + o(1)) for directed graphs: start-of-itemize: [itemsep=0pt]. the '94 breakthrough of Cohen [Cohen00], which gave a parallel algorithm with O(m^(1+epsilon)) work for approximations in undirected graphs with no negative-weight edges,. the algorithms of Andoni, Stein and Zhong [AndoniSZ20] and Li [Li20] and Rozhon, Grunau, Haeupler, Zuzic and Li [RohzhvnGHZL22] improving this to O (m) work for the same setting,. another series of celebrated works by Fineman for directed graphs, which cumulated in the approximation algorithm for directed graphs without negative edges of Cao, Fineman and Russell [CaoFR20],. and lastly, improvements to exact algorithms for directed graphs without negative edges by Rozhon, Haeupler, Martinsson, Grunau and Zuzic [RozhovnHMGZ23] and Cao and Fineman [CaoF23]. end-of-itemize"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "On the other hand, the design of sequential algorithms that can deal with negative edge weights has been equally challenging with research progress having stagnated at a complexity of O (m n ) since Goldberg's 1993 scaling framework [Gabow83, GabowT89, Goldberg95]. Only in 2022, a breakthrough by Bernstein, Nanongkai, and Wulff-Nilsen [BernsteinNW22] resulted in a sequential shortest-path algorithm with near-optimal running time O (m) (see also [BringmannCF23] ). At the same time, independently, [ChenKLPGS22] devised an almost-optimal m^(1+order(1)) for Minimum-Cost Flow and thereby also for Negative-Weight SSSP. Notably, in another breakthrough Fineman [Fineman24, HuangJQ24] recently showed that there is a strongly polynomial tildeOrder(m n^(8/9)) -time algorithm"
+    },
+    {
+      "block_id": "s0_p5",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "At the intersection of these two mostly disjoint lines of research, it is known that Goldberg's scaling algorithm can be ported to the parallel setting with work tildeOrder(m sqrt n) and span n^(5/4+o(1)) [CaoFR22]. Only very recently, Ashvinkumar, Bernstein, Cao, Grunau, Haeupler, Jiang, Nanongkai and Su [AshvinkumarBCGHJNS24] devised a parallel algorithm for Negative-Weight SSSP based on the breakthrough by Bernstein et al. [BernsteinNW22]. Their algorithm increases the total computational work to m^(1+o(1)) and achieves span n^(1/2+o(1)). Achieving any parallelism (say, any sublinear span) with near-optimal O (m) work was left as an open problem"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "In this work, we provide the first parallel algorithm for Negative-Weight Single-Source Shortest Paths with near-optimal O (m) work and state-of-the-art span"
+    },
+    {
+      "block_id": "s1_p1",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "start-of-theorem: [Parallel Negative-Weight Single-Source Shortest Paths] There is a randomized parallel algorithm for Negative-Weight Single-Source Shortest Paths with work O (m) and span n^(1/2+o(1)). end-of-theorem"
+    },
+    {
+      "block_id": "s1_p2",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "We obtain the result through a conceptually new way of thinking about the Bernstein-Nanongkai-Wulff-Nilsen algorithm in a bottom-up rather than a top-down fashion. This bottom-up approach leads to a much simpler parallel algorithm"
+    },
+    {
+      "block_id": "s1_p3",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "Similar to prior works [BernsteinNW22, BringmannCF23, AshvinkumarBCGHJNS24] our algorithm can be seen as a black-box reduction from the SSSP problem in general graphs to graphs without negative edges. In contrast to prior works, the reduction in this paper is both parallel and essentially optimal, i. e., the overhead for both work and span are merely polylogarithmic factors"
+    },
+    {
+      "block_id": "s1_p4",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "start-of-theorem: [Black-Box Reduction] If there is a parallel Nonnegative-Weight SSSP algorithm with work W_(geq 0)(n, m) and span S_(geq 0)(n, m), then there is a randomized parallel Negative-Weight SSSP algorithm with work W_(geq 0)(n, m) cdot poly(log n) and span S_(geq 0)(n, m) cdot poly(log n). end-of-theorem"
+    },
+    {
+      "block_id": "s1_p5",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "We obtain by combining this reduction with the best known algorithms for parallel Nonnegative-Weight SSSP [CaoF23, RozhovnHMGZ23] with work O (m) and span n^(1/2 + o(1)). Our reduction ensures that any future progress on the parallel span for Nonnegative-Weight SSSP (even for approximate shortest paths, due to the black-box reduction provided in [RozhovnHMGZ23] ) immediately translates to the same improvements for exact algorithms in general graphs. Like [AshvinkumarBCGHJNS24] our algorithm work in the very general minor-aggregation framework of [ZuzicGYHS21, RohzhvnGHZL22, GhaffariZ22] which allows designing algorithms that simultaneously apply to parallel, distributed and other settings in a model-independent way"
+    },
+    {
+      "block_id": "s1_p6",
+      "heading": "Our Contribution",
+      "major_heading": "Introduction",
+      "text": "Besides its applications to parallel computing, we are confident that our conceptual insights will lead to further progress on the Negative-Weight SSSP problem, particularly deterministic sequential and parallel algorithms, as well as algorithms for distributed and other models of computation"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Paper Structure.",
+      "major_heading": "Introduction",
+      "text": "In, we give an overview of the techniques developed in prior work on the parallel negative Single-Source Shortest Paths problem. In, we present our new bottom-up approach and prove"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "We write [n] = 1, dots, n and set poly(n) = n^(Order(1)) and tildeOrder(n) = n (log n)^(Order(1))"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "Throughout the paper, we consider the standard PRAM model for parallel computation"
+    },
+    {
+      "block_id": "s3_p2",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "Following standard terminology, we say that an event happens with high probability if it happens with probability at least 1 - 1/n^c, where c is an arbitrarily large prespecified constant (and n is the input size). A randomized algorithm is Monte Carlo if it succeeds with high probability (and may err with low probability), and we say that a randomized algorithm is Las Vegas if it succeeds with probability 1"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "Negative-Weight SSSP",
+      "major_heading": "Preliminaries",
+      "text": "We denote directed graphs by G = (V, E, w) with vertex sets V, directed edge sets E subseteq V^2 and (potentially negative) integer edge weights w: E to Z. If G does not contain negative-length cycles, we write dist_G(v, u) to denote the length of a shortest v - u -path. For S subseteq V, we say that P is a shortest S - v -path if P has smallest length among all paths starting in some node in S and ending in v. We also set dist_G(S, v) = min_(u in S) dist_G(u, v). (We often drop the subscript G when it is clear from context. ) Finally, we say that a set S subseteq V has weak diameter d in G if for all u, v in S it holds that dist_G(u, v) leq d and dist_G(v, u) leq d"
+    },
+    {
+      "block_id": "s4_p1",
+      "heading": "Negative-Weight SSSP",
+      "major_heading": "Preliminaries",
+      "text": "start-of-definition: [SSSP] The Single-Source Shortest Paths (SSSP) problem is, given a directed graph G = (V, E, w) (with possibly negative integer edge weights w ) and a source vertex s in V, to start-of-itemize:. output a shortest path tree from s, or. output a negative cycle in G. end-of-itemize end-of-definition"
+    },
+    {
+      "block_id": "s4_p2",
+      "heading": "Negative-Weight SSSP",
+      "major_heading": "Preliminaries",
+      "text": "The Nonnegative-Weight SSSP problem is the natural restriction to graphs with nonnegative edge lengths. Throughout, let us denote by W_(geq 0)(n, m) and S_(geq 0)(n, m) the work and span of any parallel algorithm for nonnegative SSSP. We make the reasonable assumption that W_(geq 0)(n_1, m_1) + W_(geq 0)(n_2, m_2) &leq W_(geq 0)(n_1 + n_2, m_1 + m_2), max( S_(geq 0)(n_1, m_1), S_(geq 0)(n_2, m_2) ) &leq S_(geq 0)(n_1 + n_2, m_1 + m_2). The currently best-known algorithms for Nonnegative-Weight SSSP achieve W_(geq 0)(n, m) = O (m) and S_(geq 0)(n, m) = n^(1/2 + o(1)) [CaoF23, RozhovnHMGZ23]"
+    },
+    {
+      "block_id": "s4_p3",
+      "heading": "Negative-Weight SSSP",
+      "major_heading": "Preliminaries",
+      "text": "Throughout, for the sake of simplicity we assume that the edge weights in the given graph are polynomially bounded (i. e., there is some constant c such that all edge weights satisfy |w(e)| leq n^c ). We emphasize that this restriction is indeed merely for simplicity, and that larger edge weights up to M only lead to an overhead of log M in the work and span of our algorithm"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "Directed Low-Diameter Decompositions",
+      "major_heading": "Preliminaries",
+      "text": "A crucial ingredient and one of the main innovations of [BernsteinNW22] is the use of a Low-Diameter Decomposition (LDD) in directed graphs. Specifically, we rely on the following lemma of [AshvinkumarBCGHJNS24] which already ported directed LDDs to the parallel setting:"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "Directed Low-Diameter Decompositions",
+      "major_heading": "Preliminaries",
+      "text": "start-of-theorem: [Directed LDD [Theorem 1.4, AshvinkumarBCGHJNS24] ] Let G = (V, E, w) be a directed graph with nonnegative edge weights w: E rightarrow Z _(geq 0) and let d geq 1. There is a randomized algorithm computing a set of edges E^( rem ) subseteq E with the following guarantees: start-of-itemize:. Each strongly connected component of the graph E setminus E^( rem ) has weak diameter at most d in G, i. e. if u, v are two vertices in the same SCC, then dist_G(u, v) leq d and dist_G(v, u) leq d.. For any e in E, we have prob(e in E^( rem )) = bigOleft( w(e) log^2 n (d) + 1 (n^8)right). end-of-itemize The algorithm has work W_(geq 0)(n, m) cdot poly(log n) and span S_(geq 0)(n, m) cdot poly(log n) span (assuming that w is polynomially bounded). end-of-theorem"
+    },
+    {
+      "block_id": "s5_p2",
+      "heading": "Directed Low-Diameter Decompositions",
+      "major_heading": "Preliminaries",
+      "text": "In what follows it will be convenient to additionally assume that the strongly connected components are topologically sorted. For this reason, we combine with a parallel algorithm for computing topological orderings (e. g., [Lemma 5.1, AshvinkumarBCGHJNS24] with work W_(geq 0)(n, m) and span S_(geq 0)(n, m) up to polylogarithmic overhead), to immediately obtain the following lemma:"
+    },
+    {
+      "block_id": "s5_p3",
+      "heading": "Directed Low-Diameter Decompositions",
+      "major_heading": "Preliminaries",
+      "text": "start-of-lemma: [Topologically Sorted LDD] Let G = (V, E, w) be a directed graph with nonnegative edge weights w: E to Int_(geq 0), and let d geq 1. There is a randomized algorithm DirLDD (G, d) that computes a partition calS = (S_1, dots, S_k) of V satisfying the following two properties: start-of-itemize:. For all i in [k] and for all vertices u, v in S_i, we have dist_G(u, v) leq d and dist_G(v, u) leq d.. We say that an edge e = (u, v) in E is cut if, for the unique indices i, j with u in S_i, v in S_j, it holds that i > j. The probability that e is cut is at most lddqual(n) cdot w(e) (d) + bigO( 1 (n^8)), where Q(n) = Order(log^2 n). end-of-itemize The algorithm has work W_(geq 0)(n, m) cdot poly(log n) and span S_(geq 0)(n, m) cdot poly(log n) (assuming that w is polynomially bounded). end-of-lemma"
+    },
+    {
+      "block_id": "s5_p4",
+      "heading": "Directed Low-Diameter Decompositions",
+      "major_heading": "Preliminaries",
+      "text": "We will make the assumption that does not cut any edge in the case where all pairs of nodes that can reach each other are within distance d (i. e., in the trivial instances in which we only need to compute a topological ordering of the strongly connected components)"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Potential Adjustments",
+      "major_heading": "Preliminaries",
+      "text": "A key tool used in the context of shortest paths are potential adjustments, originally introduced by Johnson [Johnson77]"
+    },
+    {
+      "block_id": "s6_p1",
+      "heading": "Potential Adjustments",
+      "major_heading": "Preliminaries",
+      "text": "start-of-definition: [Potential-Adjusted Weights] Let G = (V, E, w) be a directed graph and let phi: V rightarrow Z be a potential function. The phi -adjusted edge weights w_phi are defined by w_phi(u, v) = w(u, v) + phi(u) - phi(v). We write G_phi = (V, E, w_phi). end-of-definition"
+    },
+    {
+      "block_id": "s6_p2",
+      "heading": "Potential Adjustments",
+      "major_heading": "Preliminaries",
+      "text": "It is easy to observe that potential adjustments preserve shortest paths (in the sense that P is a shortest u - v -path in G if and only if P is a shortest u - v -path in G_phi for all potentials phi ), and preserve the weight of cycles exactly. Another useful application is Johnson's trick: Johnson's trick is a tool to find a potential that makes all edges in the graph nonnegative; the remaining instance of Nonnegative-Weight SSSP can then be solved e. g. by Dijkstra's algorithm. In our case, however, we can only find a potential that makes sure that the shortest paths contain few negative edges. In this case, we rely on the following layered construction ( ) to nevertheless reduce to the nonnegative case. Notably, this simple lemma replaces the necessity to invoke the interwoven \"Dijkstra-Bellman-Ford\" algorithm as in [BernsteinNW22, BringmannCF23]"
+    },
+    {
+      "block_id": "s6_p3",
+      "heading": "Potential Adjustments",
+      "major_heading": "Preliminaries",
+      "text": "start-of-lemma: [SSSP with Few Negative Edges] Let G = (V, E, w) be a directed graph without negative weight cycles, let phi: V to Int and t geq 0. There in an algorithm FewNegSSSP (G, phi, t) that returns d: V to Int satisfying start-of-itemize:. dist(V, v) leq d (v), and. d (v) leq w(P) for every path P ending in v containing at most t negative edges with respect to w_phi (i. e. |(e in P: w_phi(e) < 0)| leq t ). end-of-itemize The algorithm has work Order(W_(geq 0)(nt, mt)) and span Order(S_(geq 0)(nt, mt)) (assuming that both w and phi are polynomially bounded). end-of-lemma start-of-proof: Consider the (t+1) -layered graph G' = (V', E', w') with vertices V' = V times 0, dots, t and edges defined as follows: For each original edge (u, v) in E and for each 0 leq i leq t we include an edge ((u, i), (v, i)) in E' of weight w_phi(u, v) if this weight happens to be nonnegative. Moreover, for each 0 leq i < t we include the edge ((u, i), (v, i+1)) in E' of weight w_phi(u, v) + M, where we choose a sufficiently large value M: = 2 max_v |phi(v)| + max_v |w(v)| ensuring that the edge weight becomes nonnegative. Additionally, attach a source vertex s to the graph G' that is connected to each node (u, 0) via an edge of length -phi(u) + M. All in all, the graph G' contains only nonnegative edges, and thus we can afford to compute the distances dist_(G')(s, v') for all v' in V' with work Order(W_(geq 0)(nt, mt)) and span Order(S_(geq 0)(nt, mt)). Finally, we return d (v) = dist_(G')(s, (v, t)) - (t+1)M + phi(v). For the correctness, note that any s - (v, t) -path P' in G' traverses the layers 0, dots, t (in this order). Inside every layer the path arbitrarily follows the edges from G, and between the layers the path takes exactly one edge from G. Formally, the path takes the form P' = s (v_(0, 1), 0) dots (v_(0, ell_0), 0) (v_(1, 1), 1) dots (v_(t-1, ell_(t-1)), t-1) (v_(t, 1), t) dots (v_(t, ell_t), t) = (v, t). But by construction, P = v_(0, 1) dots v_(0, ell_0) v_(1, 1) dots v_(t-1, ell_(t-1)) v_(t, 1) dots v_(t, ell_t) is a path in the original graph G, and it holds that w'(P') = w(P) + (t+1) M - phi(v) (since the contribution of the potentials telescope, and since P' contains exactly t+1 edges that incur an overhead of +M ). It follows immediately that d (v) geq dist_G(V, v) + (t+1) M - phi(v) - (t+1) M + phi(v) = dist_G(V, v) proving the first item. For the second item, observe that any path P to v that contains at most t negative edges with respect to w_phi can be simulated as an s - (v, t) -path in G' by traversing the t negative edges between layers. end-of-proof"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Reduction to Restricted Graphs",
+      "major_heading": "Preliminaries",
+      "text": "Consider the following restricted variant of SSSP:"
+    },
+    {
+      "block_id": "s7_p1",
+      "heading": "Reduction to Restricted Graphs",
+      "major_heading": "Preliminaries",
+      "text": "start-of-definition: An edge-weighted directed graph G=(V, E, w) is restricted if it satisfies the following two conditions: start-of-enumerate: [label=( ), topsep= ]. all edge weights are at least -1 and at most n (i. e., w(e) in -1, 0, dots, n ), and. the minimum cycle mean is at least 1 (i. e. for every directed cycle C, sum_(e in C) w(e) geq |C| ). end-of-enumerate end-of-definition"
+    },
+    {
+      "block_id": "s7_p2",
+      "heading": "Reduction to Restricted Graphs",
+      "major_heading": "Preliminaries",
+      "text": "start-of-definition: [Restricted SSSP] Given a restricted graph G = (V, E, w), the goal is to compute a potential phi: V to Int such that w_phi(e) geq 0 for all e in E. end-of-definition"
+    },
+    {
+      "block_id": "s7_p3",
+      "heading": "Reduction to Restricted Graphs",
+      "major_heading": "Preliminaries",
+      "text": "In particular, note that restricted graphs cannot contain negative cycles, and thus in the Restricted SSSP problem all distances are well-defined. Already in [BernsteinNW22] a scaling technique was formalized to reduce from the general SSSP problem to Restricted SSSP; this argument was later made explicit and refined in [BringmannCF23]. Phrased in terms of parallel algorithms, the reduction can be summarized as follows: start-of-lemma: [ [BernsteinNW22, BringmannCF23] ] Suppose that there is a Monte Carlo algorithm for Restricted SSSP with work W_( R )(n, m) and span S_( R )(n, m). Then there is a Las Vegas algorithm for SSSP with work (W_( R )(n, m) + W_(geq 0)(n, m)) cdot poly(log n) and span (S_( R )(n, m) + S_(geq 0)(n, m)) cdot poly(log n). end-of-lemma"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "In this section we give an efficient parallel algorithm for Restricted SSSP; see the pseudocode RestrictedSSSP in. Our goal is to establish the following. Combined with, this establishes our Main"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Overview",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "We start with a brief intuitive description of the algorithm. Throughout let G_(geq 0) = (V, E, w_(geq 0)) be the graph G where we replace all negative edge weights by zero (i. e. w_(geq 0)(e) = max(0, w(e)) ). The algorithm proceeds in a logarithmic number of levels ell gets 1, dots, L from bottom to top. At each level ell we further run a logarithmic number of repetitions r gets 1, dots, R, and for each repetition we compute a low-diameter decomposition S_(ell, r) in the graph G_(geq 0) with diameter parameter d = 2^ell. Our goal is to find a potential function phi_(ell, r) that reweights the graph in such a way that all edges not cut by S_(ell, r) become nonnegative. At the top-level L we do not cut any edges, and thus the function phi_(L, 1) (say) makes all edges nonnegative. To construct the potential phi_(ell, r) we follow these two steps: start-of-enumerate: indent 1. 6em. We first consider each cluster S_i in the LDD S_(ell, r) individually. Our goal is to compute a potential function phi^((i)) that makes all edges inside S_i nonnegative. Inspired by Johnson's trick, our goal is to assign phi^((i))(v) = dist_(G[S_i])(S_i, v), i. e., to compute the shortest S_i - v -paths for all v in S_i. Fix a shortest S_i - v -path P in G[S_i]. A key insight of Bernstein, Nanongkai and Wulff-Nilsen is that since G is restricted and since S_i has weak diameter at most d = 2^ell in G_(geq 0), the path P has small length even in the graph G_(geq 0); specifically, w_(geq 0)(P) leq d (see ). Therefore, with good probability the path P has been cut only a few times (say, t = poly(log n) times) on the previous level ell-1. Therefore, on the previous level we have already computed a potential function phi_(ell-1, r') (in some repetition r' ) which makes all but at most t edges in P nonnegative. We can thus compute w(P) = dist_(G[S_i])(S_i, v) by calling FewNegSSSP (G[S_i], phi_(ell-1, r'), t) (see ).. In a second step, we combine the potential functions phi^((i)) of the individual clusters to one potential function phi_(ell, r). The idea is simple: We take phi_(ell, r)(v) = phi^((i))(v) - i cdot M whenever v in S_i, for some sufficiently large number M. The potentials phi^((i)) ensure that edges within the same cluster are nonnegative, and any edge from a lower-index cluster to a higher-index cluster is nonnegative provided that -M < phi^((i))(v) leq 0 (it turns out that taking M = n suffices). end-of-enumerate"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "In this section we provide a formal analysis of. Our strategy is as follows: We first recap one of the key insights of [BernsteinNW22] phrased in our language ( ). We then define a certain success event ( ), and we prove that this event happens with high probability ( ). Conditioned on this success event we can then prove by induction from bottom to top that the algorithm is correct ( ), and efficient ( )"
+    },
+    {
+      "block_id": "s10_p1",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "start-of-lemma: Let G = (V, E, w) be a restricted graph and let S subseteq V be such that S has weak diameter d in G_(geq 0). Then any shortest S - v -path P in G[S] has length |P| leq d and weight w_(geq 0)(P) leq d. end-of-lemma start-of-proof: Let u in S denote the starting vertex of P, let Q denote a shortest v - u -path in G[S] and let C denote the cycle obtained by concatenating P and Q. On the one hand, we have that w(C) = w(P) + w(Q) leq w(Q) leq w_(geq 0)(Q) leq dist_(G_(geq 0))(v, u) leq d, where the first inequality is due to w(P) leq dist_(G[S])(S, v) leq 0 and the last inequality is due to the fact that S has weak diameter at most d in G_(geq 0). On the other hand, since G is a restricted graph, we have that |C| leq w(C). Putting both together, we obtain that w_(geq 0)(P) leq w(P) + |P| leq |P| leq |C| leq w(C) leq d, proving the statement. end-of-proof"
+    },
+    {
+      "block_id": "s10_p2",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "start-of-definition: [Success Event] The algorithm is successful if for all levels 1 < ell leq L, for all r in [R] and for all vertices v in V the following holds: Let S in S_(ell, r) be the unique cluster containing v. Then there is a shortest S - v -path P in G[S] (i. e., w(P) = dist_(G[S])(S, v) ) and a repetition r' in [R] such that S_(ell-1, r') cuts at most t edges from P. end-of-definition"
+    },
+    {
+      "block_id": "s10_p3",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "start-of-lemma: [Success Event] With high probability, is successful. end-of-lemma start-of-proof: Fix any level ell > 1, repetition r, and vertex v, and let S in S_(ell, r) be the unique cluster containing v. Moreover, fix an arbitrary shortest S - v -path P in G[S]. We show that for any r' in [R], with probability at least 1 (2) the path P is cut at most t times in S_(ell-1, r') (recall throughout that S_(ell-1, r') is sampled independently of S_(ell, r) ). The cluster S has weak diameter at most 2^ell in G_(geq 0) (by ). Thus, by the previous lemma we have w_(geq 0)(P) leq 2^ell. Since the LDD cuts each edge e with probability at most w(e) (d) cdot Q(n) + bigO( 1 (n^8)), the expected number of edges on P that is cut in S_(ell-1, r') is at most sum_(e in P) ens*(frac(w_(geq 0)(e))(2^(ell-1)) cdot Q(n) + Order(n^(-8))) = frac(w_(geq 0)(P))(2^(ell-1)) cdot Q(n) + Order(n^(-7)) leq 2 Q(n) + Order(n^(-7)). In particular, by Markov's inequality with probability at least 1 (2) we cut at most twice that many edges, proving the claim as t = 4Q(n) + 1. Recall now that the LDDs S_(ell-1, r') are sampled independently across the repetitions r'. Thus, the probability that in none of these samples we cut P at most t times is at most 2^(-R). Taking a union bound over all levels ell, repetitions r and vertices v, the total error probability is indeed at most poly(log n) cdot n cdot 2^(-R) leq n^(-c_( whp )) as we have picked R = (2 + c_( whp )) log n. end-of-proof"
+    },
+    {
+      "block_id": "s10_p4",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "start-of-lemma: [Correctness] With high probability, correctly solves the Restricted SSSP problem. end-of-lemma start-of-proof: We condition on the high-probability event that the algorithm is successful. Our goal is to show the following two statements A(ell) and B(ell) for all levels ell: start-of-itemize:. A(ell): For all r in [R] and for each S_i in S_(ell, r), it holds that phi^((i))(v) = dist_(G[S_i])(S_i, v).. B(ell): For all r in [R], it holds that w_(phi_(ell, r))(e) geq 0 for all edges e not cut by S_(ell, r). end-of-itemize We prove both statements by induction on ell as follows. start-of-itemize:. Base case: A(1). Focus on any repetition and any cluster S_i in S_(1, r) of weak diameter at most 2. From it follows that any shortest S_i - v -path P has hop-length at most 2, and thus we compute d _phi(v) = dist_(G[S_i])(S_i, v) by calling FewNegSSSP (G[S_i], phi, t) for t geq 2 (irrespective of the potential phi ). The claim (a) follows as we pick phi^((i))(v) = d _phi(v) for the all-zero potential phi.. Inductive case: B(ell-1) implies A(ell). Focus on any repetition r and any cluster S_i in S_(ell, r). Recall that by the guarantee of it holds that (i) dist_(G[S_i])(S_i, v) leq d _phi(v) for all phi. Moreover, conditioning on the event that the algorithm is successful there is some shortest S_i - v -path P in G[S_i] and some repetition r' such that P is cut at most t times in the clustering S_(ell-1, r'). Therefore, by the assumption B(ell-1), reweighting G with the potential function phi_(ell-1, r') in Phi_(ell-1) makes all but at most t edges in P nonnegative. Thus, implies that (ii) d _(phi_(ell-1, r'))(v) leq w(P) = dist_(G[S_i])(S_i, v). Combining (i) and (ii), we obtain that indeed phi^((i))(v) = min_(phi in Phi_(ell-1)) boldsymbol(d)_phi(v) = dist_(G[S_i])(S_i, v) for all nodes v in S_i.. Inductive case: A(ell) implies B(ell). Focus on any repetition r and any edge e = (u, v) that is not cut in S_(ell, r). If u and v belong to the same cluster S_i, then w_(phi_(ell, r))(e) = w_(phi^((i)))(e) geq 0 by Johnson's trick ( ) since phi^((i)) = dist_(G[S_i])(S_i, v) (by assumption A(ell) ). So suppose that u and v belong to different clusters, u in S_i, v in S_j. We assume that e is not cut, so i < j. Therefore: w_(phi_(ell, r))(e) &= w(e) + (phi^((i))(u) - i cdot n) - (phi^((j))(v) - j cdot n) &= w(e) + phi^((i))(u) - phi^((j))(v) + (j - i) n &geq -1 -(n-1) + 0 + n = 0. In the last step we used that G is restricted and so w(e) geq - 1 and -(n-1) leq phi^((i))(v) leq 0 (recalling by assumption A(ell) that phi^((i))(u) = dist_(G[S_i])(S_i, u) ). end-of-itemize Altogether the induction shows that B(L) holds, i. e., that for all r we have w_(phi_(L, r))(e) geq 0 for all edges e not cut by S_(L, r). However, at the L -th level we may assume that the LDD does not cut any edges in G as any pair of nodes reachable from each other is trivially within distance at most (n-1) cdot n leq n^2. In particular, it follows that w_(phi_(L, 1))(e) geq 0 for all edges e in E. end-of-proof"
+    },
+    {
+      "block_id": "s10_p5",
+      "heading": "Formal Analysis",
+      "major_heading": "A Bottom-Up Algorithm for Negative-Weight SSSP",
+      "text": "start-of-lemma: [Work and Span] has work W_(geq 0)(n, m) cdot poly(log n) and span S_(geq 0)(n, m) cdot poly(log n). end-of-lemma start-of-proof: The main bottleneck to both work and span is the calls to DirLDD and FewNegSSSP. Each call to DirLDD runs in work W_(geq 0)(n, m) and span S_(geq 0)(n, m) up to polylogarithmic factors (by ), and there are at most LR = poly(log n) such calls. For each iteration of the loop in Line 9, the calls to FewNegSSSP in Line 11 are executed on disjoint induced graphs G[S_i] (up to an overhead of L R cdot max_ell |Phi_ell| leq L R^2 = poly(log n) ). By the assumption that W_(geq 0)(n, m) is subadditive ( ) the total work is thus at most W_(geq 0)(n, m) and the total span is at most S_(geq 0)(n, m) (both up to polylogarithmic factors). Any work outside these calls trivially takes work tildeOrder(n + m) and span poly(log n). As a final detail, we remark that each call to DirLDD as well as to FewNegSSSP is indeed on graphs with polynomially bounded weights (in fact, weights 0, dots, n ) and with polynomially bounded potentials (in fact, |phi(v)| leq n^2 for all v ). end-of-proof"
+    }
+  ],
+  "load_seconds": 3.7301299800164998
+}

@@ -1,0 +1,373 @@
+{
+  "arxiv_id": "2212.14041",
+  "title": "Deciphering RNA Secondary Structure Prediction: A Probabilistic K-Rook Matching Perspective",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "The secondary structure of ribonucleic acid (RNA) is more stable and accessible in the cell than its tertiary structure, making it essential for functional prediction. Although deep learning has shown promising results in this field, current methods suffer from poor generalization and high complexity. In this work, we reformulate the RNA secondary structure prediction as a K-Rook problem, thereby simplifying the prediction process into probabilistic matching within a finite solution space. Building on this innovative perspective, we introduce RFold, a simple yet effective method that learns to predict the most matching K-Rook solution from the given sequence. RFold employs a bi-dimensional optimization strategy that decomposes the probabilistic matching problem into row-wise and column-wise components to reduce the matching complexity, simplifying the solving process while guaranteeing the validity of the output. Extensive experiments demonstrate that RFold achieves competitive performance and about eight times faster inference efficiency than the state-of-the-art approaches. The code and Colab demo are available in (http://github.com/A4Bio/RFold)."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The functions of RNA molecules are determined by their structure [sloma2016exact]. The secondary structure, which contains the nucleotide base pairing information, as shown in Figure, is crucial for the correct functions of RNA molecules [fallmann2017recent]. Although experimental assays such as X-ray crystallography [cheong2004rapid], nuclear magnetic resonance [furtig2003nmr], and cryogenic electron microscopy [fica2017cryo] can be implemented to determine RNA secondary structure, they suffer from low throughput and expensive cost"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Computational RNA secondary structure prediction methods have been favored for their high efficiency in recent years [iorns2007utilizing]. Currently, mainstream methods can be broadly classified into two categories [rivas2013four, szikszai2022deep]: (i) comparative sequence analysis and (ii) single sequence folding algorithm. Comparative sequence analysis determines the secondary structure conserved among homologous sequences but the limited known RNA families hinder its development [gutell2002accuracy, griffiths2003rfam, gardner2009rfam, nawrocki2015rfam]. Researchers thus resort to single RNA sequence folding algorithms that do not need multiple sequence alignment information. A classical category of computational RNA folding algorithms is to use dynamic programming (DP) that assumes the secondary structure is a result of energy minimization [bellaousov2013rnastructure, nicholas2008unafold, lorenz2011viennarna, zuker2003mfold, mathews2006prediction, do2006contrafold]. However, energy-based approaches usually require the base pairs have a nested structure while ignoring some valid yet biologically essential structures such as pseudoknots, i. e., non-nested base pairs [e2efold, seetin2012rna, xu2015physics], as shown in Figure. Since predicting secondary structures with pseudoknots under the energy minimization framework has shown to be hard and NP-complete [wang2011dynamic, ufold], deep learning techniques are introduced as an alternative"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Attempts to overcome the limitations of energy-based methods have motivated deep learning methods that predict RNA secondary structures in the absence of DP. SPOT-RNA [spot-rna] is a seminal work that ensembles ResNet [he2016deep] and LSTM [hochreiter1997long] and applies transfer learning to identify molecular recognition features. SPOT-RNA does not constrain the output space into valid RNA secondary structures, which degrades its generalization ability on new datasets [rtfold]. E2Efold [e2efold] employs an unrolled algorithm for constrained programming that post-processes the network output to satisfy the constraints. E2Efold introduces a convex relaxation to make the constrained optimization tractable, leading to possible structural constraint violations and poor generalization ability [sato2021rna, ufold, franke2023scalable, franke2022probabilistic]. RTfold [rtfold] utilizes the Fenchel-Young loss [berthet2020learning] to enable differentiable discrete optimization with perturbations, but the approximation cannot guarantee the satisfaction of constraints. Developing an appropriate optimization that enforces the output to be valid becomes a crucial concern"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Since deep learning-based approaches cannot directly output valid RNA secondary structures, existing approaches usually formulate the problem into a constrained optimization problem and optimize the output of the model to fulfill specific constraints as closely as possible. However, these methods typically necessitate iterative optimization, leading to reduced efficiency. Moreover, the extensive optimization space involved does not ensure the complete satisfaction of these constraints. In this study, we introduce a novel perspective for predicting RNA secondary structures by reframing the challenge as a K-Rook problem. Recognizing the alignment between the solution spaces of the K-Rook problem and RNA secondary structure prediction, our objective is to identify the most compatible K-Rook solution for each RNA sequence. This is achieved by training the deep learning model on prior data to learn matching patterns"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Considering the high complexity of the solution space in the symmetric K-Rook problem, we introduced RFold, an innovative approach. This method utilizes a bi-dimensional optimization strategy, effectively decomposing the problem into separate row-wise and column-wise components. This decomposition significantly reduces the matching complexity, thereby simplifying the solving process while guaranteeing the validity of the output. We conduct extensive experiments to compare RFold with state-of-the-art methods on several benchmark datasets and show the superior performance of our proposed method. Moreover, RFold has faster inference efficiency than those methods due to its simplicity"
+    },
+    {
+      "block_id": "s0_p5",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "-3mm"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Related work",
+      "major_heading": "Related work",
+      "text": "-1mm"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Comparative Sequence Analysis",
+      "major_heading": "Related work",
+      "text": "Comparative sequence analysis determines base pairs conserved among homologous sequences [gardner2004comprehensive, knudsen2003pfold, gorodkin2001discovering]. ILM [ruan2004iterated] combines thermodynamic and mutual information content scores. Sankoff [hofacker2004alignment] merges the sequence alignment and maximal-pairing folding methods [nussinov1978algorithms]. Dynalign [mathews2002dynalign] and Carnac [touzet2004carnac] are the subsequent variants of Sankoff algorithms. RNA forester [hochsmann2003local] introduces a tree alignment model for global and local alignments. However, the limited number of known RNA families [nawrocki2015rfam] impedes the development"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Comparative Sequence Analysis",
+      "major_heading": "Related work",
+      "text": "-4mm"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Energy-based Folding Algorithms",
+      "major_heading": "Related work",
+      "text": "When the structures consist only of nested base pairing, dynamic programming can predict the structure by minimizing energy. Early works include Vienna RNAfold [lorenz2011viennarna], Mfold [zuker2003mfold], RNAstructure [mathews2006prediction], and CONTRAfold [do2006contrafold]. Faster implementations that speed up dynamic programming have been proposed, such as Vienna RNAplfold [bernhart2006local], LocalFold [lange2012global], and LinearFold [huang2019linearfold]. However, they cannot accurately predict structures with pseudoknots, as predicting the lowest free energy structures with pseudoknots is NP-complete [lyngso2000rna], making it difficult to improve performance"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Energy-based Folding Algorithms",
+      "major_heading": "Related work",
+      "text": "-4mm"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "Learning-based Folding Algorithms",
+      "major_heading": "Related work",
+      "text": "Deep learning methods have inspired approaches in bioengineering applications [wu2024psc, wu2024mape, Lin2022DiffBPGD, Lin2023FunctionalGroupBasedDF, tan2024cross, tan2023hierarchical]. SPOT-RNA [spot-rna] is a seminal work that employs deep learning for RNA secondary structure prediction. SPOT-RNA2 [singh2021improved] improves its predecessor by using evolution-derived sequence profiles and mutational coupling. Inspired by Raptor-X [wang2017accurate] and SPOT-Contact [hanson2018accurate], SPOT-RNA uses ResNet and bidirectional LSTM with a sigmoid function. MXfold [akiyama2018max] combines support vector machines and thermodynamic models. CDPfold [zhang2019new], DMFold [wang2019dmfold], and MXFold2 [sato2021rna] integrate deep learning techniques with energy-based methods. E2Efold [e2efold] constrains the output to be valid by learning unrolled algorithms. However, its relaxation for making the optimization tractable may violate the constraints. UFold [ufold] introduces U-Net model to improve performance"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Preliminaries",
+      "major_heading": "Background",
+      "text": "The primary structure of RNA is a sequence of nucleotide bases A, U, C, and G, arranged in order and represented as X = (x_1,..., x_L), where each x_i denotes one of these bases. The secondary structure is the set of base pairings within the sequence, modeled as a sparse matrix M in (0, 1)^(L times L), where M _(ij) = 1 indicates a bond between bases i and j. The key challenges include (i) designing a model, characterized by parameters Theta, that captures the complex transformations from the sequence X to the pairing matrix M and (ii) correctly identifying the sparsity of the secondary structure, which is determined by the nature of RNA. Thus, the transformation F _Theta: X mapsto M is usually decomposed into two stages for capturing the sequence-to-structure relationship and optimizing the sparsity of the target matrix: mathcal(F)_Theta: = mathcal(G)_(theta_g) circ mathcal(H)_(theta_h), where H _(theta_h): X mapsto H represents the initial processing step, transforming the RNA sequence into an intermediate, unconstrained representation H in R ^(L times L). Subsequently, G _(theta_g): H mapsto M parameterizes the optimization stage for the intermediate distribution into the final sparse matrix M"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Constrained Optimization-based Approaches",
+      "major_heading": "Background",
+      "text": "The core problem of secondary structure prediction lies in sparsity identification. Numerous studies regard this task as a constrained optimization problem, seeking the optimal refinement mappings by gradient descent. Besides, keeping the hard constraints on RNA secondary structures is also essential, which ensures valid biological functions [steeg1993neural]. These constraints can be formally described as: start-of-itemize: [leftmargin=*,itemsep=0pt,topsep=0pt]. (a) Only three types of nucleotide combinations can form base pairs: B: = ( AU, UA ) cup ( GC, CG ) cup ( GU, UG ). For any base pair x_i x_j where x_i x_j notin B, M _(ij) = 0.. (b) No sharp loop within three bases. For any adjacent bases within a distance of three nucleotides, they cannot form pairs with each other. For all |i-j| < 4, M _(ij) = 0.. (c) There can be at most one pair for each base. For all i and j, sum_(j=1)^L M _(ij) leq 1, sum_(i=1)^L M _(ij) leq 1. end-of-itemize The search for valid secondary structures is thus a quest for symmetric sparse matrices in (0, 1)^(L times L) that adhere to the constraints above. The first two constraints can be satisfied by defining a constraint matrix M as: M _(ij): =1 if x_i x_j in B and |i-j| geq 4, and M _(ij): =0 otherwise. Addressing the third constraint is critical as it necessitates employing sparse optimization techniques. Therefore, our primary objective is to devise an effective sparse optimization strategy. This strategy is based on the symmetric inherent distribution H and M, which support constraints (a) and (b), and additionally addresses constraint (c)"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "SPOT-RNA",
+      "major_heading": "Background",
+      "text": "subtly enforces the principles of sparsity. It streamlines the pathway from the raw neural network output H by harnessing the Sigmoid function to distill a sparse pattern. The transformation applies a threshold to yield a binary sparse matrix. This process can be represented as: mathcal(G)(boldsymbol(H)) = mathbbm(1)_([mathrm(Sigmoid)(boldsymbol(H)) > s]). In this approach, a fixed threshold s of 0. 5 is applied, typical for inducing sparsity. It omits complex constraints or extra parameters theta_g, simply using this cutoff to achieve sparse structure representations"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "E2Efold",
+      "major_heading": "Background",
+      "text": "introduces a non-linear transformation to the intermediate value M in R ^(L times L) and an additional regularization term M _1. frac(1)(2) leftlangle boldsymbol(H)-s, mathcal(T)(boldsymbol(widehat(M)))rightrangle - rho boldsymbol(widehat(M)) _1, where T ( M ) = 1 (2)( M odot M + ( M odot M )^T) odot M ensures symmetry and adherence to RNA base-pairing constraints (a) and (b), s is the log-ratio bias term set to log(9. 0), and the ell_1 penalty rho M _1 promotes sparsity. To fulfill constraint (c), the objective is combined with conditions T ( M ) 1 leq 1. Denote lambda in R ^(L)_+ as the Lagrange multiplier, the formulation for the sparse optimization is expressed as: min_(boldsymbol(lambda) geq boldsymbol(0)) max_(boldsymbol(widehat(M))) &frac(1)(2) leftlangle boldsymbol(H)-s, mathcal(T)(boldsymbol(widehat(M)))rightrangle - rho boldsymbol(widehat(M)) _1 &- leftlangle boldsymbol(lambda), mathrm(ReLU)(mathcal(T)(boldsymbol(widehat(M))) mathbbm(1) - mathbbm(1)) rightrangle, In the training stage, the optimization objective is the output of score function S dependent on M and H. It can be regarded as an optimization function G parameterized by theta_g: mathcal(G)_(theta_g)(boldsymbol(H)) = mathcal(T)((argmax)_(boldsymbol(widehat(M)) in mathbb(R)^(L times L)) mathcal(S)(boldsymbol(widehat(M)), boldsymbol(H))). Although the complicated design to the constraints is explicitly formulated, the iterative updates may fall into sub-optimal or invalid solutions. Besides, it requires additional parameters theta_g, making the model training complicated"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "RTfold",
+      "major_heading": "Background",
+      "text": "introduces a differentiable function that incorporates an additional Gaussian perturbation W. The objective function is expressed as: min_(boldsymbol(widehat(M))) frac(1)(N) sum_(i=1)^(N) mathcal(T)left(boldsymbol(H) + epsilon boldsymbol(W)^((i)) right) -boldsymbol(widehat(M)) where T denotes the non-linear transformation to constrain the initial output H, and N is the number of random samples. The random perturbation W ^((i)) adjusts the distribution by leveraging the gradient during the optimization process. While RTFold designs an efficient differential objective function, the constraints imposed by the non-linear transformation on a noisy hidden distribution may lead to biologically implausible structures"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Probabilistic K-Rook Matching",
+      "major_heading": "RFold",
+      "text": "The symmetric K-Rook arrangement [riordan2014introduction, elkies2011chess] is a classic combinatorial problem involving the placement of K (K leq L) non-attacking Rooks on an Ltimes L chessboard, where the goal is to arrange the Rooks such that they form a symmetric pattern. The term 'non-attacking' means that no two Rooks are positioned in the same row or column. An interesting parallel can be drawn between this combinatorial scenario and the domain of RNA secondary structure prediction, as illustrated in Figure. This analogy stems from the conceptual similarity in the arrangement patterns required in both cases. The RNA sequence can be regarded as a chessboard of size L and the base pairs are the Rooks. The core problem is to determine an optimal arrangement of these base pairs"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "Probabilistic K-Rook Matching",
+      "major_heading": "RFold",
+      "text": "Given a finite solution space M defined by the symmetric K-Rook arrangement, we reformulate our objective as a probabilistic matching problem. The goal is to find the most matching solution M ^* in M for the given sequence X. The optimal solution M ^* is defined as: boldsymbol(M)^* &= argmax_(boldsymbol(M) in mathcal(M)) mathcal(P)(boldsymbol(M) | boldsymbol(X))"
+    },
+    {
+      "block_id": "s12_p2",
+      "heading": "Probabilistic K-Rook Matching",
+      "major_heading": "RFold",
+      "text": "According to Bayes' theorem, the posterior probability can be represented as P ( M | X ) = P ( X | M ) P ( M ) ( P ( X )). Since the denominator P( X ) is constant for all M, and assuming that the solution space is finite and each solution within it is equally likely, we can adopt a uniform prior P ( M ) in this context. Therefore, maximizing the posterior probability is equivalent to maximizing the likelihood P ( X | M ). This leads to the following equation: boldsymbol(M)^* = argmax_(boldsymbol(M) in mathcal(M)) mathcal(P)(boldsymbol(X)|boldsymbol(M)). Therefore, our primary task becomes computing the likelihood P ( X | M ) for the given sequence X under each possible solution M"
+    },
+    {
+      "block_id": "s13_p0",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "Computing the likelihood P ( X | M ) directly poses significant challenges. To address this, we propose a bi-dimensional optimization strategy that simplifies the problem by decomposing it into row-wise and column-wise components. This approach is mathematically represented as: mathcal(P)(boldsymbol(X)|boldsymbol(M)) = mathcal(P)(boldsymbol(X)|boldsymbol(R)) mathcal(P)(boldsymbol(X)|boldsymbol(C)), where M is the product of the row-wise component R in R ^(Ltimes L) and the column-wise component C in R ^(Ltimes L), i. e., M = R odot C. Each component represents the optimal solution for the row-wise and column-wise matching problems, respectively. Importantly, the row-wise and column-wise components are independent, and the comprehensive solution for the entire problem is derived from the product of the optimal solutions for these two sub-problems"
+    },
+    {
+      "block_id": "s13_p1",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "Applying Bayes' theorem, for the row-wise component, we have P ( R | X ) = P ( X | R ) P ( R ) ( P ( X )). Given that the solution space of R is both finite and valid, we can regard it as a uniform distribution. The analysis for the column-wise component, P ( C | X ), follows a similar approach. Therefore, the optimal solution M ^* can be represented as: boldsymbol(M)^* &= argmax_(boldsymbol(R), boldsymbol(C)) mathcal(P)(boldsymbol(R)|boldsymbol(X)) mathcal(P)(boldsymbol(C)|boldsymbol(X)) &= argmax_(boldsymbol(R)) mathcal(P)(boldsymbol(R)|boldsymbol(X)) argmax_(boldsymbol(C))mathcal(P)(boldsymbol(C)|boldsymbol(X)) The next phase involves establishing proxies for P ( R | X ) and P ( C | X ). To this end, we introduce the basic symmetric hidden distribution, H = ( H odot H ^T) odot M. The row-wise and column-wise components are then derived by applying Softmax functions to H, resulting in their respective probability distributions: mathcal(R)(boldsymbol(widehat(H))) = frac(exp(boldsymbol(widehat(H))_(ij)))(sum_(k=1)^Lexp(boldsymbol(widehat(H))_(ik))), mathcal(C)(boldsymbol(widehat(H))) = frac(exp(boldsymbol(widehat(H))_(ij)))(sum_(k=1)^Lexp(boldsymbol(widehat(H))_(kj))). The final output is the element-wise product of the row-wise component R ( H ) and the column-wise component C ( H ). This operation integrates the individual insights from both dimensions, leading to the optimized matrix M ^*: boldsymbol(M)^* = argmax mathcal(R)(boldsymbol(widehat(H))) odot argmax mathcal(C)(boldsymbol(widehat(H)))"
+    },
+    {
+      "block_id": "s13_p2",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "As illustrated in Figure, we consider a random symmetric 6times 6 matrix as an example. For simplicity, we disregard the constraints (a-b) from M. This example demonstrates the outputs of R (cdot), C (cdot), and their element-wise product R (cdot) odot C (cdot). The row-wise and column-wise components jointly select the value that has the maximum in both its row and column while keeping the output matrix symmetric"
+    },
+    {
+      "block_id": "s13_p3",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "Given the definition of H = ( H odot H ^T) odot M, it is evident that H inherently forms a symmetric and non-negative matrix. Regarding optimization, the operation R ( H ) odot C ( H ) can be equivalently simplified to optimizing 1 (2)( R ( H ) + C ( H )). This is because both approaches fundamentally aim to maximize the congruence between the row-wise and column-wise components of H. The underlying reason for this equivalence is that both optimizing the Hadamard product and the arithmetic mean of R ( H ) and C ( H ) focus on reinforcing the alignment and coherence across the various dimensions of the matrix"
+    },
+    {
+      "block_id": "s13_p4",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "Moreover, examining the gradients of these operations sheds light on their computational efficiencies. The gradient of R ( H ) odot C ( H ) entails a blend of partial derivatives interconnected via element-wise multiplication. It can be formally expressed as follows: &frac( tial(mathcal(R)(boldsymbol(widehat(H))) odot mathcal(C)(boldsymbol(widehat(H))))_(ij))( tial boldsymbol(widehat(H))_(ij)) = &mathcal(C)(boldsymbol(widehat(H)))_(ij) cdot frac( tial mathcal(R)(boldsymbol(widehat(H)))_(ij))( tial boldsymbol(widehat(H))_(ij)) + mathcal(R)(boldsymbol(widehat(H)))_(ij) cdot frac( tial mathcal(C)(boldsymbol(widehat(H)))_(ij))( tial boldsymbol(widehat(H))_(ij)). In contrast, the gradient of 1 (2)( R ( H ) + C ( H )) is characterized by a straightforward sum of partial derivatives: frac( tial (mathcal(R)(boldsymbol(widehat(H))) + mathcal(C)(boldsymbol(widehat(H))))_(ij))( tial boldsymbol(widehat(H))_(ij)) = frac( tial mathcal(R)(boldsymbol(widehat(H)))_(ij))( tial boldsymbol(widehat(H))_(ij)) + frac( tial mathcal(C)(boldsymbol(widehat(H)))_(ij))( tial boldsymbol(widehat(H))_(ij)). Element-wise addition, as used in the latter, tends to be numerically more stable and less susceptible to issues like floating-point precision errors, which are more common in element-wise multiplication operations. This stability is particularly beneficial when dealing with large-scale matrices or when the gradients involve extreme values, where numerical instability can pose significant challenges"
+    },
+    {
+      "block_id": "s13_p5",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "RFold",
+      "text": "The proposed simplification not only maintains the mathematical integrity of the optimization problem but also provides computational advantages, making it a desirable strategy in practical scenarios involving large and intricate datasets. Consequently, we define the overall loss function as the mean square error (MSE) between the averaged row-wise and column-wise components of H and the ground truth secondary structure M: mathcal(L)(boldsymbol(M)^*, boldsymbol(M)) = frac(1)(L^2) Big frac(1)(2)(mathcal(R)(boldsymbol(widehat(H))) + mathcal(C)(boldsymbol(widehat(H)))) - boldsymbol(M)Big ^2"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Practical Implementation",
+      "major_heading": "RFold",
+      "text": "We identify the problem of predicting H in R ^(L times L) from the given sequence attention map Z in R ^(L times L) as an image-to-image segmentation problem and apply the U-Net model to extract pair-wise information, as shown in Figure"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Practical Implementation",
+      "major_heading": "RFold",
+      "text": "To automatically learn informative representations from sequences, we propose a Seq2map attention module. Given a sequence in one-hot form X in R ^(Ltimes 4), we first obtain the sum of the token embedding and positional embedding as the input of the Seq2map attention. We denote the input as Z in R ^(L times D) for convenience, where D is the hidden layer size of the token and positional embeddings"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Practical Implementation",
+      "major_heading": "RFold",
+      "text": "Motivated by the recent progress in attention mechanisms [vaswani2017attention, choromanski2020rethinking, katharopoulos2020transformers, hua2022transformer], we aim to develop a highly effective sequence-to-map transformation based on pair-wise attention. We obtain the query Q in R ^(L times D) and key K in R ^(L times D) by applying per-dim scalars and offsets to Z: boldsymbol(Q) &= gamma_Q boldsymbol(Z) + beta_Q, boldsymbol(K) &= gamma_K boldsymbol(Z) + beta_K, where gamma_Q, gamma_K, beta_Q, beta_K in R ^(L times D) are learnable parameters"
+    },
+    {
+      "block_id": "s14_p3",
+      "heading": "Practical Implementation",
+      "major_heading": "RFold",
+      "text": "Then, the pair-wise attention map is obtained by: boldsymbol(widebar(Z)) = mathrm(ReLU)^2(boldsymbol(Q) boldsymbol(K)^T / L), where ReLU ^2 is an activation function that can be recognized as a simplified Softmax function in vanilla Transformers [so2021searching]. The output of Seq2map is the gated representation of Z: boldsymbol(widehat(Z)) = boldsymbol(widebar(Z)) odot sigma(boldsymbol(widebar(Z))), where sigma(cdot) is the Sigmoid function that performs as a gate"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Experiments",
+      "major_heading": "Experiments",
+      "text": "We conduct experiments to compare our proposed RFold with state-of-the-art and commonly used approaches. Multiple experimental settings are taken into account, including standard structure prediction, generalization evaluation, large-scale benchmark evaluation, cross-family evaluation, pseudoknot prediction and inference time comparison. Detailed experimental setups can be found in the Appendix"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Standard RNA Secondary Structure Prediction",
+      "major_heading": "Experiments",
+      "text": "Following [e2efold], we split the RNAStralign dataset into train, validation, and test sets by stratified sampling. We report the results in Table. Energy-based methods achieve relatively weak F1 scores ranging from 0. 420 to 0. 633. Learning-based folding algorithms like E2Efold and UFold significantly improve performance by large margins, while RFold obtains even better performance among all the metrics. Moreover, RFold obtains about 8% higher precision than the state-of-the-art method. This suggests that our optimization strategy is strict to satisfy all the hard constraints for predicting valid structures"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Generalization Evaluation",
+      "major_heading": "Experiments",
+      "text": "To verify the generalization ability of our proposed RFold, we directly evaluate the performance on another benchmark dataset ArchiveII using the pre-trained model on the RNAStralign training dataset. Following [e2efold], we exclude RNA sequences in ArchiveII that have overlapping RNA types with the RNAStralign dataset for a fair comparison. The results are reported in Table"
+    },
+    {
+      "block_id": "s17_p1",
+      "heading": "Generalization Evaluation",
+      "major_heading": "Experiments",
+      "text": "It can be seen that traditional methods achieve F1 scores in the range of 0. 545 to 0. 842. A recent learning-based method, MXfold2, obtains an F1 score of 0. 768, which is even lower than some energy-based methods. Another state-of-the-art learning-based method improves the performance to the F1 score of 0. 905. RFold further improves the F1 score to 0. 921, even higher than UFold. It is worth noting that RFold has a relatively lower result in the recall metric and a significantly higher result in the precision metric. The reason for this phenomenon may be the strict constraints of RFold. While none of the current learning-based methods can satisfy all the constraints we introduced in Sec., the predictions of RFold are guaranteed to be valid. Thus, RFold may cover fewer pair-wise interactions, leading to a lower recall metric. However, the highest F1 score still suggests the great generalization ability of RFold"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Large-scale Benchmark Evaluation",
+      "major_heading": "Experiments",
+      "text": "The bpRNA dataset is a large-scale benchmark, comprises fixed training (TR0), evaluation (VL0), and testing (TS0) sets. Following previous works [spot-rna, sato2021rna, ufold], we train the model in bpRNA-TR0 and evaluate the performance on bpRNA-TS0 by using the best model learned from bpRNA-VL0. The detailed results can be found in Table"
+    },
+    {
+      "block_id": "s18_p1",
+      "heading": "Large-scale Benchmark Evaluation",
+      "major_heading": "Experiments",
+      "text": "RFold outperforms the prior state-of-the-art method, SPOT-RNA, by a notable 4. 0% in terms of the F1 score. This improvement in the F1 score can be attributed to the consistently superior performance of RFold in the precision metric when compared to baseline models. However, it is important to note that the recall metric remains constrained, likely due to stringent constraints applied during prediction"
+    },
+    {
+      "block_id": "s18_p2",
+      "heading": "Large-scale Benchmark Evaluation",
+      "major_heading": "Experiments",
+      "text": "Following [ufold], we conduct an experiment on long-range interactions. Given a sequence of length L, the long-range base pairing is defined as the paired and unpaired bases with intervals longer than L/2. As shown in Table, RFold performs unexpectedly well on these long-range base pairing predictions and improves UFold in all metrics by large margins, demonstrating its strong predictive ability"
+    },
+    {
+      "block_id": "s18_p3",
+      "heading": "Large-scale Benchmark Evaluation",
+      "major_heading": "Experiments",
+      "text": "-3mm"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Cross-family Evaluation",
+      "major_heading": "Experiments",
+      "text": "The bpRNA-new dataset is a cross-family benchmark dataset comprising 1, 500 RNA families, presenting a significant challenge for pure deep learning approaches. UFold, for instance, relies on the thermodynamic method Contrafold for data augmentation to achieve satisfactory results. As shown in Table, the standard UFold achieves an F1 score of 0. 583, while RFold reaches 0. 616. When the same data augmentation technique is applied, UFold's performance increases to 0. 636, whereas RFold yields a score of 0. 651. This places RFold second only to the thermodynamics-based method, Contrafold, in terms of F1 score"
+    },
+    {
+      "block_id": "s20_p0",
+      "heading": "Predict with Pseudoknots",
+      "major_heading": "Experiments",
+      "text": "Following E2Efold [e2efold], we consider a sequence to be a true positive if it is correctly identified as containing a pseudoknot. For this analysis, we extracted all sequences featuring pseudoknots from the RNAStralign test dataset and assessed their predictive accuracy. The results of this analysis are summarized in the following table: RFold demonstrates superior performance compared to its counterparts across all evaluated metrics, i. e., precision, recall, and F1 score. This consistent outperformance across multiple dimensions of accuracy underscores the efficacy and robustness of the RFold approach in predicting RNA structures with pseudoknots"
+    },
+    {
+      "block_id": "s21_p0",
+      "heading": "Inference Time Comparison",
+      "major_heading": "Experiments",
+      "text": "We compared the running time of various methods for predicting RNA secondary structures using the RNAStralign testing set with the same experimental setting and the hardware environment as in [ufold]. The results are presented in Table, which shows the average inference time per sequence. The fastest energy-based method, LinearFold, takes about 0. 43s for each sequence. The learning-based baseline, UFold, takes about 0. 16s. RFold has the highest inference speed, costing only about 0. 02s per sequence. In particular, RFold is about eight times faster than UFold and sixteen times faster than MXfold2"
+    },
+    {
+      "block_id": "s23_p0",
+      "heading": "Bi-dimensional Optimization",
+      "major_heading": "Experiments",
+      "text": "To validate the effectiveness of our proposed bi-dimensional optimization strategy, we conduct an experiment that replaces them with other optimization methods. The results are summarized in Table, where RFold-E and RFold-S denote our model with the optimization strategies of E2Efold and SPOT-RNA, respectively. While precision, recall, and F1 score are evaluated at base-level, we report the validity which is a sample-level metric evaluating whether the predicted structure satisfies all the constraints. It can be seen that though RFold-E has comparable performance in the first three metrics with ours, many of its predicted structures are invalid. The optimization strategy of SPOT-RNA has incorporated no constraint that results in its low validity. Moreover, its strategy seems to not fit our model well, which may be caused by the simplicity of our proposed RFold model"
+    },
+    {
+      "block_id": "s24_p0",
+      "heading": "Seq2map Attention",
+      "major_heading": "Experiments",
+      "text": "We also conduct an experiment to evaluate the proposed Seq2map attention. We replace the Seq2map attention with the hand-crafted features from UFold and the outer concatenation from SPOT-RNA, which are denoted as RFold-U and RFold-SS, respectively. In addition to performance metrics, we also report the average inference time for each RNA sequence to evaluate the model complexity. We summarize the result in Table. It can be seen that RFold-U takes much more inference time than our RFold and RFold-SS due to the heavy computational cost when loading and learning from hand-crafted features. Moreover, it is surprising to find that RFold-SS has a little better performance than RFold-U, with the least inference time for its simple outer concatenation operation. However, neither RFold-U nor RFold-SS can provide informative representations like our proposed Seq2map attention. With comparable inference time with the simplest RFold-SS, our RFold outperforms baselines by large margins"
+    },
+    {
+      "block_id": "s25_p0",
+      "heading": "Row-wise and Column-wise Componenets",
+      "major_heading": "Experiments",
+      "text": "We conducted comprehensive ablation studies on the row-wise and column-wise components of our proposed model, RFold, by modifying the inference mechanism using pre-trained checkpoints. These studies were meticulously designed to isolate and understand the individual contributions of these components to our model's performance in RNA secondary structure prediction. The results, presented across three datasets—RNAStralign (Table ), ArchiveII (Table ), and bpRNA-TS0 (Table )—highlight two key findings: (i) Removing both the row-wise and column-wise components leads to a substantial drop in the model's performance, underscoring their pivotal role within our model's architecture. This dramatic reduction in effectiveness clearly demonstrates that both components are integral to achieving high accuracy. The significant decline in performance when these components are omitted highlights their essential function in capturing the complex dependencies within RNA sequences. (ii) The performance metrics when isolating either the row-wise or column-wise components are remarkably similar across all datasets. This uniformity suggests that the training process, which incorporates row-wise and column-wise softmax functions, likely yields symmetric outputs. Consequently, this symmetry implies that each component contributes in an almost equal measure to the model's overall predictive capacity"
+    },
+    {
+      "block_id": "s26_p0",
+      "heading": "Visualization",
+      "major_heading": "Experiments",
+      "text": "We visualize two examples predicted by RFold and UFold in Figure. The corresponding F1 scores are denoted at the bottom right of each plot. The first row of secondary structures is a simple example of a nested structure. It can be seen that UFold may fail in such a case. The second row of secondary structures is much more difficult that contains over 300 bases of the non-nested structure. While UFold fails in such a complex case, RFold can predict the structure accurately. Due to the limited space, we provide more visualization comparisons in Appendix"
+    },
+    {
+      "block_id": "s26_p1",
+      "heading": "Visualization",
+      "major_heading": "Experiments",
+      "text": "-2mm"
+    },
+    {
+      "block_id": "s27_p0",
+      "heading": "Conclusion",
+      "major_heading": "Conclusion",
+      "text": "In this study, we reformulate RNA secondary structure prediction as a K-Rook problem, thus transforming the prediction process into probabilistic matching. Subsequently, we introduce RFold, an efficient learning-based model, which utilizes a bidimensional optimization strategy to decompose the probabilistic matching into row-wise and column-wise components, simplifying the solving process while guaranteeing the validity of the output. Comprehensive experiments demonstrate that RFold achieves competitive performance with faster inference speed"
+    },
+    {
+      "block_id": "s27_p1",
+      "heading": "Conclusion",
+      "major_heading": "Conclusion",
+      "text": "The limitations of RFold primarily revolve around its stringent constraints. This strictness in constraints implies that RFold is cautious in predicting interactions, leading to higher precision but possibly at the cost of missing some true interactions. Though we have provided a naive solution in Appendix, it needs further studies to obtain a better strategy that leads to more balanced precision-recall trade-offs and more comprehensive structural predictions"
+    },
+    {
+      "block_id": "s28_p0",
+      "heading": "Acknowledgements",
+      "major_heading": "Acknowledgements",
+      "text": "This work was supported by National Science and Technology Major Project (No. 2022ZD0115101), National Natural Science Foundation of China Project (No. U21A20427), Project (No. WU2022A009) from the Center of Synthetic Biology and Integrated Bioengineering of Westlake University and Integrated Bioengineering of Westlake University and Project (No. WU2023C019) from the Westlake University Industries of the Future Research Funding"
+    },
+    {
+      "block_id": "s29_p0",
+      "heading": "Impact Statement",
+      "major_heading": "Impact Statement",
+      "text": "RFold is the first learning-based method that guarantees the validity of predicted RNA secondary structures. Its capability to ensure accurate predictions. It can be a valuable tool for biologists to study the structure and function of RNA molecules. Additionally, RFold stands out for its speed, significantly surpassing previous methods, marking it as a promising avenue for future developments in this field. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here"
+    },
+    {
+      "block_id": "s30_p0",
+      "heading": "Comparison of mainstream RNA secondary structure prediction methods",
+      "major_heading": "Comparison of mainstream RNA secondary structure prediction methods",
+      "text": "We compare our proposed method RFold with several other leading RNA secondary structure prediction methods and summarize the results in Table. RFold satisfies all three constraints (a)-(c) for valid RNA secondary structures, while the other methods do not fully meet some of the constraints. RFold utilizes a sequence-to-map attention mechanism to capture long-range dependencies, whereas SPOT-RNA simply concatenates pairwise sequence information and E2Efold/UFold uses hand-crafted features. In terms of prediction accuracy on the RNAStralign benchmark test set, RFold achieves the best F1 score of 0. 977, outperforming SPOT-RNA, E2Efold and UFold by a large margin. Regarding the average inference time, RFold is much more efficient and requires only 0. 02 seconds to fold the RNAStralign test sequences. In summary, RFold demonstrates superior performance over previous methods for RNA secondary structure prediction in both accuracy and speed"
+    },
+    {
+      "block_id": "s32_p0",
+      "heading": "Datasets",
+      "major_heading": "Experimental Details",
+      "text": "We use three benchmark datasets: (i) RNAStralign [tan2017turbofold], one of the most comprehensive collections of RNA structures, is composed of 37, 149 structures from 8 RNA types; (ii) ArchiveII [sloma2016exact], a widely used benchmark dataset in classical RNA folding methods, containing 3, 975 RNA structures from 10 RNA types; (iii) bpRNA [spot-rna], is a large scale benchmark dataset, containing 102, 318 structures from 2, 588 RNA types. (iv) bpRNA-new [sato2021rna], derived from Rfam 14. 2 [kalvari2021rfam], containing sequences from 1500 new RNA families"
+    },
+    {
+      "block_id": "s33_p0",
+      "heading": "Baselines",
+      "major_heading": "Experimental Details",
+      "text": "We compare our proposed RFold with baselines including energy-based folding methods such as Mfold [zuker2003mfold], RNAsoft [andronescu2003rnasoft], RNAfold [lorenz2011viennarna], RNAstructure [mathews2006prediction], CONTRAfold [do2006contrafold], Contextfold [zakov2011rich], and LinearFold [huang2019linearfold]; learning-based folding methods such as SPOT-RNA [spot-rna], Externafold [wayment2021rna], E2Efold [e2efold], MXfold2 [sato2021rna], and UFold [ufold]"
+    },
+    {
+      "block_id": "s34_p0",
+      "heading": "Metrics",
+      "major_heading": "Experimental Details",
+      "text": "We evaluate the performance by precision, recall, and F1 score, which are defined as: small mathrm(Precision) &= frac(mathrm(TP))(mathrm(TP)+mathrm(FP)), mathrm(Recall) = frac(mathrm(TP))(mathrm(TP)+mathrm(FN)), mathrm(F1) &= 2 frac(mathrm(Precision) cdot mathrm(Recall))(mathrm(Precision) + mathrm(Recall)), where TP, FP, and FN denote true positive, false positive and false negative, respectively"
+    },
+    {
+      "block_id": "s35_p0",
+      "heading": "Implementation details",
+      "major_heading": "Experimental Details",
+      "text": "Following the same experimental setting as [ufold], we train the model for 100 epochs with the Adam optimizer. The learning rate is 0. 001, and the batch size is 1 for sequences with different lengths"
+    },
+    {
+      "block_id": "s36_p0",
+      "heading": "Discussion on Abnormal Samples",
+      "major_heading": "Discussion on Abnormal Samples",
+      "text": "Although we have illustrated three hard constraints in, there exist some abnormal samples that do not satisfy these constraints in practice. We have analyzed the datasets used in this paper and found that there are some abnormal samples in the testing set that do not meet these constraints. The ratio of valid samples in each dataset is summarized in the table below:"
+    },
+    {
+      "block_id": "s36_p1",
+      "heading": "Discussion on Abnormal Samples",
+      "major_heading": "Discussion on Abnormal Samples",
+      "text": "As shown in Table, RFold forces the validity to be 100. 00%, while other methods like E2Efold only achieve about 50. 31%. RFold is more accurate than other methods in reflecting the real situation"
+    },
+    {
+      "block_id": "s36_p2",
+      "heading": "Discussion on Abnormal Samples",
+      "major_heading": "Discussion on Abnormal Samples",
+      "text": "Nevertheless, we provide a soft version of RFold to relax the strict constraints. A possible solution to relax the rigid procedure is to add a checking mechanism before the Argmax function in the inference. Specifically, if the confidence given by the Softmax is low, we do not perform Argmax and assign more base pairs. It can be implemented as the following pseudo-code:"
+    },
+    {
+      "block_id": "s36_p3",
+      "heading": "Discussion on Abnormal Samples",
+      "major_heading": "Discussion on Abnormal Samples",
+      "text": "-2mm"
+    },
+    {
+      "block_id": "s36_p4",
+      "heading": "Discussion on Abnormal Samples",
+      "major_heading": "Discussion on Abnormal Samples",
+      "text": "We conduct experiments to compare the soft-RFold and the original version of RFold in the RNAStralign dataset. The results are summarized in the Table. It can be seen that soft-RFold improves the recall metric by a small margin. The minor improvement may be because the number of abnormal samples is small. We then select those samples that do not obey the three constraints to further analyze the performance. The total number of such samples is 179. It can be seen that soft-RFold can deal with abnormal samples well. The improvement of the recall metric is more obvious"
+    }
+  ],
+  "load_seconds": 3.604139078001026
+}

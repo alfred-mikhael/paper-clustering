@@ -1,0 +1,631 @@
+{
+  "arxiv_id": "2304.09092",
+  "title": "Sliced Optimal Transport on the Sphere",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "Sliced optimal transport reduces optimal transport on multi-dimensional domains to transport on the line. More precisely, sliced optimal transport is the concatenation of the well-known Radon transform and the cumulative density transform, which analytically yields the solutions of the reduced transport problems. Inspired by this concept, we propose two adaptions for optimal transport on the 2-sphere. Firstly, as counterpart to the Radon transform, we introduce the vertical slice transform, which integrates along all circles orthogonal to a given direction. Secondly, we introduce a semicircle transform, which integrates along all half great circles with an appropriate weight function. Both transforms are generalized to arbitrary measures on the sphere. While the vertical slice transform can be combined with optimal transport on the interval and leads to a sliced Wasserstein distance restricted to even probability measures, the semicircle transform is related to optimal transport on the circle and results in a different sliced Wasserstein distance for arbitrary probability measures. The applicability of both novel sliced optimal transport concepts on the sphere is demonstrated by proof-of-concept examples dealing with the interpolation and classification of spherical probability measures. The numerical implementation relies on the singular value decompositions of both transforms and fast Fourier techniques. For the inversion with respect to probability measures, we propose the minimization of an entropy-regularized Kullback--Leibler divergence, which can be numerically realized using a primal-dual proximal splitting algorithm."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Optimal transport and in particular Wasserstein distances between measures have received much attention from a theoretical and practical point of view [PeyCut19, San15, Vil03] and recently became of interest in neural gradient flows [FZTC2022, KSB2022, AHS2023]. While Wasserstein distances are in general hard to compute, there exist analytic formulas for optimal transport on the line. Therefore sliced Wasserstein distances, which basically combine the Radon transform in Euclidean spaces with optimal transport on the line, have become quite popular [RabPeyDelBer12, San15, NRNRNH23]. In particular, the related Radon cumulative distribution transform has been applied for interpolation and classification as well as for model reduction [KolParRoh16, GuaLiaDuYin19, RenWolMao21, ShiRub21, BRPP15]. The idea behind sliced optimal transport has been generalized and transferred to many related problems. There exists sliced variants [BC19, BSTK23] of partial optimal transport [Fig10, CAG20], where only a fraction of mass is transported, and a sliced version [CTP+21] of multi-marginal optimal transport [GS98, BLNS22, BBS22], considering the transport between several measures instead of only two. For optimal transport on Riemannian manifolds, sliced Wasserstein distances based on the push-forward of the eigenfunctions of the Laplacian have been proposed in [RusMaj20]. Especially for shape and graph analysis, sliced optimal transport has been transferred to the Gromov Wasserstein setting [VFC+19], which more generally defines a metric between metric measure spaces [Mem11, Stu20, BeBeSt22]. Differently from the Wasserstein formulation with its analytic solution, the Gromov Wasserstein transport on the line is more involved [BCS22, DLV23]"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "In this paper, we transfer the slicing approach to optimal transport on the two-dimensional sphere. Spherical optimal transport has been intensely studied in recent years. For instance, the problem can be solved using a Monge Ampère type equation [HamTur22, McrCotBud18, WelBroBudCul16] or a variational framework [CuiQi19]. The regularity of optimal maps has been investigated in [Loe10]. Spherical Wasserstein barycenters have been computed using a stochastic projected subgradient method [StaClaSolJeg17] and have been estimated on random graphs [TheKer22]"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "To introduce slicing frameworks on the sphere, we do not follow the Laplacian approach in [RusMaj20], but focus on spherical counterparts of the Radon transform. A well-known one is the Funk Radon transform [Fun13, Hel11, LoRiSpSp11, QueWeiHubErc23], which takes integrals along all great circles. Integration along all circles of a fixed radius were studied in [Sch69, Rub00]. Further Radon-type transforms were considered based on intersections with planes containing a fixed point inside the sphere [Pal16, Sal17, Qu17, Que20], on the sphere [AbDa93, Rub22], and outside the sphere [AgRu20]. Moreover, transforms including derivatives were proposed in [MaMaOd01, QuHiLo18]. However, in the context of sliced optimal transport, we require that probability density functions on the sphere are mapped to a family of probability density functions on one-dimensional domains. For this purpose, we consider two specific spherical transforms, namely the vertical slice transform and the normalized semicircle transform"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The vertical slice transform was first considered in [GiReSh94] and applied in [ZaSc10, HiQu15circav] for photoacoustic tomography. The generalization to higher dimensions is due to [Rub19]. The basic idea is to take means along parallel circles, see fig: vertical_slice_1, which gives a probability density function on an interval. The process is then repeated for further directions. Geometrically, the areas of integration for a fixed direction can be imagined like an egg cutter applied to the sphere. We generalize the vertical slice transform to probability measures and use it to define a vertical sliced Wasserstein distance. Radon transforms of measures have been considered in the context of a dual fibration, cf. [GelShm83, Pal95] and [Chap. 2, § 2, Hel11], where they are defined via duality. We will see that our definition via the push-forward of measures can be also derived from that point of view"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "An (unnormalized) semicircle transform was examined in [Gro98, HiPoQu18]. It takes integrals along semicircles starting in a fixed point, see fig: vertical_slice_2, and yields a function defined on the one-dimensional unit circle. The process is then repeated for further starting points. This transform has been combined with optimal transport on the circle to obtain a sliced Wasserstein distance [Bon22]. However, the crucial point is here that the unnormalized semicircle transform does not map probability density functions to probability density functions, meaning that optimal transport techniques on the circle cannot be applied. In the numeric part of [Bon22], the authors restrict themselves to point measures, which then are projected onto great circles. This approach corresponds to an appropriately normalized semicircle transform instead, where the integrand is multiplied with a certain weight function. In this paper, we introduce and study this normalized semicircle transform in a rigours manner to obtain a semicircular sliced Wasserstein distance"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Main contributions",
+      "major_heading": "Introduction",
+      "text": "start-of-itemize:. We give rigorous definitions of the vertical slice and the normalized semicircle transform, which are originally considered only for functions, and generalize them to measures using an appropriate push-forward. For absolutely continuous measures, the generalized and initial definitions coincide in the sense that merely the density function has to be transformed. Furthermore, probability measures are transformed to probability measures.. We prove a singular value decomposition of the normalized semicircle transform, which provides an approach for numerical computations. Moreover, the singular value decompositions of the vertical slice and the normalized semicircle transform allow the inversion via their Moore Penrose pseudoinverses.. We define sliced Wasserstein distances on the sphere based on both transform. We show that the normalized semicircle transform is injective for all measures, and hence the sliced Wasserstein distance indeed fulfills the properties of a metric. Furthermore, the vertical sliced Wasserstein distance is a metric for even measures on the sphere.. We propose a Tikhonov-type regularization which minimizes a variational model consisting of the entropy-regularized Kullback Leibler divergence. This ensures that the inverse is a probability measure and in particular non-negative. Further, this allows to compute a sliced CDT interpolation between spherical probability measures to approximate Wasserstein barycenters. end-of-itemize"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Outline of the Paper",
+      "major_heading": "Introduction",
+      "text": "We start in sec: prelim with the necessary preliminaries on optimal transport, the unit sphere and the rotation group on R^3. Then, we introduce the two counterparts of the Radon transform on S^2, namely the vertical slice transform in sec: vert_slice and the normalized semicircle transform in sec: semicircle. First, we define the transforms for functions and derive their adjoint operators and singular value decompositions on L^2(S^2). In order to combine these transforms with optimal transport on the interval and the circle respectively, we have to enlarge their definitions to measure spaces which we have not found in a mathematically rigorous form in the literature. sec: SOT connects the above transforms with optimal transport to introduce spherical sliced Wasserstein distances for measures on the sphere. sec: disc-and-inv deals with the discretization of the spherical transforms and their inversion, which is an ill-posed problem. For an approximate inversion, we can use the truncated Moore Penrose pseudoinverse. However, when dealing with probability density functions, this inversion does not guarantee the non-negativity of the reconstructed function. Therefore, we suggest another reconstruction which minimizes a variational model consisting of an entropy-regularized Kullback Leibler divergence, see sec: reg. The actual minimization can be done by a primal-dual splitting. Numerical proof-of-concept results are reported in sec: numerics, where we provide two kinds of experiments. First, we show in sec: int-meas that Wasserstein barycenters on the sphere can be approximated using sliced Wasserstein transforms and Wasserstein interpolation on the interval and the circle respectively. These results require in particular the inversion of the sliced spherical transforms. Second, we demonstrate by a synthetic example that the binary classification of different measures is in principle possible in sec: classification"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "In this section, we first provide the notation and necessary preliminaries on optimal transport, in particular on the interval and the circle. Then, we recall basic facts about the unit sphere and the rotation group on mathbb R^3"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "Measures and Optimal Transport",
+      "major_heading": "Preliminaries",
+      "text": "Let X be a compact metric space with metric dcolon X times X to R, and let B(X) be the Borel sigma -algebra induced by d. By M(X), we denote the Banach space of signed, finite measures, and by P(X) the subset of probability measures on X. The pre-dual space of M(X) is C(X). Let Y be another compact metric space and Tcolon X to Y be measurable. For mu in M(X), we define the push-forward measure T_# mu coloneqq mu circ T^(-1) in M(mathbb Y). For any measure pi in M(X times Y) with first marginal mu in M(X), i. e., pi(B times Y) = mu(B) for all B in B(X), we call a collection of measures pi_x in M(Y), x in X, a disintegration family if int_(X times Y) f(x, y) d pi(x, y) = int_X int_Y f(x, y) d pi_x(y) d mu(x) for all measurable functions f on X times Y"
+    },
+    {
+      "block_id": "s4_p1",
+      "heading": "Measures and Optimal Transport",
+      "major_heading": "Preliminaries",
+      "text": "The p - Wasserstein distance, pin[1, infty), of mu, nu in P(mathbb X) is given by WS_p^p(mu, nu) coloneqq min_(piinPi(mu, nu)) int_(mathbb X^2) d^p(x, y) d pi (x, y), with Pi(mu, nu) coloneqq (pi inM(mathbb X times mathbb X): pi(B times mathbb X) = mu(B), pi(mathbb Xtimes B) = nu(B) for all B in B(mathbb X)). It defines a metric on P(mathbb X). The metric space P^p(mathbb X) coloneqq ( P(mathbb X), W_p) is called p -Wasserstein space and, in case p=2, just Wasserstein space. The above Wasserstein distance is just a special case of the more general optimal transport problem, where d^p(x, y) can be replaced by a more general cost function c(x, y). For deltain[0,1], the p -Wasserstein barycenter between mu, nuinP^p(X) is the minimizer of min_(omegainP(X)) (1-delta) WS_p^p(mu, omega) + delta WS_p^p(nu, omega), see [AguCar11]. Note that the Wasserstein barycenter between absolutely continuous measures is unique, cf. [KimPas17]"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "Optimal Transport on the Interval",
+      "major_heading": "Preliminaries",
+      "text": "If X is the unit interval II coloneqq [-1,1] with the distance d(x, y) = x-y, the optimal transport between two probability measures mu, nuin P(II) can be computed easily [PeyCut19, San15, Vil03] using the cumulative distribution function F_mu(x) coloneqq mu([-1,x]), xinII, which is non-decreasing and right-continuous. Its pseudoinverse, the quantile function F_mu^(-1)(r) coloneqq min( xinII: F_mu(x)ge r), rin[0,1], is non-decreasing and left-continuous. The measure mu can be recovered by mu = (F_mu^(-1))_# sigma_([0,1]), where sigma_([0,1]) denotes the Lebesque measure on [0,1]. The p -Wasserstein distance between mu, nu in P^p(II) now equals WS_p(mu, nu) = lVert F_mu^(-1) - F_nu^(-1) rVert_(L^p([0,1])). Moreover, if mu in Pac(II), where Pac(II) denotes the probability measures that are absolutely continuous with respect to the Lebesgue measure, then the optimal transport plan pi in is uniquely given by pi = (Id, T^(mu, nu))_# mu quadtext(with)quad T^(mu, nu)(x) coloneqq F_nu^(-1)(F_mu(x)), quad x in II"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "Optimal Transport on the Interval",
+      "major_heading": "Preliminaries",
+      "text": "Based on the optimal transport map T^(mu, nu), the Wasserstein space P^p(II) can be isometrically embedded into L^p_omega(II) with omega in Pac(II) [KolParRoh16, PaKoSo18, BeBeSt22], where L^p_omega(II) consists of all p -integrable functions with respect to omega. More precisely, for the reference measure omega in Pac(II), the cumulative distribution transform (CDT) is defined by CDT_omega colon P^p(II) to L^p_omega(II) with CDT_(omega)[mu] (x) coloneqq (T^(omega, mu) - Id)(x) = bigl(F_(mu)^(-1) circ F_(omega) bigr) (x) - x, quad xinII, and we especially have WS_p(mu, nu) = lVert CDT_omega[mu] - CDT_(omega)[nu] rVert_(L^p_omega(II)). The CDT is in fact a mapping from P^p(II) into the tangent space of P^p(II) at omega, see [§ 8.5, AGS05]. Due to the relation to the optimal transport map, the CDT can be inverted by mu = CDT^(-1)_omega[h] coloneqq (h + Id)_# omega for h = CDT_omega[mu]. If mu, omega in Pac(II) possess the density functions f_mu > 0, f_omega > 0, then, by the transformation formula for push-forward measures, f_mu can be recovered by f_mu(x) = left( g^(-1) right)'(x) f_omega(g^(-1)(x)) quad text(with) quad g(x) = CDT_omega[mu](x) + x, quad x in II. For mu, nu in P(II), and an arbitrary reference measure omega in Pac(II), the 2-Wasserstein barycenter has the form CDT^(-1)_(omega)left( delta CDT_omega [nu] + (1-delta) CDT_omega[mu] right), see [KolParRoh16]. In particular for omega = mu, we have by that CDT_mu[mu](x) = F_mu^(-1)(F_mu(x))-x = 0 and therefore the barycenter becomes CDT^(-1)_(mu)left( delta CDT_mu [nu] right)"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Optimal Transport on the Circle",
+      "major_heading": "Preliminaries",
+      "text": "On the circle T coloneqq R/(2piZ) equipped with the metric d(x, y) coloneqq min_(kinZ) x-y+2pi k, the optimal transport can be computed in a similar manner by incorporating the periodicity. Following [DelSalSob10, RabDelGou11], we define the (extended) cumulative distribution function by tilde F_mu(x) coloneqq mu([0,x]) for x in [0,2pi] and extend it to mathbb R by the convention tilde F_mu(x + 2pi) coloneqq tilde F_mu(x) + 1. Its pseudoinverse, the (extended) quantile function, is defined as tilde F_mu^(-1)(r) coloneqq min( xinR: tilde F_mu(x)ge r) for rin R. Note that tilde F and tilde F^(-1) are mappings defined on entire R. The p -Wasserstein distance between mu, nu in P(T) is given by W_p^p(mu, nu) = min_(thetainR) int_(0)^(1) lverttilde F_mu^(-1)(r) - (tilde F_nu - theta)^(-1)(r) rvert^p d r, where (tilde F_nu - theta)^(-1) is the pseudoinverse of the shifted cumulative distribution function [RabDelGou11]. For mu in Pac(T), each minimizer theta of yields an optimal transport plan pi = (Id, iota(tilde T^(mu, nu)))_# mu quadtext(with)quad tilde T^(mu, nu)(x) coloneqq (tilde F_nu - theta)^(-1) (tilde F_mu(x)), quad x in [0, 2pi), where iota colon R to T denotes the canonical projection from the line to the circle. Note that tilde T^(mu, nu)(x) in R is the representative of iota(tilde T^(mu, nu)(x)) in T with d(x, iota(tilde T^(mu, nu)(x))) = lvert x - tilde T^(mu, nu)(x) rvert. If p>1 and mu, nuinPac(T), the minimizer theta of is unique. This follows by the proof of [Lem. 5.2, DelSalSob10], where it is shown that the objective of is convex in theta, but the argument even implies strict convexity. In analogy to, we define for pin(1, infty), the circular CDT (cCDT) of muinPac(T) with reference measure omegainPac(T) by sCDT_omega colon P^p(T) to L^p_omega(T) with sCDT_(omega)[mu] (x) coloneqq (tilde T^(omega, mu) - Id)(x) = bigl((tilde F_(mu)-theta_(omega, mu))^(-1) circ tilde F_(omega)bigr) (x) - x, quad xin[0, 2pi), where tilde T^(omega, mu) is the optimal transport plan and theta_(omega, mu) the minimizer of. Note that the cCDT is no longer an isometric embedding. The cCDT can be inverted by mu = sCDT^(-1)_omega[h] coloneqq (iota circ(h + Id))_#omega for h = sCDT_omega[mu]. If mu, omega in Pac(T) have densities f_mu > 0, f_omega > 0, the density f_mu can be recovered similarly to via f_mu(x) = left( g^(-1)right)'(x) f_omega(g^(-1)(x)) quad text(with) quad g(x) = iota left(sCDT_omega[mu](x) + x right), quad x in T. In analogy to with omega = mu, we interpolate between the measures mu, nu in Pac(T) by sCDT^(-1)_(mu)[delta sCDT_(mu)[nu]]"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "Unit  Sphere",
+      "major_heading": "Preliminaries",
+      "text": "The two-dimensional unit sphere is defined as S^(2) coloneqq (bx inR^3: bx =1). The canonical unit vectors are henceforth denoted by zb e^j, j=1, 2, 3. Points bxi in S^2 can be parameterized in spherical coordinates bxi = sph(varphi, vartheta) coloneqq left( cosvarphi sinvartheta, sinvarphi sinvartheta, cosvarthetaright) in S^2, quad varphiinT, varthetain[0,pi]. The restriction sphcolon left(Ttimes (0, pi) right) cup left((0)times(0, pi ) right) to mathbb S^2 is a bijective mapping. We denote the first and second component of this restriction as azimuth angle azi(bxi) and zenith angle zen(bxi), respectively, which are uniquely given by azi(sph(varphi, vartheta)) = varphi quadtext(and)quad zen(sph(varphi, vartheta)) = vartheta for all (varphi, vartheta) in left(Ttimes (0, pi) right) cup left((0)times(0, pi ) right). The surface measure sigma_(S^2) on the sphere is given by int_(S^2) f(bxi) dsigma_(S^2)(bxi) = int_(0)^(pi) int_(T) f(sph(varphi, vartheta)) sinvartheta dvarphi d vartheta. Normalizing sigma_(S^2) yields the uniform measure u_(S^2) coloneqq (4pi)^(-1) sigma_(S^2). We denote by L^(p)(S^2), p in [1,infty], the Banach space of all (equivalence classes of) p -integrable functions on S^2, where we use the above surface measure"
+    },
+    {
+      "block_id": "s8_p1",
+      "heading": "Unit  Sphere",
+      "major_heading": "Preliminaries",
+      "text": "We define the spherical harmonics of degree ninNN and order k=-n, dots, n by Y_n^k(sph(varphi, t)) coloneqq sqrt(frac(2n+1)(4pi) frac((n-k)! )((n+k)! )) P_n^k(cosvartheta) e^(i k varphi), where P_n^kcolon [-1,1] to R denotes the associated Legendre functions defined by P_n^k(t) coloneqq frac((-1)^k)(2^n n! ) (1-t^2)^(frac(k)(2)) frac( text(d)^(n+k) (t^2-1)^n)( text( d) t^(n+k)), qquad ninN_0, kin(0, dots, n) and P_n^(-k) coloneqq (-1)^k frac((n-k)! )((n+k)! ) P_n^k. The spherical harmonics (Y_n^k: ninNN, k= -n,, dots, n) form an orthonormal basis of L^2(mathbb S^2). Finally, the Sobolev space H^s(S^2) with sge 0, is defined as the completion of C^infty(S^(2)) with respect to the norm norm(f)_(H^s(S^(2))) coloneqq sum_(n=0)^(infty) left(n+tfrac(1)(2)right)^(2s) sum_(k=-n)^(n) abs(langle f, Y_n^krangle_(L^2(S^(2))) )^2"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Rotation Group",
+      "major_heading": "Preliminaries",
+      "text": "Next, we are interested in the rotation group SO coloneqq (bQinR^(3times3): bQ^top bQ=I, det(bQ)=1). Any matrix in SO has an Euler angle parameterization eul(alpha, beta, gamma) coloneqq zb R_3(alpha) zb R_2(beta) zb R_3(gamma) inSO, qquad alpha, gammainT, betain[0,pi], where zb R_3(alpha) coloneqq cosalpha &-sinalpha &0 sinalpha &cosalpha &0 0&0&1, zb R_2(beta) coloneqq cosbeta&0 &sinbeta 0&1&0 -sinbeta&0 &cosbeta. The rotation group SO can be identified with the product S^2timesT via the bijection S^2timesT ni (bxi, gamma) mapsto eul(azi(bxi), zen(bxi), gamma) in SO, cf. [GrPo09]. In Euler angles, the rotationally invariant measure sigma_(SO) on SO is given by int_(SO) f(bQ) dsigma_(SO)(bQ) &= int_(0)^(2pi) int_(0)^(pi) int_(0)^(2pi) f(eul(alpha, beta, gamma)) sin(beta) dalpha dbeta dgamma &= int_(T) int_(S^2) f(eul(alpha, beta, gamma)) dsigma_(S^2) (sph(alpha, beta)) dgamma. The uniform measure on SO is u_(SO) coloneqq (8pi^(2))^(-1) sigma_(SO)"
+    },
+    {
+      "block_id": "s9_p1",
+      "heading": "Rotation Group",
+      "major_heading": "Preliminaries",
+      "text": "The rotational harmonics or Wigner D-functions D_n^(k, j) of degree ninNN and orders k, jin(-n, dots, n) are defined by D_n^(k, j) (eul(alpha, beta, gamma)) coloneqq e^(-mathrm(i)kalpha) d_n^(k, j) (cosbeta) e^(-mathrm(i)jgamma), where the Wigner d-functions are given for tin[-1,1] by d_n^(k, j)(t) &coloneqq frac((-1)^(n-j))(2^n) sqrtfrac((n+k)! (1-t)^(j-k))((n-j)! (n+j)! (n-k)! (1+t)^(j+k)) frac(dx^(n-k))(dx t^(n-k)) frac((1+t)^(n+j))((1-t)^(-n+j)), see [chap. 4, Varsha88]. The rotational harmonics are the matrix entries of the left angular representations of SO, i. e., Y_n^k(bQ^tT bxi) = sum_(j=-n)^(n) D_n^(j, k)(bQ) Y_n^j(bxi), quad bQinSO, bxiinS^2. They satisfy the orthogonality relation int_(SO) D_n^(j, k)(bQ) D_(n')^(j', k')(bQ) d bQ = frac(8pi^2)(2n+1) delta_(n, n') delta_(k, k') delta_(j, j'), for all n, n'inN_0, j, k=-n, dots, n, and j', k'=-n', dots, n', where delta denotes the Kronecker symbol. Then ( big( 2n+1 (8pi^2)big)^frac12 D_n^(j, k): n in mathbb N_0, j, k = -n, ldots, n) form an orthonormal basis of L^2(SO)"
+    },
+    {
+      "block_id": "s9_p2",
+      "heading": "Rotation Group",
+      "major_heading": "Preliminaries",
+      "text": "Finally, the Sobolev space H^s(SO) with sge0 is defined as the completion of C^infty(SO) with respect to the Sobolev norm norm(g)_(H^s(SO))^2 coloneqq sum_(n=0)^infty left( n+tfrac12right)^(2s) sum_(j, k=-n)^(n) frac(8pi^2)(2n+1) | langle g, D_n^(j, k)rangle|^2"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "In analogy to the Radon transform, the main idea behind the vertical slice transform is to integrate a given function f colon S^2 to R along parallel vertical slices. To describe these slices mathematically, we define the slicing operator cS_psi colon S^2 to II for any fixed psi in T by cS_psi (zb xi) coloneqq langle bxi, (cos psi, sin psi, 0)^tT rangle = cos(psi) xi_1 + sin(psi) xi_2, and the corresponding slice / circle by C_(psi)^(t) coloneqq cS_psi^(-1)(t) = (zb xi in mathbb S^2: cS_psi (zb xi) = t), quad t in II. The slice C_(psi)^(t) is the intersection of mathbb S^2 and the plane with normal (cos psi, sin psi, 0)^tT and distance t from the origin, An illustration of the slices C_psi^t for fixed psi is given in fig: vertical_slice_1. The vertical slice transform V is defined by mathcal V f(psi, t) coloneqq frac(1)(2 pi sqrt(1-t^2)) int_(C_(psi)^(t)) f(zbxi) ds (bxi), qquad psiinT, tin (-1, 1), where d s denotes the arc-length on C_(psi)^(t). For t = pm 1, the vertical slice transform is mathcal V f (psi, 1) coloneqq f(cospsi, sinpsi, 0) quadtext(and)quad mathcal V f (psi, -1) coloneqq f(-cospsi, -sinpsi, 0). For fixed psi in T, we define the (normalized) restrictions V_psicoloneqq 2pi V(psi, cdot). This corresponds to projecting the mean values of f along C_(psi)^(t) to t in II. For an illustration see again fig: vertical_slice_1. The different normalizations of V and V_psi are chosen with respect to the later generalization to measures and ensure that density functions are transformed to density functions by V and V_psi. By the following proposition, both operators are well defined almost everywhere"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proposition: Let 1 le p le infty. For every f in L^p(S^2), it holds int_(II) V_psi f(t) dx t = int_(S^2) f(zbxi) dxsigma_(S^2)(zbxi) quadtext(and)quad int_(T)int_(II) V f(psi, t) dx t d psi = int_(S^2) f(zbxi) dxsigma_(S^2)(zbxi). Let psi in T. The operators V_psi colon L^p(S^2) to L^p(II) and V colon L^p(S^2) to L^p(T times II) are bounded with lVert V_psi rVert_(L^p to L^p) = (2pi)^(1-1/p) quadtext(and)quad lVert V rVert_(L^p to L^p) = 1. Moreover, it holds V_psi colon C(S^2) to C(II) and V colon C(S^2) to C(T times II). end-of-proposition"
+    },
+    {
+      "block_id": "s11_p2",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proof: We parameterize the upper and lower hemispheres by H_(psi)^pm (s, t) coloneqq t cos(psi) - s sin(psi) t sin(psi) + s cos(psi) pm sqrt(1- t^2 - s^2), quad s in sqrt(1-t^2) II, t in II. Then the upper and lower semicircle of C_(psi)^(t) can be parameterized via H_(psi)^pm(cdot, t). Thus we obtain int_(mathbb S^2) f(zb xi) dxsigma_(S^2)(zb xi) &= int_(II) int_(sqrt(1-t^2) II) left( f(H_(psi)^+(s, t) + f(H_(psi)^-(s, t) )right) frac(1)(sqrt(1-t^2-s^2) ) dx s dx t &= int_(II) frac(1)(sqrt(1-t^2)) int_(C_(psi)^(t)) f(zb xi) ds(bxi) dx t = int_(II) V_psi f(t) dx t. Using and integrating over psi immediately yields the second identity in. By Fubini's theorem, V_psi and V are well defined. Following the above computation for the absolute value of f, we obtain with the triangle inequality lVert V_psi rVert_(L^1 to L^1) = lVert V rVert_(L^1 to L^1) = 1. Since the vertical slice transform is essentially bounded by lvert V_psi f(t) rvert le frac(1)(sqrt(1-t^2)) int_(C_(psi)^(t)) lvert f( bxi ) rvert ds(bxi) le 2pi esssup_(bxi in S^2) lvert f(bxi) rvert, we further have lVert V_psi rVert_(L^infty to L^infty) = 2pi and lVert V rVert_(L^infty to L^infty) = 1. Now the second assertion follows from the Riesz Thorin interpolation theorem. The last assertion is an immediate consequence of Lebesgue's dominated convergence theorem. end-of-proof"
+    },
+    {
+      "block_id": "s11_p3",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "Since all circles C_(psi)^(t) are symmetric with respect to the xi_1 - xi_2 plane, V f vanishes for functions f which are odd in the third coordinate, i. e., f(xi_1, xi_2, xi_3) = - f(xi_1, xi_2, -xi_3). For brevity, we call these functions odd. In [GiReSh94], an explicit inversion formula for even functions, i. e., f(xi_1, xi_2, xi_3) = f(xi_1, xi_2, -xi_3), is derived. However, as for the Radon inversion formula, this formula leads to instable practical computations if we leave the range of V. For numerical simulation, we will invert V using its singular value decomposition. For this purpose, notice that the spherical harmonics Y^k_n with even k+n are even functions, while those with odd k+n are odd functions"
+    },
+    {
+      "block_id": "s11_p4",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-theorem: [ [Thm. 3.3, HiQu15circav] ] The vertical slice transform fulfills V Y_n^k (psi, t) = mathrm(v)_n^k sqrt(tfrac(2n+1)(4 pi)) e^(i k psi) P_n(t), qquad ninNN, kin(-n, dots, n), n+ktext( even), where mathrm(v)_n^k coloneqq (-1)^(frac(n+k)2) sqrt(frac((n-k)! )((n+k)! )) frac((n+k-1)!! ) ((n-k)!! ). There exist constants C_1, C_2>0 such that for all ninNN, kin(-n, dots, n) with n+k even, C_1(n+1/2)^(-1/2) le lvert mathrm(v)_n^krvert le C_2(n+1/2)^(-1/4). end-of-theorem"
+    },
+    {
+      "block_id": "s11_p5",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "Noting that the functions B_n^k(psi, t) coloneqq sqrt(frac(2n+1)(4pi)) P_n(t) e^(i k psi), qquad forall (psi, t) in Ttimes II, form an orthonormal basis of L^2(T times II) and that v _n^k to 0 as n to infty, we deduce that Vcolon L^2(S^2) to L^2(T times II) is a compact operator with singular value decomposition V f (psi, t) = sum_(n in (mathbb N_0)) sum_(substack(k=-n +k text(even)) )^n mathrm(v)_n^k B_n^k(psi, t). Restricting V to even functions L^2_(sym)(S^2), where L^p_(sym)(S^2) with 1 le p le infty is defined as L^p_(sym)(S^2) coloneqq bigl(fin L^p(S^2): f(xi)= check f(xi) text( a. e. on )S^2 bigr) and check f(bxi) coloneqq f(xi_1, xi_2, -xi_3) is the reflection at the xi_1 - xi_2 plane, the operator Vcolon L^2_(sym)(S^2) to L^2(T times II) is injective. Its Moore Penrose pseudoinverse, cf. [EnHaNe96], is given by V^dagger colon mathcal R(V)oplus mathcal R(V)^perp to L^2_(sym)(S^2), qquad V^dagger g = sum_(n in (mathbb N_0)) sum_(substack(k=-n +k text(even)) )^n (mathrm(v)_n^k)^(-1) langle g, B_n^k rangle Y^k_n, where R(V) denotes the range of V. We will further need the adjoint operator of V"
+    },
+    {
+      "block_id": "s11_p6",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proposition: Let 1 le p, q le infty with 1/p + 1/q = 1. For 1 le p < infty, the adjoint V^*colon L^q(T times II) to L^q(S^2) of Vcolon L^p(S^2) to L^p(T times II) is given by mathcal V^*g(bxi) = frac(1)(2pi) int_(T) g(psi, xi_1cospsi+xi_2sinpsi) dpsi, and the adjoint V_psi^*colon L^q(II) to L^q(S^2) of V_psi colon L^p(S^2) to L^p(II) by mathcal V_psi^*g(bxi) = g(xi_1cospsi+xi_2sinpsi). Moreover, it holds V^* colon C(T times II) to C(S^2) and V_psi^* colon C(II) to C(S^2). end-of-proposition"
+    },
+    {
+      "block_id": "s11_p7",
+      "heading": "Vertical Slice Transform of Functions",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proof: The assertion follows from prop: V_norm, which yields langle V f, g rangle &= int_(T) int_(II) V f (psi, t) g(psi, t) d t dpsi = int_(T) int_(II) frac(1)(2pisqrt(1-t^2)) int_(C_(psi)^(t)) f(bxi) g(psi, t) ds(bxi) d t dpsi &= frac(1)(2pi) int_(T) int_(S^2) f(bxi) g(psi, xi_1cospsi+xi_2sinpsi) dsigma_(S^2)(bxi) dpsi = langle f, V^*g rangle for all f in L^p(S^2), g in L^q(T times II). The adjoint of V_psi can be established analogously without the integral over T and the factor (2pi)^(-1). The last assertion again follows from Lebesgue's dominated convergence theorem and by the definition of the adjoint. end-of-proof"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "For functions fcolon S^2toR, the vertical slice transform V f(psi, t) in and its restriction V_psi f(t) in are integrals of f along the slices cS_psi^(-1)(t). Heuristically, the related concept for measures mu in M(S^2) would be to consider mu(cS_psi^(-1)(t)). In this manner, for a fixed angle psi in T, we generalize the (restricted) vertical slice transform V_psi by V_psi colon M(S^2) to M(II), quad mu mapsto (cS_psi)_# mu = mu circ cS_psi^(-1). In the function setting, we figuratively obtain V f by gluing the (rescaled) functions 1 (2pi)V_psi f together along the angle psi. In the measure setting, the corresponding concept is to consider V_psi as disintegration family. We define the vertical slice transform Vcolon M(S^2) to M(T times II) by V mu coloneqq (T_(V))_# (u_(T) times mu) quadtext(with)quad T_(V)(psi, zbxi) coloneqq (psi, cS_psi(zbxi)). The disintegration aspect becomes clear in the following proposition"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proposition: Let mu in M(S^2). Then V mu can be disintegrated into the family V_psi mu with respect to the uniform measure u_T, i. e., for all g in C(TtimesII), it holds int_(T times II) g(psi, t) d Vmu (psi, t) = int_(T) int_(II) g(psi, t) d V_psi mu(t) d u_T(psi). end-of-proposition"
+    },
+    {
+      "block_id": "s12_p2",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proof: Incorporating, and using Fubini's theorem, we obtain langle Vmu, g rangle = int_(T) int_(S^2) g(psi, cS_psi (zb xi)) d mu(zb xi) d u_T(psi) = int_(T) int_(II) g(psi, t) d ( (cS_psi)_# mu )(t) d u_T(psi) for every g in C(T times II). By this implies the assertion. end-of-proof"
+    },
+    {
+      "block_id": "s12_p3",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "The defined measure-valued versions of V and V_psi are in fact the adjoints of V^* colon C(T times II) to C(S^2) in and V_psi^* colon C(II) to C(S^2) in, which explains the generalizations from the duality point of view"
+    },
+    {
+      "block_id": "s12_p4",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proposition: The vertical slice transforms and satisfy langle Vmu, g rangle &= langle mu, V^*g rangle quad text(for all ) g in C(T times II) quad text(and) langle V_psi mu, g rangle &= langle mu, V_psi^*g rangle quad text(for all ) g in C(II), psiinT with the adjoint operators from and. end-of-proposition"
+    },
+    {
+      "block_id": "s12_p5",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proof: For mu in M(S^2) and g in C(T times II), the conjecture can be established by langle Vmu, g rangle = int_(T times II) g(psi, t) d (T_(V))_# (u_(T) times mu)(psi, t) = int_(S^2) int_(T) g(psi, cS_psi(zb xi)) d u_(T)(psi) d mu(zb xi) = langle mu, V^*g rangle and, for mu in M(S^2), g in C(II), and fixed psi in T, by langle V_psimu, g rangle = int_(II) g(t) d (cS_psi)_# mu (t) = int_(S^2) g(cS_psi(zb xi)) d mu(zb xi) = langle mu, V_psi^*g rangle. qedhere end-of-proof"
+    },
+    {
+      "block_id": "s12_p6",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "One could equivalently use the identity to define the vertical slice transform of a measure, analogously as it was done for the Radon transform in [Chap. 2, § 2, Hel11]. For absolutely continuous measures with respect to sigma_(S^2), the measure- and function-valued vertical slice transforms coincide, which now justify the different scalings in and"
+    },
+    {
+      "block_id": "s12_p7",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proposition: For f in L^1(S^2), the vertical slice transforms satisfy V[f sigma_(S^2)] = (V f) sigma_(T times II) quadtext(and)quad V_psi[f sigma_(S^2)] = (V_psi f) sigma_(II). In particular, the transformed measures are again absolutely continuous. end-of-proposition"
+    },
+    {
+      "block_id": "s12_p8",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-proof: Let langle cdot, cdot rangle_M denotes the dual pairing for measures and continuous function and langle cdot, cdot rangle_(L) the dual pairing between L^1 and L^infty functions. Then the identity follows directly from prop: V-as-adj by langle V[f sigma_(S^2)], g rangle_(M) = langle f sigma_(S^2), V^* g rangle_(M) = langle f, V^* g rangle_(L) = langle V f, g rangle_(L) = langle (V f) sigma_(T times II), g rangle_(M) for all g in C(TtimesII). For V_psi, the identity follows analogously. end-of-proof"
+    },
+    {
+      "block_id": "s12_p9",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "By the following theorem, we see that similarly to the function setting, the vertical slice transform is injective when restricted to the even measures (with respect to the xi_1 - xi_2 plane) given by M_(sym)(S^2) coloneqq (muinM(S^2): inn(mu, f) = inn(mu, check f) text( for all ) fin C(S^2) )"
+    },
+    {
+      "block_id": "s12_p10",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "start-of-theorem: The vertical slice transform V colon M_ sym (S^2)to M(Ttimes II) is injective. end-of-theorem"
+    },
+    {
+      "block_id": "s12_p11",
+      "heading": "Vertical Slice Transform of Measures",
+      "major_heading": "Vertical Slice Transform",
+      "text": "The proof is given in app: thm: V_inj"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "Instead of integrating over parallel slices, the semicircle transform integrates a function along all meridians with respect to a fixed zenith on the sphere. For any zenith sph(alpha, beta)inS^2 with alpha in T and beta in [0,pi], we define the azimuth operator cA_(alpha, beta)colon S^2 to T and the zenith operator cZ_(alpha, beta)colon S^2 to [0, pi] as cA_(alpha, beta)(bxi) &coloneqq azi(eul(alpha, beta, 0)^tT bxi), cZ_(alpha, beta)(bxi) &coloneqq zen(eul(alpha, beta, 0)^tT bxi), i. e., we rotate the zenith back to the north pole and take the azimuth and zenith angle, see fig: semicircles. For the zenith sph(alpha, beta) and fixed gamma in T, we consider the semicircles/meridians M_(alpha, beta)^gamma coloneqq cA_(alpha, beta)^(-1)(gamma) = (bxi in mathbb S^2: cA_(alpha, beta)(bxi) = gamma ). If gammaneq0, we have M_(alpha, beta)^gamma = ( bxi=eul(alpha, beta, 0) sph(gamma, vartheta) = eul(alpha, beta, gamma) sph(0, vartheta): vartheta in (0, pi) ). Otherwise, if gamma=0, we need to replace the open interval by a closed one, i. e., vartheta in [0,pi]. Figuratively, M_(alpha, beta)^gamma is a rotation of the meridian (sph(gamma, vartheta): vartheta in (0, pi)) with azimuth gamma by eul(alpha, beta, 0). The normalized semicircle transform W of f colon S^2 to R is defined by mathcal W f (alpha, beta, gamma) &coloneqq frac(1)(4pi) int_(M_(alpha, beta)^gamma) f(bxi) sinleft(cZ_(alpha, beta) ( bxi) right) ds(bxi) &= frac(1)(4pi) int_0^pi f(eul(alpha, beta, 0) sph(gamma, vartheta)) sin(vartheta) dx vartheta. We may interpret M_(alpha, beta)^gamma as rotation of the prime median by eul(alpha, beta, gamma). Based on the substitution bQ = eul(alpha, beta, gamma), the normalized semicircle transform defines a function on SO via mathcal W f (bQ) coloneqq frac(1)(4pi) int_(0)^(pi) fleft(bQ sph(0, vartheta) right) sin(vartheta) dx vartheta. Henceforth, we will not distinguish between W f(alpha, beta, gamma) and W f(bQ). Especially for the inversion formula by the singular value decomposition, we will make use of the latter definition. The multiplication with (4pi)^(-1) sin (vartheta) in the latitude ensures that density functions are mapped to density functions allowing the later generalization to measures. For the zenith sph(alpha, beta), we define the (normalized) restriction W_(alpha, beta) f coloneqq 4pi W f(alpha, beta, cdot)"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-remark: The (unnormalized) semicircle transform W colon C(S^2)to C(SO) is defined by widetilde (mathcal W) f(bQ) coloneqq int_(-pi/2)^(pi/2) fleft(smash(bQ^tT (sph(varphi, tfracpi2)))right) dvarphi, qquad bQinSO, see [HiPoQu18]. It computes the mean values of f along all half great circles of the sphere, i. e., without the weight sin(vartheta) of. The injectivity of W was shown in [Gro98]. A singular value decomposition and inversion algorithms were provided in [HiPoQu18]. The authors of [Bon22] reinvented this transform with another parameterization using the plane through Psi(alpha, beta, 0) zb e^1 and Psi(alpha, beta, 0) zb e^2. More precisely, their notation was not clear to us since it seems that they have applied the normalized transform in the numerical examples, but certain parts in their analysis rely on the unnormalized transform. end-of-remark"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "The semicircle transforms W and W_(alpha, beta) are well defined for continuous functions as well as for p -integrable functions. Moreover, both transforms are continuous operators"
+    },
+    {
+      "block_id": "s14_p3",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proposition: Let 1 le p le infty, and let sph(alpha, beta) in S^2. For every f in L^p(S^2), it holds int_(T) W_(alpha, beta) f(gamma) dx gamma = int_(S^2) f(zbxi) dxsigma_(S^2)(zbxi) quadtext(and)quad int_(SO) W f(bQ) dsigma_(SO)(bQ) = int_(S^2) f(zbxi) dxsigma_(S^2)(zbxi). The operators W_(alpha, beta) colon L^p(S^2) to L^p(T) and W colon L^p(S^2) to L^p(SO) are bounded with lVert W_(alpha, beta) rVert_(L^p to L^p) le 2^(1-1/p) quadtext(and)quad lVert W rVert_(L^p to L^p) le (2pi)^(1/p - 1). Moreover, it holds W_(alpha, beta) colon C(S^2) to C(T) and W colon C(S^2) to C(SO). end-of-proposition"
+    },
+    {
+      "block_id": "s14_p4",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proof: Since the surface measure on S^2 is invariant under rotations, we have int_(T) mathcal W_(alpha, beta) f(gamma) dxgamma &= int_(T) int_(0)^(pi) f ( eul(alpha, beta, 0) sph(gamma, vartheta) ) sin(vartheta) d vartheta dgamma &= int_(S^2) f ( eul(alpha, beta, 0) bxi ) dsigma_(S^2) (bxi) = int_(S^2) f (bxi) dsigma_(S^2)(bxi). The definition of W_(alpha, beta) and integration over alpha and beta gives the second identity. Thus W_(alpha, beta) and W are well defined almost everywhere by Fubini's theorem. Using absolute values and the triangle inequality in the above computation yields lVert W_(alpha, beta) rVert_(L^1 to L^1) = lVert W rVert_(L^1 to L^1) = 1, where we deduce a lower bound of the norm by inserting the constant f=1. The semicircle transform is further essentially bounded by lvert W_(alpha, beta) f(gamma) rvert le int_(0)^pi lvert fleft( eul(alpha, beta, 0) sph(gamma, vartheta ) right)rvert sin(vartheta) dxvartheta le 2 esssup_(bxi in S^2) lvert f(bxi) rvert; so lVert W_(alpha, beta) rVert_(L^infty to L^infty) = 2 and lVert W rVert_(L^infty to L^infty) = (2pi)^(-1). The second assertion now follows from the Riesz Thorin interpolation theorem. The last assertion is an immediate consequence of Lebesgue's dominated convergence theorem. end-of-proof"
+    },
+    {
+      "block_id": "s14_p5",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "Considering the semicircle transform in the Hilbert space setting, i. e., W colon L^2(S^2) to L^2(SO), we are interested in its singular value decomposition"
+    },
+    {
+      "block_id": "s14_p6",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-theorem: The normalized semicircle transform fulfills mathcal W Y_n^k = mathrm(w)_n Z_n^k, quad ninNN, kin(-n, dots, n), with the singular values w _n coloneqq lVert W Y_n^krVert_(L^2(S^2)) and the orthonormal functions Z_n^k coloneqq mathrm(w)_n^(-1) sum_(j=-n)^n lambda_n^j overline(D_n^(k, j)) in L^2(SO), where lambda_0^0 coloneqq 2 (4pi)^(-3/2) and, for ninN and jin(1, dots, n) with n+j even, lambda_n^j coloneqq frac((-1)^j)(4pi) sqrt(frac(2n+1)(4pi) frac((n-j)! )((n+j)! )) frac(j (n-2)!! (n+j-1)!! )( (n-j)!! (n+1)!! ) 2: & n text( even), (pi): & n text( odd), lambda_n^(-j) coloneqq (-1)^j lambda_n^j, and lambda_n^j=0 otherwise. Here Y_n^k denote the spherical harmonics and D_n^(k, j) the rotational harmonics. Moreover, there are constants C_1, C_2>0 such that C_1 (n+1)^(-1/2) le mathrm(w)_n le C_2 (n+1)^(-1/2) quad text(for all ) ninNN. end-of-theorem"
+    },
+    {
+      "block_id": "s14_p7",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "The proof is given in sec: W-svd. Analogously to [Thm. 3.13, quellmalzdiss], we see that the semicircle transform is a smoothing operator"
+    },
+    {
+      "block_id": "s14_p8",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-corollary: For sge0, the operator Wcolon H^s(S^2) to H^(s+1/2)(SO) is continuous. end-of-corollary"
+    },
+    {
+      "block_id": "s14_p9",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "Theorem implies that Wcolon L^2(S^2) to L^2(SO) is an injective, compact operator with mathcal W f = sum_(n in NN) mathrm(w)_n sum_(k=-n)^n langle f, Y^k_n rangle Z^k_n. Its Moore Penrose pseudoinverse is given by mathcal W^dagger g &= sum_(n=0)^(infty) frac(1)(mathrm(w)_n) sum_(k=-n)^(n) inn(g, Z_n^(k)) Y_n^k = sum_(n=0)^(infty) frac(1)((mathrm(w)_n)^2) sum_(k=-n)^(n) sum_(substack((j)=-n ))^n (lambda_n^j) inn(g, overline(D_n^(k, j))) Y_n^k"
+    },
+    {
+      "block_id": "s14_p10",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "We will also need the adjoint operator"
+    },
+    {
+      "block_id": "s14_p11",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proposition: Let 1 le p, q le infty with 1/p + 1/q = 1. For 1 le p < infty, the adjoint W^*colon L^q(SO) to L^q(S^2) of Wcolon L^p(S^2) to L^p(SO) is given by mathcal W^* g (bxi) = frac1(4pi) int_(T) int_(0)^(pi) g (eul(alpha, beta, cA_(alpha, beta) bxi)) sin(beta) dbeta dalpha, and the adjoint W_(alpha, beta)^*colon L^q(T) to L^q(S^2) of W_(alpha, beta) colon L^p(S^2) to L^p(T) by W_(alpha, beta)^*g(bxi) = g( cA_(alpha, beta) bxi). Moreover, it holds W^* colon C(SO) to C(S^2), but W_(alpha, beta)^* colon C(T) notto C(S^2). end-of-proposition"
+    },
+    {
+      "block_id": "s14_p12",
+      "heading": "Normalized Semicircle Transform of Functions",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proof: Let fin L^p(S^2) and gin L^q(SO). Based on and, and using the substitution zbeta coloneqq sph(gamma, vartheta) with gamma = azi(zbeta), we compute the adjoint by langle W f, grangle &= frac1(4pi) int_(T) int_(0)^(pi) int_(T) int_0^pi f(eul(alpha, beta, 0) sph(gamma, vartheta)) g(eul(alpha, beta, gamma)) sin(vartheta) sin(beta) dvartheta d alpha dbeta dgamma &= frac1(4pi) int_(T) int_(0)^(pi) int_(S^2) f(eul(alpha, beta, 0) zbeta) g(eul(alpha, beta, azi(zbeta)) sin(beta) dsigma_(S^2)(zbeta) dbeta dalpha &= frac1(4pi) int_(S^2) int_(T) int_(0)^(pi) f(zbxi) g(eul(alpha, beta, cA_(alpha, beta)(zbxi)) sin(beta) dbeta dalpha dsigma_(S^2)(zbxi) = langle f, W^* g rangle, where we used zbxi coloneqq eul(alpha, beta, 0) zbeta in the last line. The adjoint of W_(alpha, beta) follows analogously. The continuity of W^* g for g in C(SO) can be established by Lebesgue's dominated convergence theorem. For non-constant gin C(T), the adjoint W_(alpha, beta)^* is discontinuous at sph(alpha, beta). end-of-proof"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "The generalization from functions to measures can be done analogously to sec: vert-slice-meas. For the zenith sph(alpha, beta), we generalize the (restricted) semicircle transform W_(alpha, beta) by W_(alpha, beta) colon M(S^2) to M(T), quad mu mapsto (cA_(alpha, beta))_# mu = mu circ cA_(alpha, beta)^(-1). Considering the measures W_(alpha, beta) mu as disintegration family, we define the (normalized) semicircle transform W colon M(S^2) to M(SO) by mathcal W mu coloneqq (T_(mathcal W))_# (u_(S^2) times mu) quadtext(with)quad T_(mathcal W)(sph(alpha, beta), zb xi) coloneqq eul(alpha, beta, cA_(alpha, beta)(zbxi))"
+    },
+    {
+      "block_id": "s15_p1",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proposition: Let mu in M(S^2). Then W mu can be disintegrated into the family W_(alpha, beta) mu with respect to the uniform measure u_(S^2), i. e., for all g in C(SO), it holds int_(SO) g(bQ) d(Wmu)(bQ) = int_(S^2) int_T g(eul(alpha, beta, gamma)) d (W_(alpha, beta) mu)(gamma) d sigma_(S^2)(sph(alpha, beta)). end-of-proposition"
+    },
+    {
+      "block_id": "s15_p2",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proof: Inserting and using Fubini's theorem, we obtain langle W mu, g rangle &= int_(S^2) int_(S^2) g(eul(alpha, beta, cA_(alpha, beta) bxi)) d mu(zb xi) d u_(mathbb S^2) (sph(alpha, beta)) &= int_(S^2) int_(T) g(eul(alpha, beta, gamma)) d (cA_(alpha, beta))_# mu(gamma) d u_(mathbb S^2)(sph(alpha, beta)). for every gin C(SO) establishing the asserstion. end-of-proof"
+    },
+    {
+      "block_id": "s15_p3",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "While W can be interpreted as the adjoint of W^*colon C(SO) to C(S^2) in, the same reasoning does not hold for W_(alpha, beta) by the lack of continuity of W_(alpha, beta)^*g for continuous g"
+    },
+    {
+      "block_id": "s15_p4",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proposition: The semicircle transforms and satisfy langle W mu, g rangle &= langle mu, W^* g rangle quad text(for all ) g in C(SO) text( and) langle W_(alpha, beta) mu, g rangle &= int_(S^2) W_(alpha, beta)^* g (bxi) d mu(bxi) quad text(for all ) g in C(T) with the adjoint operator from and. end-of-proposition"
+    },
+    {
+      "block_id": "s15_p5",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proof: Plugging in the push-forward definition, we obtain langle mathcal W mu, g rangle = int_(S^2) int_(S^2) g (eul(alpha, beta, cA_(alpha, beta) zbxi)) d mu(zb xi) d u_(S^2)(sph(alpha, beta)) = inn(mu, mathcal W^*g). The second identity follows analogously. end-of-proof"
+    },
+    {
+      "block_id": "s15_p6",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-remark: The restricted semicircle transform W_(alpha, beta): M(S^2) to M(T) is indeed related to the L^p adjoint W_(alpha, beta)^* in. Although the integral on the right-hand side of is always well defined, i. e., W_(alpha, beta)^* g in L^infty(S^2), the integral is no dual pairing in the measure/continuous function sense since W_(alpha, beta)^* g is discontinuous at the zenith sph(alpha, beta) in general. Therefore, unlike in prop: V-as-adj for the vertical slice transform, equation does not constitute a proper definition of W_(alpha, beta) for measures via the dual pairing. end-of-remark"
+    },
+    {
+      "block_id": "s15_p7",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "The definitions of the semicircle transform in the function and measure setting are consistent in the sense that both coincide for absolutely continuous measures"
+    },
+    {
+      "block_id": "s15_p8",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proposition: For f in L^1(S^2), the semicircle transforms satisfy W [f sigma_(S^2)] = (W f) sigma_(SO) quadtext(and)quad W_(alpha, beta)[f sigma_(S^2)] = (W_(alpha, beta) f) sigma_T. In particular, the transformed measures are again absolutely continuous. end-of-proposition"
+    },
+    {
+      "block_id": "s15_p9",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-proof: Both identities directly follow from prop: W-adj-meas in analogy to the proof of cor: abs1. For W_(alpha, beta) the second dual pairing has to be replaced by an integral. end-of-proof"
+    },
+    {
+      "block_id": "s15_p10",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "By the following theorem, the injectivity of Wcolon L^2(S^2) to L^2(SO) generalizes to WcolonM(S^2) to M(SO), which also implies the injectivity of Wcolon L^p(S^2) to L^p(SO)"
+    },
+    {
+      "block_id": "s15_p11",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "start-of-theorem: The semicircle transform W colon M(S^2)to M(SO) defined by is injective. end-of-theorem"
+    },
+    {
+      "block_id": "s15_p12",
+      "heading": "Normalized Semicircle Transform of Measures",
+      "major_heading": "Normalized Semicircle Transform",
+      "text": "The proof is given in app: abc"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "The computation of the Wasserstein distance on the sphere consists in determining a transport plan between the considered probability measures. To avoid the occurring optimization problem, the general idea behind so-called sliced Wasserstein distances [KolNadSimBadRoh19, Bon22] is to transform the measures first to one-dimensional domains, and to exploit the explicit solution formula of the one-dimensional transport. Based on the vertical slice and the normalized semicircle transform, we can define two kinds of spherical sliced distances. For p in [1, infty) and mu, nu in M(S^2), we define the vertical sliced Wasserstein distance VSW_p^p(mu, nu) coloneqq int_(T) WS_p^p( V_(psi)mu, V_(psi)nu ) d psi, and the semicircular sliced Wasserstein distance SSW_p^p(mu, nu) coloneqq int_(S^2) WS_p^p( W_(alpha, beta)mu, W_(alpha, beta)nu ) d sigma_(S^2)(sph(alpha, beta)), which are integrals over Wasserstein distances on II and T, respectively"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-theorem: For every 1 le p < infty, the vertical sliced Wasserstein distance VSW_p is a metric on M_(sym)(S^2), which was defined in, and the semicircular Wasserstein distance SSW_p is a metric on M(S^2). end-of-theorem"
+    },
+    {
+      "block_id": "s16_p2",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-proof: The symmetry and the triangle inequality follow from the corresponding properties of the Wasserstein distance and the p -norm on T and S^2. The positive definiteness follows from the injectivity of V and W in thm: V_inj and thm: B_inj. end-of-proof"
+    },
+    {
+      "block_id": "s16_p3",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "Since the geodesic distance d(zbxi, zbeta) = arccos(zbxi^topzbeta) on the sphere S^2 is rotationally invariant, i. e., d(zb Q zbxi, zb Q zbeta) = d(zbxi, zbeta) for all zb Q inSO, the Wasserstein distance on S^2 inherits this property, i. e., WS_p(mu, nu) = WS_p(mucirc zb Q, nucirc zb Q) for all zb QinSO. The vertical sliced Wasserstein distance is only partially rotation invariant"
+    },
+    {
+      "block_id": "s16_p4",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-proposition: For any pin[1, infty), the vertical sliced Wasserstein distance VSW_p is invariant with respect to rotations around the vertical axis, i. e., for all mu, nu in M(S^2) and alpha in T, it holds VSW_p(mu, nu) = VSW_p(mu circ zb R_3(alpha), mu circ zb R_3(alpha)). end-of-proposition"
+    },
+    {
+      "block_id": "s16_p5",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-proof: We have VSW_p^p(mu circ zb R_3(alpha), mu circ zb R_3(alpha)) &= int_(T) WS_p^p( V_(psi)[mu circ zb R_3(alpha)], V_(psi)[nucirc zb R_3(alpha)] ) d psi &= int_(T) WS_p^p( [cS_psi circ zb R_3(alpha)^tT]_#mu, [cS_psi circ zb R_3(alpha)^tT]_# nu ) d psi. Since [cS_psi circ zb R_3(alpha)^tT](bxi) = langle bxi, zb R_3(alpha) (cos psi, sin psi, 0)^tT rangle = cS_(psi + alpha)(bxi), we further obtain VSW_p^p(mu circ zb R_3(alpha), mu circ zb R_3(alpha)) = int_(T) WS_p^p( V_(psi + alpha) mu, V_(psi + alpha) nu ) d psi = VSW_p^p(mu, nu). qedhere end-of-proof"
+    },
+    {
+      "block_id": "s16_p6",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "In contrast to the vertical sliced Wasserstein distance, the semicircular sliced Wasserstein distance is invariant to general rotations"
+    },
+    {
+      "block_id": "s16_p7",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-proposition: For any pin[1, infty), the semicircular sliced Wasserstein distance SSW_p is rotationally invariant, i. e., for every mu, nu in M(S^2) and zb Q in SO, it holds SSW_p(mu, nu) = SSW_p(mu circ zb Q, mu circ zb Q). end-of-proposition"
+    },
+    {
+      "block_id": "s16_p8",
+      "heading": "Spherical Sliced Wasserstein Distances",
+      "major_heading": "Spherical Sliced Wasserstein Distances",
+      "text": "start-of-proof: For gamma in T, let cT_gamma colon T to T be the shift operator given by cT_gamma(psi) coloneqq psi - gamma. The key observation to show the statement is the identity cT_gamma circ cA_(alpha, beta)(bxi) = azi(eul(alpha, beta, 0)^tT bxi) - gamma = azi(eul(alpha, beta, gamma)^tT bxi). Exploiting the shift invariance of the Wasserstein distance on T, the identity, and the rotation invariance of the surface measure on SO, we have &SSW_p^p(mu circ zb Q, nu circ zb Q) = int_(S^2) WS_p^p( W_(alpha, beta)[mu circ zb Q], W_(alpha, beta)[nu circ zb Q] ) d sigma_(S^2)(sph(alpha, beta)) &quad= frac(1)(2pi) int_T int_(S^2) WS_p^p( [cT_gamma circ cA_(alpha,beta)]_# (mu circ zb Q), [cT_gamma circ cA_(alpha,beta)]_#(nu circ zb Q) ) d sigma_(S^2)(sph(alpha, beta)) d gamma &quad= frac(1)(2pi) int_(SO) WS_p^p( [azi(eul(alpha,beta,gamma)^tT zb Q^tT ]_# mu, [azi(eul(alpha,beta,gamma)^tT zb Q^tT cdot)]_# nu ) d sigma_(SO)(eul(alpha, beta, gamma)) &quad= frac(1)(2pi) int_(SO) WS_p^p( [azi(eul(tildealpha,tildebeta,tildegamma)^tT cdot)]_# mu, [azi(eul(tildealpha,tildebeta,tildegamma)^tT cdot)]_# nu ) d sigma_(SO)(eul(tildealpha, tildebeta, tildegamma)) &quad= frac(1)(2pi) int_T int_(S^2) WS_p^p( [cT_(tildegamma) circ cA_(tildealpha,tildebeta)]_# mu, [cT_(tildegamma) circ cA_(tildealpha,tildebeta)]_#nu) d sigma_(S^2)(sph(tildealpha, tildebeta)) d tildegamma = SSW_p^p(mu, nu). qedhere end-of-proof"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Discretization and Inversion via Moore Penrose Pseudoinverse",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "We will compute the sliced spherical transforms of (probability density) functions numerically based on the singular value decomposition in a similar way as in [HiPoQu18]. To this end, we need an appropriate discretization. In particular we need quadrature formulas on S^2 as well as on the image domains T times II and SO of V and W, respectively"
+    },
+    {
+      "block_id": "s18_p1",
+      "heading": "Discretization and Inversion via Moore Penrose Pseudoinverse",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "Let NinN. We choose quadrature nodes bxi^minS^2 and respective weights w_m>0, m in [M] coloneqq (1, dots, M) such that all spherical harmonics of degree le 2N are exactly integrated by the corresponding quadrature rule, see [GrPo10, HiQu15]. To be more precise, we use the equispaced nodes varphi_i = i pi/(N+1), iin[2N+2], and the Gauss Legendre nodes t_j in [-1,1], jin[N+1], given by the roots of the (N+1) st Legendre polynomial. We denote the corresponding Gauss Legendre weights by r_j. Now we obtain the quadrature bxi^(m(i, j)) coloneqq sph(varphi_i, arccos t_j) quadtext(and)quad w_(m(i, j)) coloneqq 2pi r_j / (2N+2), qquad iin[2N+2], jin[N+1], where m(i, j)in [M] denotes the index related to the pair (i, j) and M=2(N+1)^2. Setting zb f coloneqq (f_m)_(m=1)^M coloneqq (f(bxi^m))_(m=1)^M, quad zb Y_n^k coloneqq (Y_n^k(bxi^m))_(m=1)^M, quadtext(and)quad zb w coloneqq (w_m)_(m=1)^M, we approximate the spherical harmonics coefficients f, Y_n^k by zb f, zb Y_n^k _(bw) coloneqq sum_(m=1)^(M) f(bxi^m) Y_n^k(bxi^m) w_m, qquad n=0, dots, N, k=-n, dots, n. In particular, we have that f, Y_n^k = zb f, zb Y_n^k _(bw) if f is a spherical polynomial of degree le N. All discrete Fourier coefficients can be computed efficiently in bigo(N^2 log^2 N) arithmetic operations utilizing the nonuniform fast spherical Fourier transform (NFSFT) [kupo02, PlPoStTa18]"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Discrete Vertical Slice Transform",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "For discretizing TtimesII, we use again equispaced nodes psi_i = i pi / (N+1), iin[2N+2] and Gauss Legendre nodes t_j and weights r_j, jin[N+1]. We denote the respective quadrature weights on TtimesII by zb w, where tilde w_(ell(i, j)) = pi r_j / (N+1) and ell(i, j) in [L] with L=2(N+1)^2 denotes the index related to the pair (i, j). The quadrature is exact of degree 2N, i. e., for all linear combinations of basis functions B_n^k with 0le n, k le 2N. Using the singular value decomposition, we discretize V by V_Dcolon R^(M) to R^(L), quad V_Dzb f coloneqq sum_(n=0)^(N) sum_(substack(k=-n +k text(even)) )^n mathrm(v)_n^k inn(zb f, zb Y_n^k)_(bw) zb B_n^k, where zb B_n^k coloneqq (B_n^k(psi_i, t_j))_(ell(i, j)=1)^L and B_n^k is given in. Then V_Dzb f can be computed using the fast Fourier transform (FFT) in psi and a fast polynomial transform [postta98] in t in bigo(N^2 log^3 N) arithmetic operations. Based on the quadrature for T times II, we analogously discretize the (truncated) Moore Penrose pseudoinverse by V^dagger_D colon R^L to R^M, quad V^dagger_D zb g coloneqq sum_(n =0) ^N sum_(substack(k=-n +k text(even)) )^n frac(1)((mathrm v)_n^k) Bigllanglezb g, zb B_n^k Bigrrangle_(tilde (zb w)) zb Y^k_n, where zb g coloneqq (g(psi_i, t_j))_(ell(i, j)=1)^(L) consists of samples of gcolon TtimesII toR. For a spherical polynomial f of degree N, the chosen quadratures ensure V^dagger_DV_D zb f = zb f"
+    },
+    {
+      "block_id": "s20_p0",
+      "heading": "Discrete Semicircle Transform",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "We use quadrature nodes bQ_ellinSO and weights zb w = (tilde w_(ell))_(ell=1)^L such that all rotational harmonics of degree le 2N are exactly integrated. Since it becomes clear from the context which weights are addressed, we use again zb w. In particular, we consider a quadrature [GrPo09] on SO cong S^2timesS^1 as product of a Gauss-type quadrature on S^2, see [GrPo10], and an equispaced quadrature on T. We use this product structure because we can now discretize W_(alpha, beta) on a uniform grid. Similarly to, the singular value decomposition of Wcolon L^2(S^2) to L^2(SO) can be truncated as mathcal W_Dcolon R^M to R^L, quad mathcal W_Dzb f &coloneqq sum_(n=0)^N sum_(j, k=-n)^(n) lambda_n^j inn(zb f, zb Y_n^k)_(bw) overline(zb D_n^(k, j)), where zb D_n^(k, j) coloneqq (D_n^(k, j)(bQ_ell))_(ell=1)^L. Then can be computed in bigo(N^3 log^2 N + L) arithmetic operations with the nonuniform fast SO(3) Fourier transform (NFSOFT) [poprvo07]. Further, we approximate the Moore Penrose pseudoinverse of W by mathcal W_D^dagger colon R^LtoR^M, quad mathcal W_D^dagger zb g coloneqq sum_(n=0)^N sum_(j, k=-n)^(n) frac(1)((mathrm(w)_n)^2) lambda_n^j inn(zb g, overline(zb D_n^(k, j)))_(tilde(zb w)) zb Y_n^k, where zb g coloneqq (g(bQ_ell))_(ell=1)^L for gcolon SOtoR. As above, W_D^dag zb g can be evaluated with NFSFT and NFSOFT algorithms. For a spherical polynomial f of degree N, we have W^dagger_D W_D zb f = zb f"
+    },
+    {
+      "block_id": "s21_p0",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "The push-forward definitions of the sliced spherical transforms ensure that probability measures are mapped to probability measures. In the context of optimal transport, we require that the inverse transforms have the same behaviour. Even when restricting to the function setting, we can however construct functions with non-trivial negative part that are transformed into probability densities, e. g. by taking a function that is negative in a sufficiently small spherical cap (bxiinS^2: xi_3<1-varepsilon) and equals a positive constant otherwise. Thus the Moore Penrose pseudoinverse applied to a probability density is not necessarily a probability density. To overcome this issue, we consider the inversion of the discretized spherical transforms as inverse problems, which we solve using a variational formulation"
+    },
+    {
+      "block_id": "s21_p1",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "As in, let zb f in R^M contain the samples of the probability density function f on S^2, and zb w in R^M the respective quadrature weights. If the quadrature is exact for f, we have zb fge 0 and int_(S^2) f d sigma_(S^2) = sum_(m=1)^M w_m f_m = 1. Thus zb f can be interpreted as probability density function with respect to the counting measure weighted by bw. For the numerical inversion, we handle both transforms simultaneously, denoting the discretizations V_D and W_D by T_D colon R^M to R^L. Let zb g in R^(L) be the samples of the density function g on T times II or SO. We equip R^M with the weighted Euclidean inner product langle zb f, zb f rangle_(zb w) coloneqq sum_(m=1)^M w_m f_m tilde f_m, and, analogously, R^L with the inner product langle zb g, zb g rangle_( zb w ) coloneqq sum_(ell=1)^L tilde w_ell g_ell tilde g_ell, where zb w contains the quadrature weights for T times II or SO. Furthermore, we denote the all-one vector by zb 1"
+    },
+    {
+      "block_id": "s21_p2",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "Now, we aim to find an approximate solution zb f of the inversion problem T_D zb f = zb g in the weighted probability simplex Delta_bw coloneqq ( zb f in R^M: zb f ge 0, allowbreak langle zb f, zb 1 rangle_bw = 1). To this end, we introduce a regularized inverse as the minimizer of the strictly convex optimization problem argmin_(zb f in Delta_bw) KL_(tilde(bw))(mathcal T_D zb f, zb g) + rho KL_(bw)(zb f, zb 1), quad rho > 0, where"
+    },
+    {
+      "block_id": "s21_p3",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "KL_bw is the discrete Kullback Leibler (KL) divergence on the weighted space mathbb R^M given by KL_bw( zb f, tilde(zb f)) coloneqq langle zb f, log zb f - log tilde(zb f) rangle_bw + langle tilde(zb f) -zb f, zb 1 rangle_(zb w), for zb f, zb f ge 0 with f_m = 0 whenever tilde f_m = 0, and KL_bw( zb f, zb f ) coloneqq +infty otherwise. Here the logarithm acts componentwise, and we set 0 log 0 coloneqq 0. Note that KL_(bw)(zb f, zb 1) is the negative entropy of zb f. The KL divergence on R^L is defined analoguously"
+    },
+    {
+      "block_id": "s21_p4",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "To find the minimizer of, we employ the primal-dual splitting of Chambolle and Pock [ChPo16a]. To this end, we reformulate as argmin_(zb f, zb y_1, zb y_2) KL_(tilde(bw))(zb y_1, zb g) + rho KL_(bw)(zb y_2, zb 1) + chi_(Delta_bw) (zb f) quadtext(s. t. )quad mathcal T_D zb f = zb y_1, zb f = zb y_2 with the characteristic function chi_(Delta_bw)(zb f) = 0 for zb f in Delta_bw and chi_(Delta_bw)(zb f) = +infty else. For theta in (0, 1] and sigma, tau >0 such that 1/tau sigma > lVert I + T_D^* T_D rVert, the algorithm converges and reads as showonlyrefs=false showonlyrefs=true Here proj_(Delta_bw) is the orthogonal projection onto Delta_bw. Further, for a function h colon R^M to R, the proximal operator with respect to the weight bw is given by prox_(sigma h)((zb x)) coloneqq argmin_((zb y) in R^M) h((zb y)) + tfrac(1)(2sigma) lVert zb x - (zb y) rVert^2_(zb w) and its Fenchel conjugate by h^* (zb y) coloneqq max_(zb x in R^M) langle zb x, zb yrangle_((zb w)) + h(zb y). On R^L with weight tilde bw, the proximal operator and conjugate are defined similarly"
+    },
+    {
+      "block_id": "s21_p5",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "start-of-proposition: The orthogonal projection onto Delta_bw with respect to the inner product cdot, cdot _bw is given by proj_(Delta_bw)(zb f) = [zb f + lambda zb 1]_+, where [cdot]_+ denotes the componentwise positive part, and lambda is the root of langle zb 1, [zb f + lambda zb 1]_+ rangle_(zb w) - 1. end-of-proposition"
+    },
+    {
+      "block_id": "s21_p6",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "The statement follows line by line via incorporating the weighted inner product into the argumentation in [Thm 6.27, Be17]. The function in prop: proj-ps is monotonically increasing and piecewise linear with finitely many pieces; thus the root can be determined using a bisection method to identify the piece with sign change and solving a linear equation. For the standard probability simplex with bw=zb1, there exist several further numerically efficient approaches [Con16]"
+    },
+    {
+      "block_id": "s21_p7",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "start-of-proposition: Let sigma, a > 0, and zb b in R^M. On the weighted Euclidean space R^M, the KL divergence satisfies prox_(sigma (a KL)^*(cdot, zb b))((zb x)) = zb x - a W bigl( a zb b odot exp bigl( 1 (a) zb x bigr) bigr), qquad bxinR^M, where W denotes the componentwise applied Lambert's W -function that maps z to the solution y of y exp y = z and odot the componentwise multiplication. end-of-proposition"
+    },
+    {
+      "block_id": "s21_p8",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "start-of-proof: Differentiating the objective of the weighted Fenchel conjugate and setting to zero yields (a KL_((zb w)))^* (zb y, zb b) = a biglangle zb b, expbig(tfrac(1)(a) zb ybig) bigrangle_((zb w)) + a langle zb b, zb 1 rangle_((zb w)). Inserting the conjugated scaled KL divergence into, and setting the derivative again zero, we componentwise obtain zb b odot expbigl(tfrac(1)(a) zb y bigr) = tfrac(1)(sigma) (zb x - zb y) &quadLeftrightarrowquad log(zb b) + tfrac(1)(a) bx = tfrac(1)(a) (bx - by) + log bigl(tfrac(1)(sigma) (bx-by) bigr) &quadLeftrightarrowquad tfrac(sigma)(a) zb b odot expbigl(tfrac(1)(a) zb xbigr) = tfrac(1)(a) (zb x- zb y) odot expbigl( tfrac(1)(a) (zb x- zb y) bigr), which gives the assertion. end-of-proof"
+    },
+    {
+      "block_id": "s21_p9",
+      "heading": "Inversion by Variational Approach",
+      "major_heading": "Discrete Spherical Transforms and Inversion",
+      "text": "Note that the primal-dual algorithm requires the adjoint T_D^* in. Based on the discretized spherical transforms in sec: disc-and-inv, we obtain their adjoint operators V_D^* bg = sum_(n =0) ^N sum_(substack(k=-n +k text(even)) )^n (mathrm v)_n^k inn( zb g, zb B_n^k )_(tilde (bw)) zb Y^k_n quadtext(and)quad W_D^* zb g = sum_(n=0)^N sum_(k, j=-n)^(n) lambda_n^j inn(zb g, overline(zb D_n^(k, j)))_(tildebw) zb Y_n^k. The primal-dual iteration may be summarized as follows"
+    },
+    {
+      "block_id": "s22_p0",
+      "heading": "Numerical Results",
+      "major_heading": "Numerical Results",
+      "text": "In this section, we provide proof-of-concept examples that the sliced spherical transforms can be combined in a meaningful way with optimal transport on the interval and the circle. First, we deal with the approximation of Wasserstein barycenters on the sphere. In particular, this requires the inversion of the sliced spherical transforms. Second, we show that these transforms combined with optimal transport can be used for classifying classes of measures. All numerical tests are performed in Matlab R2022a on an Intel Core i7-10700 CPU with 16 GB memory"
+    },
+    {
+      "block_id": "s23_p0",
+      "heading": "Interpolation between Probability Measures",
+      "major_heading": "Numerical Results",
+      "text": "Given two probability measures on the sphere, we generate a measure between them, as proposed in [KolParRoh16] for the Radon transform on R^2. In particular, we compute the CDT or cCDT of their spherical transform V or W, then we interpolate in the CDT space and go back to S^2 via the inverse of the CDT or cCDT and the spherical transforms"
+    },
+    {
+      "block_id": "s23_p1",
+      "heading": "Interpolation between Probability Measures",
+      "major_heading": "Numerical Results",
+      "text": "For computing the forward, inverse, and adjoint spherical transforms, we truncate the singular value decomposition at degree N=44 and use the software package [nfft3] for the NFSFT and NFSOFT. We have M = (2N+2)(N+1) = 4050 quadrature nodes on the sphere, cf. sec: disc-and-inv"
+    },
+    {
+      "block_id": "s24_p0",
+      "heading": "Interpolation between Mises Fisher Distributions",
+      "major_heading": "Numerical Results",
+      "text": "As test function on C(S^2), we choose the density of the von Mises Fisher (vMF) distribution f_(kappa, zbeta)(bxi) = c_kappa e^(kappa inn(zbeta, bxi)), quad bxiinS^2, with the mean direction zbetainS^2 and the concentration kappa>0, where c_kappa is chosen such that int_(S^2) f_(kappa, zbeta) dsigma_(S^2) = 1. Since V acts only on even functions, we make our first tests with symmetrized vMF distributions via (f_(kappa, zbeta)(xi_1, xi_2, xi_3) + f_(kappa, zbeta)(xi_1, xi_2, -xi_3))/2, see fig: vmf"
+    },
+    {
+      "block_id": "s24_p1",
+      "heading": "Interpolation between Mises Fisher Distributions",
+      "major_heading": "Numerical Results",
+      "text": "Let mu, nu in Pac(S^2) be two given measures. For some delta in[0,1], we set the unregularized V -CDT interpolation between mu and nu as V^dagger h, quad text(where) quad h(psi, t) = CDT^(-1)_(V_psi mu)big[delta CDT_(V_psi mu)[ V_psi nu]big](t), quad psiinT, tinII. Here, we discretize V_psi via with 2(N+1)^2=4050 quadrature nodes on TtimesII. Our implementation of the CDT and its inverse is based on [KolParRoh16]. Analogously, we define the unregularized W -CDT interpolation W^dagger h, where h(eul(alpha, beta, gamma)) = CDT^(-1)_(W_(alpha, beta) mu)big[ delta sCDT_(W_(alpha, beta) mu)[W_(alpha,beta)nu]big](gamma), quad eul(alpha, beta, gamma)inSO. Here, the optimal parameter theta of, which is required for the sCDT, is determined by the algorithm [DelSalSob10]. Moreover, we compute Wmu and Wnu by, where we use L=118 944 quadrature points eul(alpha, beta, gamma) on SO, which are obtained as the product of a Gauss-type quadrature in sph(alpha, beta) in S^2 and a uniform grid in gamma"
+    },
+    {
+      "block_id": "s24_p2",
+      "heading": "Interpolation between Mises Fisher Distributions",
+      "major_heading": "Numerical Results",
+      "text": "Instead of the Moore Penrose pseudoinverse V^dagger or W^dagger, we also apply the primal-dual alg: class-PD to obtain the regularized inverse of h, which we call the regularized V -CDT or W -CDT interpolation. Here we choose the regularization parameter rho=0. 1 and step sizes sigma=1 and tau=1/4, and we terminate the algorithm after 200 iterations. The CDT interpolations for delta=0. 5 are plotted in fig: vmf_bary. While the regularization has a comparably small effect on the V -CDT interpolation, we note that the unregularized W -CDT interpolation is severely negative in some areas and therefore not a probability density, which is circumvented by the primal-dual algorithm"
+    },
+    {
+      "block_id": "s24_p3",
+      "heading": "Interpolation between Mises Fisher Distributions",
+      "major_heading": "Numerical Results",
+      "text": "As a reference, we consider the spherical 2-Wasserstein barycenter and its entropy-regularized counterpart [PeyCut19], whose computation with the Sinkhorn algorithm [Kni08] can be implemented efficiently, cf. [BaQue22, BenCarCutNenPey15]. We apply the Python optimal transport library [POT] for both, where the Sinkhorn algorithm uses the regularization parameter 0. 01 and a maximum number of 1000 iterations. In our example in fig: vmf_bary, the regularized 2-Wasserstein barycenter looks similar to the W -CDT interpolation, while the unregularized barycenter is very noisy and takes very long to compute with a linear program solver"
+    },
+    {
+      "block_id": "s25_p0",
+      "heading": "Interpolation between vMF Distribution and a Mixture",
+      "major_heading": "Numerical Results",
+      "text": "The W -CDT interpolation of more evolved test functions, which are not symmetric, is depicted in fig: smiley. We notice that the W -CDT interpolation shows the eyes more clearly than the regularized 2-Wasserstein barycenter. This might be caused by a too large regularization parameter of the Sinkhorn algorithm, but when making it smaller the algorithm fails with a division by zero error"
+    },
+    {
+      "block_id": "s26_p0",
+      "heading": "Classification of Probability Measures",
+      "major_heading": "Numerical Results",
+      "text": "In one dimension, the cumulative distribution transform is known to increase the separability between certain classes of probability measures. If the considered classes are build from prototypes using certain transformations like shifts or scalings, the constructed classes are linearly separable in the CDT space [MoCl23, PaKoSo18]. For probability measures on multi-dimensional domains, the separability of the CDT can be exploited by transforming the considered measures to a series of line measures using the Radon or generalized Radon transform [KolParRoh16, KolNadSimBadRoh19]. If we replace the Radon transform by the vertical slice or the normalized semicircle transform, the procedure can be immediately transferred to measures on the sphere"
+    },
+    {
+      "block_id": "s26_p1",
+      "heading": "Classification of Probability Measures",
+      "major_heading": "Numerical Results",
+      "text": "To show that the vertical slice and semicircle transform can in principle improve the separability between different classes of probability measures, we built five datasets consisting of 100 measures each. Each datum represents a (discretized) single or mixture density function of vMF distributions. The concentration is always chosen as kappa = 50. The means are randomly generated on S^2 satisfying the restrictions in tab: dataset. All distributions in the mixtures are equally weighted. fig: vMF-mix shows some examples of the different classes. On the basis of these classes, we train and test linear support vector machines (SVMs) to study the linear separability after our spherical transformations. To be more precise, let f_nu be the density function of a specific datum. This specimen is now transformed into bigl( CDT_(u_II)[V_psi f_nu] bigr)_(psi in T) quadtext(and)quad bigl( sCDT_(u_T)[ W_(alpha,beta) f_nu] bigr)_(sph(alpha, beta) in S^2), where u_bullet denotes the uniform measure. For the numerical implementation, we use the quadrature points bxi^m with N=44 from sec: int-meas"
+    },
+    {
+      "block_id": "s26_p2",
+      "heading": "Classification of Probability Measures",
+      "major_heading": "Numerical Results",
+      "text": "Training and testing of the SVMs is here based on 10-fold cross-validations, i. e., the dataset is divided in 10 subsets containing equally many samples of each class, the training is performed on 9 subsets, and the testing on the remaining. The procedure is repeated 10 times such that each subset serves one time as testing set. Before training, the dimension of the training set is reduced to 50 using a principle component analysis. The success rates of the trained SVMs are given in tab: succ-rate. Although the vertical slice transform cannot distinguish between the upper and lower hemisphere, the V -CDT approach yields high-quality linear separators between the classes of single and mixture vMF densities. The V -CDT approach only fails in experiment #3, which is not surprising since the samples from the second class are seen as single vMF densities by V. The W -CDT approach is useless in #1 and #2, but significantly increases the separability between single and symmetrized vMF distributions. These first simulations show that both spherical transforms can increase the linear separability between certain classes"
+    },
+    {
+      "block_id": "s27_p0",
+      "heading": "Acknowledgements",
+      "major_heading": "Numerical Results",
+      "text": "We thank Sophie Mildenberger for creating an illustration of the semicircle transform. We gratefully acknowledge the funding by the German Research Foundation (DFG): STE 571/19-1, project number 495365311, within the SFB F68: Tomography Across the Scales as well as the BMBF under the project VI-Screen (13N15754)"
+    },
+    {
+      "block_id": "s28_p0",
+      "heading": "Proof of  thm:V_inj ",
+      "major_heading": "Proof of  thm:V_inj ",
+      "text": "Any measure muin M_ sym (S^2) is uniquely determined by its application on C_ sym (S^2), since, by the definition, we have for any fin C(S^2) that mu, f = frac12 mu, f+check f and f+check f in C_ sym (S^2), where check f(bxi) = f(xi_1, xi_2, -xi_3). Let mu, nu in M_ sym (S^2) such that Vmu=Vnu. Then we obtain for gin C(Ttimes II) by prop: V-as-adj that inn(mu, V^*g) = inn(nu, V^*g). Hence, the claim mu=nu holds true if (V^*g: gin C(Ttimes II)) is a dense subset of C_ sym (S^2). To show this, let s>2 and fin H_ sym ^s(S^2), which is dense in C_ sym (S^2). Here we denote by H_ sym ^s(S^2) the subset of even functions of the Sobolev space H^s(S^2), see. Since V is injective by prop: V-inj, we have f = V^* g if and only if V f = VV^* g. In the following, we show that g coloneqq (VV^*)^(-1) V f is continuous on Ttimes II, then we obtain f = V^* g, which shows the assertion. We proceed in a similar manner as for the proof of Sobolev's embedding theorem, cf. [lem. 6.14, Mic13]"
+    },
+    {
+      "block_id": "s28_p1",
+      "heading": "Proof of  thm:V_inj ",
+      "major_heading": "Proof of  thm:V_inj ",
+      "text": "Recall the right singular functions B_n^k of V from. Since V^* has the same singular functions as V and the conjugate singular values v _n^k = v _n^k, we have by prop: V-inj VV^* h = sum_(n=0)^(infty) sum_(substack(k=-n +ktext( even)))^(n) abs(mathrm(v)_n^k)^2 inn(h, B_n^k)_(L^2(SO)) B_n^k, qquad forall hin L^2(Ttimes II). Hence, again by the singular value decomposition of V, we have (V V^*)^(-1) V f = sum_(n=0)^(infty) sum_(substack(k=-n +ktext( even)))^(n) frac(1)(mathrm(v)_n^k) inn(f, Y_n^k)_(L^2(S^2)) B_n^k. We want to show that the right hand side of converges uniformly on C(Ttimes II). Let (psi, t) in Ttimes II. As the Legendre polynomials satisfy |P_n(t)|le 1 for all tin II, cf. [§ 8.917, GrRy14], we have abs(B_n^k(psi, t)) = abs(sqrt(frac(2n+1)(4pi)) P_n(t) e^(i k psi)) le sqrt(frac(2n+1)(4pi)). Let NinN. Using the bound on the singular values of V, we see that there exists C>0 such that &quad abs(sum_(n=0)^(infty) sum_(substack(k=-n +ktext( even)))^(n) frac(1)(mathrm(v)_n^k) inn(f, Y_n^k)_(L^2(S^2)) B_n^k(psi, t) -sum_(n=0)^(N-1) sum_(substack(k=-n +ktext( even)))^(n) frac(1)(mathrm(v)_n^k) inn(f, Y_n^k)_(L^2(S^2)) B_n^k(psi, t) ) &le C sum_(n=N)^(infty) sum_(substack(k=-n +ktext( even)))^(n) left(n+tfrac12right) abs(inn(f, Y_n^k)_(L^2(S^2))) &le C sqrt(sum_(n=N)^(infty) sum_(substack(k=-n +ktext( even)))^(n) left(n+tfrac12right)^(2s) abs(inn(f, Y_n^k)_(L^2(S^2)))^2) sqrt(sum_(n=N)^(infty) sum_((k=-n))^(n) left(n+tfrac12right)^(2-2s) ), where the last line follows by the Cauchy Schwarz inequality. In the last equation, the first root converges to zero for Ntoinfty since the Sobolev norm f _(H^s(S^2)) is finite, and the term under the second root, sum_(n=N)^(infty) sum_(k=-n)^(n) left(n+tfrac12right)^(2-2s) = 4 sum_(n=N)^(infty) left(n+tfrac12right)^(3-2s), also converges since s>2. Hence, the right-hand side of, whose summands are continuous themselves, converges uniformly to a continuous function on Ttimes II, which finally implies that g is continuous. Box"
+    },
+    {
+      "block_id": "s29_p0",
+      "heading": "Proof of  thm:svd2 ",
+      "major_heading": "Proof of  thm:svd2 ",
+      "text": "1. First we show for ninNN, kin(-n, dots, n), and bQinSO that mathcal W Y_n^k (bQ) = sum_(j=-n)^n lambda_n^j overline(D_n^(k, j)(bQ)), which implies. By, we have mathcal W Y_n^k (bQ) = frac(1)(4pi) int_(0)^(pi) Y_n^k(bQ sph(0, vartheta)) sinvartheta d vartheta overset( )= (frac(1)(4pi)) sum_(j=-n)^n D_n^(j, k)(bQ^top) int_(0)^(pi) Y_n^j(sph(0, vartheta)) sinvartheta d vartheta. Noting that D_n^(j, k)(bQ^top) = overline(D_n^(-k, -j)(bQ)) by [§ 4.4, Varsha88] and performing the substitution z=cosvartheta, we see that holds with lambda_n^j = frac(1)(4pi) int_(-1)^(1) Y_n^j(sph(0, arccos z)) d z overset( )(=) frac(1)(4pi) sqrt(frac(2n+1)(4pi) frac((n-j)! )((n+j)! )) int_(-1)^(1) P_n^j(z) d z. If n=0, then also j=0 and we have P_0^0 = 1, which implies that lambda_0^0 = 2 (4pi)^(-1/2). Let ninN. If j=0, then P_n^0 is the Legendre polynomial of degree n and thus we have int_(-1)^1 P_n^0(z) d z = 0 for nge1. If n+j is odd, then P_n^j is an odd function and hence its integral vanishes. Let us compute for n=j inNN. The substitution z = cosvartheta and yield int_(-1)^1 P_n^n(z) d z &= 2(-1)^n (2n-1)!! int_(0)^1 (1-z^2)^(n/2) d z = 2(-1)^n (2n-1)!! int_(0)^(pi/2) (sinvartheta)^(n+1) dvartheta = (-1)^n (2n-1)!! frac(n!! )((n+1)!! ) 2: & n text( even), (pi): & n text( odd), where the last equality follows by [§3.621, GrRy14]. Let n+j be even and nge2, jge0. We are going to use two recurrence relations from [§8.731, GrRy14]. First, we compute the integral of the relation (n-j) P_(n)^j(z) = (z^2-1) partial_z P_(n-1)^j(z) + n z P_(n-1)^j(z). Using integration by parts and noting that P_(n-1)^j(1) = -P_(n-1)^j(-1) yields (n-j) int_(-1)^1 P_(n)^j(z) d z = (n-2) int_(-1)^1 z P_(n-1)^j(z) d z. Second, inserting the integral of the recurrence relation (2n-1) z P_(n-1)^j(z) = (n-j) P_(n)^j(z) + (n+j-1) P_(n-2)^j(z) into results in (n-j) int_(-1)^1 P_(n)^j(z) d z = n-2 (2n-1) int_(-1)^1 left( (n-j) P_(n)^j(z) + (n+j-1) P_(n-2)^j(z) right) d z and thus (n-j) ((n+1)) int_(-1)^1 P_(n)^j(z) d z = (n-2)(n+j-1) int_(-1)^1 P_(n-2)^j(z) d z. Hence, we obtain by that int_(-1)^1 P_(n)^j(z) d z &= frac((n-2)(n+j-1))((n-j)(n+1)) int_(-1)^1 P_(n-2)^j(z) d z = frac((n-2)!! )((j-2)!! ) frac((n+j-1)!! )((2j-1)!! ) frac(1)((n-j)!! ) frac((j+1)!! )((n+1)!! ) int_(-1)^1 P_(j)^j(z) d z = (-1)^j frac(j!! (n-2)!! (n+j-1)!! )((j-2)!! (n-j)!! (n+1)!! ) 2: & n text( even), (pi): & n text( odd). Together with and, this implies. [1ex] 2. We show that (Z^k_n: n in NN, k = -n, ldots, n) forms an orthonormal system in L^2(SO). The orthogonality follows from the orthogonality relation of the rotational harmonics and the fact that Z_n^k for different indices (n, k) neq (n', k') contains disjoint linear combinations of rotational harmonics. Since lambda_n^nneq0, this also yields that w _nneq0 for any ninNN, and hence the normalization follows by definition of Z_n^k. [1ex] 3. We show the bound. Let ninNN. The squared singular values of the operator W are (mathrm(w)_n)^2 = norm(mathcal W Y_n^k)_(L^2(S^2))^2 = (sum_(j=-n)^n abs(lambda_n^j)^2 norm(D_n^(k, j))^2_(L^2(SO)) ) overset( )(=) (sum_(j=1)^n abs(lambda_n^j)^2 frac(16pi^2)(2n+1) ), where we used the identity lvertlambda_n^jrvert = lvert(lambda_n^(-j))rvert. We have by that (mathrm(w)_n)^2 &= frac(1)(4pi) sum_(substack(j=1 +jtext( even)))^n frac((n-j)! )((n+j)! ) left(frac(j (n-2)!! (n+j-1)!! )( (n-j)!! (n+1)!! ) right)^2 4: & n text( even), (pi)^2: & n text( odd). &= frac(1)(4pi) left(frac( (n-2)!! )( (n+1)!! ) right)^2 sum_(substack(j=1 +jtext( even)))^n j^2 frac((n-j-1)!! )((n-j)!! ) frac((n+j-1)!! )( (n+j)!! ) 4: & n text( even), (pi)^2: & n text( odd). We use the fact from [p. 9, HiPoQu18] that (2m-1)!! ((2m)!! ) = (c_m) ((2m+1))^(-1/2), quad where sqrt( 2 (pi)) le c_(m) le 1, qquad forall minN. We perform the proof for the case that n=2m is even, the case of odd n is completely analogous. We have (mathrm(w)_(2m))^2 &= frac(1)(pi) left(frac( (2m-2)!! )( (2m+1)!! ) right)^2 sum_(j=1)^m (2j)^2 frac((2m-2j-1)!! )((2m-2j)!! ) frac((2m+2j-1)!! )( (2m+2j)!! ) &= frac( (2m+1))(pi c_m^2 (2m+1)^2 (2m)^2) sum_(j=1)^m frac(4j^2 c_(m-j) c_(m+j))(sqrt(2m-2j+1) sqrt(2m+2j+1)) &= frac( 1)(pi c_m^2 (2m+1) (2m)^2) sum_(j=1)^m frac(4j^2 c_(m-j) c_(m+j))(sqrt((2m+1)^2-(2j)^2)). Taking into account the bounds on c_m and noting that the summands increase monotonic with j, we replace the sum by an integral plus the last summand and obtain the upper bound (mathrm(w)_(2m))^2 &le frac( 1)(8 (2m+1) m^2) left(int_(0)^(m+1/2) frac((2x)^2)(sqrt((2m+1)^2-(2x)^2)) d x + frac(4m^2)(sqrt(4m+1))right) &= frac( 1)(8 (2m+1) m^2) left(frac(pi(2m+1)^2)(8) + frac(4m^2)(sqrt(4m+1))right) in mathcal O(m^(-1)). For the lower bound, we analogously see that (mathrm(w)_(2m))^2 &ge frac( 1)(2pi^2 (2m+1) m^2) sum_(j=1)^m frac(4j^2)(sqrt((2m+1)^2-(2j)^2)) ge frac( 1)(2pi^2 (2m+1) m^2) int_(1)^m frac(4j^2 d j)(sqrt((2m+1)^2-(2j)^2)) = frac( 1)(2pi^2 (2m+1) m^2) left(frac((2m+1)^2)(4) arcsinleft( frac(2 m)(2 m+1)right) -frac(m)(2) sqrt(4 m+1) right) can be bounded from below by a positive multiple of m^(-1) for mtoinfty. Box"
+    },
+    {
+      "block_id": "s30_p0",
+      "heading": "Proof of  thm:B_inj ",
+      "major_heading": "Proof of  thm:B_inj ",
+      "text": "Let mu, nu in M(S^2) such that W mu = W nu. By prop: W-adj-meas, we have inn(mu, mathcal W^* g) = inn(nu, mathcal W^* g), qquad forall gin C(SO). The claim holds if we can show that ( W^*g: gin C(SO)) is a dense subset of C(S^2). Let fin H^s(S^2) with s>2, cf., which is dense in C(S^2), see [p. 121, AtHa12]. We show that gcoloneqq ( W W^*)^(-1) W f in C(SO), which also implies f = W^*g by the injectivity of W. We proceed analogously to the proof of Sobolev's embedding theorem [p. 122, AtHa12]. Since W^* has the same singular functions as W and the singular values w _n = w _n, thm: B_inj implies g = sum_(ninNN) sum_(k=-n)^(n) 1 ( w _n) f, Y_n^k Z_n^k. Let bQinSO. We have by and the Cauchy Schwarz inequality abs(Z_n^k(bQ))^2 le abs(mathrm(w)_n)^(-2) bigg(sum_(j=-n)^n abs(lambda_n^j) abs(D_n^(k, j)(bQ)) bigg)^2 overset( )(le) frac(2n+1)(16pi^2) (sum_(j=-n)^n abs(D_n^(k, j)(bQ))^2). Again by the Cauchy Schwarz inequality, we obtain abs(g(bQ))^2 &le bigg(sum_(ninNN) sum_(k=-n)^(n) abs(mathrm(w)_n)^(-1) abs(inn(f, Y_n^k)) abs(Z_n^(k)(bQ))bigg)^2 &le (sum_(ninNN) sum_(k=-n)^(n) (n+tfrac12)^(2s) abs(inn(f, Y_n^k))^2) (sum_(ninNN) sum_(k=-n)^(n) (n+tfrac12)^(-2s) abs(mathrm(w)_n)^(-2) abs(Z_n^(k)(bQ))^2) &overset( )(le) norm(f)_(H^s(S^2))^2 (sum_(ninNN) (n+tfrac12)^(-2s) abs(mathrm(w)_n)^(-2) frac(2n+1)(16pi^2) sum_(k=-n)^(n)sum_(j=-n)^n abs(D_n^(k, j)(bQ))^2). Using the addition formula sum_(j, k=-n)^n lvert(D_n^(k, j)(bQ))rvert^2 = n+1, see [p. 17, hiediss07], and the bound of w _n, we see that the last sum converges uniformly in bQ. Since the basis functions Z_n^k are continuous, this implies the continuity of g, which proves the assertion. Box"
+    }
+  ],
+  "load_seconds": 4.10779903299408
+}

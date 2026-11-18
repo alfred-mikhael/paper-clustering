@@ -1,0 +1,733 @@
+{
+  "arxiv_id": "2003.13065",
+  "title": "Two combinatorial MA-complete problems",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "Despite the interest in the complexity class MA, the randomized analog of NP, just a few natural MA-complete problems are known. The first problem was found by (Bravyi and Terhal, SIAM Journal of Computing 2009); it was then followed by (Crosson, Bacon and Brown, PRE 2010) and (Bravyi, Quantum Information and Computation 2015). Surprisingly, two of these problems are defined using terminology from quantum computation, while the third is inspired by quantum computation and keeps a physical terminology. This prevents classical complexity theorists from studying these problems, delaying potential progress, e.g., on the NP vs. MA question. Here, we define two new combinatorial problems and prove their MA-completeness. The first problem, ACAC, gets as input a succinctly described graph, with some marked vertices. The problem is to decide whether there is a connected component with only unmarked vertices, or the graph is far from having this property. The second problem, SetCSP, generalizes standard constraint satisfaction problem (CSP) into constraints involving sets of strings. Technically, our proof that SetCSP is MA-complete is based on an observation by (Aharonov and Grilo, FOCS 2019), in which it was noted that a restricted case of Bravyi and Terhal's problem (namely, the uniform case) is already MA-complete; a simple trick allows to state this restricted case using combinatorial language. The fact that the first, more natural, problem of ACAC is MA-hard follows quite naturally from this proof, while the containment of ACAC in MA is based on the theory of random walks. We notice that the main result of Aharonov and Grilo carries over to the SetCSP problem in a straightforward way, implying that finding a gap-amplification procedure for SetCSP (as in Dinur's PCP proof) is equivalent to MA=NP. This provides an alternative new path towards the major problem of derandomizing MA."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The complexity class is a natural extension of proof systems to the probabilistic setting [Babai85]. There is a lot of evidence towards the fact that these two complexity classes are equal [ImpagliazzoKW02, Goldreich2011, HastadILL99, BabaiFNW93, NisanW94, ImpagliazzoW97, SudanTV01, KabanetsI2004], however the proof remains elusive. It is even open to show that every problem in can be solved in non-deterministic sub-exponential time"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Surprisingly, the very first natural -complete problem, found by Bravyi and Terhal [BravyiT09] only close to 25 years after the definition of the class (! ) is defined using quantum terminology. But why would randomized NP have anything to do with quantum? Bravyi and Terhal show that deciding if a given stoquastic k -Local Hamiltonian is frustration-free or at least inverse polynomially frustrated, is promise- -complete. Bravyi [Bravyi14] also proved -completeness of yet another quantum Hamiltonian problem. A third MA-complete problem was proposed by Crosson, Bacon and Brown [CrossonBB10], inspired by quantum adiabatic computation. This leaves us in a strange situation in which the known complete problems are not stated using natural or standard complexity theory terminology. This makes us wonder if there is a fundamental reason why we cannot find classical -complete problems, or it is just an \"accident\" that the first -complete problems come from quantum computing. Moreover, we think that new natural (classically defined) complete problems for the class might enable access to the major open problem of derandomization of, and possibly to other related problems such as PCP for [AharonovG19]. In particular, though the problems proposed in [BravyiT09, Bravyi14] are very natural within quantum complexity theory, the fact that they are defined within the area of quantum computation seems to pose a language and conceptual barrier that might delay progress on them, and make it hard for classical complexity theorists to study them. The goal of this work is to provide classically, combinatorially-defined complete problems for. We hope that these definitions lead to further understanding of the class and the vs. question"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "One of these problems,, is morally based on the complete problem of [BravyiT09], while the other problem,, seems to be a rather natural problem on graphs. The definition of as well as the proof of its -completeness rely on a simple but crucial insight: we can translate \"testing history states\", a notion familiar in quantum complexity theory, into constraints on sets of strings. This idea is used here throughout, but in fact can be used to translate also other quantum results related to stoquastic Hamiltonians, to the classical combinatorial language of constraints on sets of strings (see as well as for more intuition). However though this translation idea can be viewed as standing at the heart of many of the definitions and results presented here, it is in fact not necessary to understand the proofs. Based on this idea, as well as a simple observation made in [AharonovG19] which says that the problem of [BravyiT09] remains promise- complete even when restricted to what is referred to in [AharonovG19] as uniform stoquastic Hamiltonians, we can prove the -hardness proof of the problem as a translation of the -hardness proof given in [BravyiT09] into a classical language. We notice that the proof of [BravyiT09] on its own heavily relies on the Quantum Cook-Levin proof of Kitaev [KitaevSV02]. It turns out that there is an easy reduction from the problem to that of, and therefore the proof that is -hard follows immediately. Interestingly, the proof of containment in is rather simple for (it is an easy application of a known result from random walk theory. ) Finally, using the same reduction, we arrive at a proof that the problem is also in"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "We stress that we present all proofs here avoiding any quantum notation or quantum jargon whatsoever. The main contribution of this work is in the definitions themselves, initiated by the small but important conceptual idea of the translation mentioned above; this translation thus provides two new, combinatorial, and natural -complete problems, which we believe are amenable to research in a language familiar to (classical) computer scientists. We now describe the problems. In the problem, we consider an exponentially large graph, accompanied with a function on the vertices that marks some of them. Both graph and the function on the vertices are given implicitly (and succinctly) by a polynomial size circuit. We then ask if there exists a connected component of the graph that is \"clean\" (meaning that all of its vertices are unmarked ) or if the graph is eps -far from having this property. The notion of \"far\" is defined as follows: every set of vertices which is close to being a connected component (i. e. its expansion is smaller than eps ) must have at least an eps -fraction of its vertices marked. In other words, either a set is eps -far from a connected component (i. e. has large expansion) or at least eps fraction of its vertices are marked. We call this problem ( ACleanCC_eps )"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Our second -complete problem, called the Set-Constraint Satisfaction Problem, or, is a somewhat unexpected generalization of the standard Constraint Satisfaction Problem ( ). While a constraint in acts on a single string (deciding if it is valid or not), the generalized constraints act on sets of strings. We call the generalized constraints set-constraints (see for the exact definition of a set-constraint. ). The input to the problem is a collection of such set-constraints, and the output is whether there is a set of strings S that satisfies all set-constraints in this collection, or any set of strings S is eps -far from satisfying this set-constraint collection (see for formal definitions of \"satisfying a set-constraint\" and \"far\"). We denote this problem by SetCSP_eps"
+    },
+    {
+      "block_id": "s0_p5",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Following the ideas of [BravyiT09, KitaevSV02], we show the following three claims: i) for every inverse polynomial eps, we have that ACleanCCeps is in (Corollary ); ii) there exists an inverse polynomial function eps=eps(n) such that _(eps) is -hard ( ); and iii) for all functions eps=eps(n)>0, there is a polynomial-time reduction from _(eps) to ACleanCC_(eps/2). Together, these facts imply the following results (which are proven in )"
+    },
+    {
+      "block_id": "s0_p6",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "start-of-theorem: There exists some inverse polynomial p(x) = Theta(1/x^3) such that for every inverse polynomial p' < p, the problems SetCSP_(p'(m)) and ACleanCC_(p'(m)) are MA -complete, where m is the size of the SetCSP or ACleanCC instance. end-of-theorem"
+    },
+    {
+      "block_id": "s0_p7",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "We stress that the definitions of both these problems and the proofs presented in this paper only use standard combinatorial concepts from set- and graph-theory"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "In a similar way to what is done in this note, we claim that it is possible to translate several other results from the stoquastic local Hamiltonian language to the language, bringing us to very interesting conclusions"
+    },
+    {
+      "block_id": "s1_p1",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "First, one could strengthen the -hardness of ( ), whose proof is a translation of the proof of the quantum Cook-Levin theorem [KitaevSV02], to the restricted case in which the constraints are set on a 2D lattice. To do this, one could consider the result of [AharonovDKLLR08] where they prove the QMA -hardness of local Hamiltonians on a 2D lattice (considering only the restricted family of stoquastic Hamiltonians), and translate it to the language. In this way, it can be proven that _eps with inverse polynomial eps, and with set-constraints arranged on a 2D -lattice with constant size alphabet is still -hard. We omit here the details of the proof, since it is a straight forward translation of [AharonovDKLLR08], similarly to what's done in. This leads to the following statement"
+    },
+    {
+      "block_id": "s1_p2",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "start-of-lemma: There exists some inverse polynomial p such that for every inverse polynomial p' < p, _(p') is -hard even when each bit participates in O(1) set-constraints, and each set-constraint acts on O(1) bits. end-of-lemma"
+    },
+    {
+      "block_id": "s1_p3",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "We also claim that the main result of [AharonovG19], which states that some problem called stoquastic local Hamiltonian with constant gap is in, can be translated to language, using again the same translation. This means that the gapped version of the problem is in. By the gapped version of the problem, we mean _eps when eps is a constant; and where we also require that the locality k (number of bits in a set-constraint) and degree d (number of set-constraints each bit participates in) are bounded from above by a constant. More concretely, we have the following"
+    },
+    {
+      "block_id": "s1_p4",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "start-of-lemma: For any constant eps and constants k and d, _(eps) is in if each bit participates in d set-constraints, and each set-constraint acts on k bits. end-of-lemma"
+    },
+    {
+      "block_id": "s1_p5",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "Together these two results lead to a very important and surprising equivalence:"
+    },
+    {
+      "block_id": "s1_p6",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "Proposition. = iff there is a gap amplification reduction for. The existence of a gap amplification reduction means that there exists a constant eps>0, such that for every inverse polynomial p, there is a polynomial time reduction from SetCSP_(p(n)) to SetCSP_(eps)"
+    },
+    {
+      "block_id": "s1_p7",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "We note that it is easy to see that = implies such gap-amplification for: if MA=NP, then we can reduce SetCSP_(1/poly), which is in -complete by, to CSP_(O(1)), which is -complete by the PCP theorem [Dinur07]; then, since every CSP instance is also a SetCSP instance with the same parameters, we have the gap-amplification. It is the other direction of deriving = from gap-amplification for, that is the new contribution. This implication suggests a new path to the long standing open problem of derandomizing"
+    },
+    {
+      "block_id": "s1_p8",
+      "heading": "Conclusions, future work and open questions",
+      "major_heading": "Introduction",
+      "text": "Finally, we leave as an open problem deriving such a natural statement regarding gap amplification for the problem. Though the two problems are technically very related, defining a natural restricted version of the gapped problem, so that the [AharonovG19] result would apply to show containment in (similarly to with constant eps, locality k and degree d ) remains open. The problem is that the locality notions don't have a very natural analogues in the graph language of. Organization. We provide notation and a few basic notions in. In, we define the problem and prove its containment in. The definition of and the proof of its -hardness are in. The reduction from to appear in. In we provide some basic background on computational complexity and random walks, and prove some standard technical results we need. In, we also prove the -completeness of the exact version of the problem"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "For n in N ^+, we denote [n] = (0,..., n-1). For any n -bit string, we index its bits from 0 to n-1. For x in 1^n and J subseteq [n], we denote x|_(J) as the substring of x on the positions contained in J"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "For x in 1^(|J|), y = 1^(n - |J|) and J subseteq [n], we define x^( J )y^( J ) to be the unique n -bit string w such that w|_(J) = x and w|_( J ) = y, where J = [n] setminus J. For two strings, x and y, we denote by x concat y their concatenation, and |x| denotes the number of bits in x"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Complexity classes",
+      "major_heading": "Preliminaries",
+      "text": "A (promise) problem A = (A_(yes), A_(no)) consists of two non-intersecting sets A_(yes), A_(no) subseteq (0, 1)^*. For completeness, we add in the definitions of the two main complexity classes that are considered in this work: and"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Complexity classes",
+      "major_heading": "Preliminaries",
+      "text": "The standard definition of [Babai85] requires yes-instances to be accepted with probability at least 2 (3), but it has been shown that there is no change in the computational power if we require the verification algorithm to always accept yes-instances [Zachos1987, Goldreich2011]"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "Reversible circuits",
+      "major_heading": "Preliminaries",
+      "text": "It is folklore that the verification algorithms for and can be converted into a uniform family of polynomial-size Boolean circuits, made of reversible gates, (NOT, CNOT, CCNOT) by making use of additional auxiliary bits initialized to 0, with only linear overhead. For randomized circuits, we can also assume the circuit uses only reversible gates, by assuming that the random bits are part of input. See Appendix for more details"
+    },
+    {
+      "block_id": "s4_p1",
+      "heading": "Reversible circuits",
+      "major_heading": "Preliminaries",
+      "text": "Let G in (NOT, CNOT, CCNOT) be a gate to be applied on the set of bits J out of some n -bit input x. We slightly abuse notation (but make it much shorter! ) and denote G(x) defeq x|_( J )^( J )G(z|_(J))^( J ). Namely, we understand the action of the k -bit gate G on an n>k bit string x by applying G only on the relevant bits, and leaving all other bits intact"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "In this section, our goal is to present the problem and prove its containment in. But before that, we explain the exact version of this problem"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "For a fixed parameter n, we consider a graph G of 2^n nodes, which is described by a classical circuit C_G of size (number of gates) n, as follows. For simplicity, we represent each vertex of G as an n -bit string, and C_G, on input x in 1^n, outputs the (polynomially-many) neighbors of x in G. We are also given a circuit C_M, which when given input x in 1^n, outputs a bit indicating whether the vertex x is marked or not"
+    },
+    {
+      "block_id": "s5_p2",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "We define the problem ( ) which, on input (C_G, C_M), asks if G has a connected component where all vertices are unmarked or if all connected components have at least one marked element. We give now the formal definition of this problem"
+    },
+    {
+      "block_id": "s5_p3",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "( ) def: succ-ccc Fix some parameter n. An instance of the problem consists of two classical n -size circuits C_G and C_M. C_G consists of a circuit succinctly representing a graph with G = (V, E) where V = 1^n and each vertex has degree at most n. On input x in 1^n, C_G outputs all of the neighbors of x. C_M is a circuit that on input x in 1^n, outputs a bit. The problem then consists of distinguishing the two following cases: There exists one non empty connected component of G such that C_M outputs 0 on all of its vertices. In every connected component of G, there is at least one vertex for which C_M outputs 1"
+    },
+    {
+      "block_id": "s5_p4",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "We show in that this problem is -complete. Our focus here is to study the approximate version of, where we ask whether G has a clean connected component or it is \" far \" from having this property, meaning that for every set of vertices S, the boundary of S is at least eps|S| (and therefore S is far from being a connected component), or, if the boundary is small (i. e. S is close to a connected component) it contains at least eps|S| marked elements. Here is the definition of the problem"
+    },
+    {
+      "block_id": "s5_p5",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "start-of-definition: [  ( ACleanCCeps )] Same as with the following difference for no-instances: No. For all non empty S subseteq V, we have that either | tial_(G)(S)| geq eps|S| quad or quad left|left(x in S: C_M(x) = 1 right)right| geq eps |S|. end-of-definition"
+    },
+    {
+      "block_id": "s5_p6",
+      "heading": "   problem",
+      "major_heading": "   problem",
+      "text": "In the remainder of this section, we show that ACleanCCeps is in for every inverse polynomial eps"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Inclusion in  ",
+      "major_heading": "   problem",
+      "text": "The idea of the proof is as follows. The prover sends a vertex that belongs to the (supposed) clean connected component and then the verifier performs a random-walk on G for sufficiently (but still polynomially-many) steps and rejects if the random walk encounters a marked element"
+    },
+    {
+      "block_id": "s6_p1",
+      "heading": "Inclusion in  ",
+      "major_heading": "   problem",
+      "text": "In order to prove that this verification algorithm is correct, we first prove a technical lemma regarding the random-walk on no-instances"
+    },
+    {
+      "block_id": "s6_p2",
+      "heading": "Inclusion in  ",
+      "major_heading": "   problem",
+      "text": "start-of-lemma: [In NO-instances the random walk reaches marked nodes quickly] Let eps be an inverse polynomial function of n. If (C_G, C_M) is a no-instance of ACleanCCeps, then there exist polynomials q_1 and q_2 such that for every x in 1^n, a q_1(n) -step lazy random walk starting at x reaches a marked vertex with probability at least 1 (q_2(n)). end-of-lemma start-of-proof: Let x be some initial (unmarked) vertex (notice that we can assume that x is unmarked since otherwise the lazy random walk reaches a marked vertex with probability 1 ). Let G_x be the connected component of x in G and V_x be the set of vertices in the connected component of x. We partition V_x into A, the unmarked vertices in V_x and B = V_xsetminus A, the marked vertices in V_x. We want to upper bound the size of the edge boundary of any set S subseteq A which contains only unmarked strings. We claim that by the conditions of the lemma, it must be that for any S subseteq A, we have the following bound: | tial_(G)(S)| geq eps|S|, otherwise S would contradict the fact that (C_G, C_M) is a no-instance, since it only contains unmarked vertices. We can now ask how fast does a lazy random walk starting from x, reach an element in B. This is a well known question from random walk theory, and it can be stated as follows. start-of-lemma: [Escaping time of high conductance subset] Let G = (V =Acup B, E) be a simple (no multiple edges) undirected connected graph, such that for every v in A d_G(v) leq d, and such that for some delta < 1 (2), for all A' subseteq A, we have that | tial_G(A')| geq delta |A'|. Then a left( stepsrandomwalk right) -step lazy random walk starting in any v in A reaches some vertex u in B with probability at least 4d. end-of-lemma We defer the proof of this lemma to and we apply it using G = G_x, A, B, d is the ( n -large) maximum degree of G, and delta geq eps. It follows that a left( 16d^2 (eps^2) left(n + lnleft(2d/epsright)right)right) -step lazy random walk starting on any x in G_x reaches a marked vertex with probability at least 4d. end-of-proof"
+    },
+    {
+      "block_id": "s6_p3",
+      "heading": "Inclusion in  ",
+      "major_heading": "   problem",
+      "text": "From the previous lemma, we can easily achieve the following"
+    },
+    {
+      "block_id": "s6_p4",
+      "heading": "Inclusion in  ",
+      "major_heading": "   problem",
+      "text": "start-of-corollary: For any inverse polynomial eps, ACleanCCeps is in. end-of-corollary start-of-proof: The witness for the ACleanCC instance consists of some string x, which is supposed to be in a clean connected component of G. Define q_1 and q_2 as the same polynomials of, namely, let q_1=left( 16d^2 (eps^2) left(n + lnleft(2d/epsright)right)right) and q_2 = 4d (eps). The -verification algorithm consists of repeating nq_2(n) times the following process: start from x, perform a q_1(n) -step lazy random walk in G, reject if any of these walks encounters a marked vertex, otherwise accept. If (C_G, C_M) is a yes-instance, then the prover can provide a vertex x which belongs to the clean connected component. Any walk starting from x remains in its connected component and thus it will never encounter a marked vertex and the verifier accepts with probability 1. If (C_G, C_M) is a no-instance, from, each one of the random walks finds a marked vertex with probability at least 1 (q_2(n)). Thus, if we perform nq_2(n) lazy random walks, the probability that at least one of them finds a marked vertex is exponentially close to 1. end-of-proof"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Set-Constraint Satisfaction Problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "In this section we present the Set Constraint Satisfaction Problem ( ), and then prove its -hardness"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We start by recalling the standard Constraint Satisfaction Problem ( ). We choose to present in a way which is more adapted to our generalization (but still equivalent to the standard definition). An instance of is a sequence of constraints C_1,..., C_m. In this paper, we see each constraint C_i as a tuple (J(C_i), Y(C_i)), where J(C_i)subseteq [n] is a subset of at most k distinct elements of [n] (these are referred to as \"the bits on which the constraint acts\") and Y(C_i) is a subset of k -bit strings, namely Y(C_i) subseteq 1^(|J(C_i)|) (these are called the \"allowed strings\"). We say that a string x in 1^n satisfies C_i if x|_(J(C_i)) in Y(C_i). The familiar problem of, in this notation, is to decide whether there exists an n -bit string x which satisfies C_i, for all 1 leq i leq m"
+    },
+    {
+      "block_id": "s8_p1",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "In, our generalization of, the constraints C_i are replaced by what we call \"set-constraints\" which are satisfied by (or alternatively, that allow ), sets of strings S subseteq (0, 1)^n"
+    },
+    {
+      "block_id": "s8_p2",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-definition: [Set constraint] A k -local set-constraint C consists of a) a tuple of k distinct elements of [n], denoted J(C) (we have |J(C)|=k, and we refer to J(C) as the bits which the set-constraint C acts on), and b) a collection of sets of strings, Y(C) = (Y_1,..., Y_(ell)), where Y_i subseteq (0, 1)^k is a set of k -bit strings and Y_i cap Y_j = emptyset for all distinct 1 leq i, j leq ell. end-of-definition"
+    },
+    {
+      "block_id": "s8_p3",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-definition: [A set of strings satisfying a constraint] We say that a set of strings Ssubseteq (0, 1)^n satisfies the k -local set-constraint C if first, the k -bit restriction of any string in S to J(C) is contained in one of the sets in Y(C), i. e., for all x in S, x|_(J(C)) in bigcup_j Y_j. Secondly we require that if xin S and x|_(J(C)) in Y_j, then for every y such that y|_(J(C)) in Y_j and y|_( J(C) ) = x|_( J(C) ), then y in S. In other words, for any string sin S, one can replace its k -bit restriction to the bits J(C), which is a string in some Y_jin Y(C), with a different k -bit string in Y_j, and the resulting string s' must also be in S. end-of-definition"
+    },
+    {
+      "block_id": "s8_p4",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "An instance of kSetCSP consists of m such k -local set-constraints, and we ask if there is some non-empty S subseteq 1^n that satisfies each of the set constraints, or if any set S of n -bit strings is far from satisfying the collection of set-constraints. How to define far? We quantify the distance from satisfaction using a generalization of the familiar notation of unsat from PCP theory [Dinur07]; we denote the generalized notion by setunsat(calC, S). Intuitively, this quantity captures how much we need to modify S in order to satisfy the collection of set-constraints. Making this definition more precise will require some work; However we believe it already makes some sense intuitively, so we present the definition of the problem now, and then provide the exact definition of setunsat(calC, S) in"
+    },
+    {
+      "block_id": "s8_p5",
+      "heading": "Definition of the    problem",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "k -local Set Constraint Satisfaction problem ( kSetCSP_eps ) def: set-csp Fix the two constants d, k in N ^+, as well as a monotone function eps: N ^+ rightarrow (0, 1) to be some parameters of the problem. An instance to the k -local Set Constraint Satisfaction problem is a sequence of m(n) k -local set-constraints calC = (C_1,..., C_m) on 1^n, where m is some polynomial in n. Under the promise that one of the following two holds, decide whether: There exists a non-empty S subseteq 1^n that satisfies all set constraints in calC: setunsat(calC, S)=0 For all S subseteq 1^n, setunsat(calC, S)ge eps(n)"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We present some concepts required for the formal definition of setunsat(calC, S). start-of-definition: [ C -Neighboring strings] Let C be some set-constraint. Two distinct strings x and y are said to be C -neighbors if x|_( J(C) ) = y|_( J(C) ) and x|_(J(C)), y|_(J(C)) in Y_i, for some Y_i in Y(C). We call a string x a C -neighbor of S if there exists a string yin S such that x is a C -neighbor of y. end-of-definition"
+    },
+    {
+      "block_id": "s9_p1",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We also define the C -longing strings in a set of strings S: these are the strings that are in S but are C -neighbors of some string that is not in S"
+    },
+    {
+      "block_id": "s9_p2",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-definition: [ C -Longing strings] Given some set Ssubseteq(0, 1)^n and a set-constraint C, x in S is a C -longing string with respect to S if x is a C -neighbor of some y notin S. end-of-definition"
+    },
+    {
+      "block_id": "s9_p3",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "A useful definition is that of bad strings for some set-constraint C, which in short are the strings that do not appear in any subset of Y(C)"
+    },
+    {
+      "block_id": "s9_p4",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-definition: [ C -Bad string] Given a set-constraint C, with Y(C)=(Y_1,... Y_ell), a string x in (0, 1)^n is C -bad if x|_(J(C)) notin bigcup_i Y_i. We abuse the notation and whenever x is C -bad, we say x notin Y(C). end-of-definition The following complementary definition will be useful: start-of-definition: [Good string] We say that a string is C -good if it is not C -bad. We say that it is a \"good string for the set-constraint collection calC \" if it is C -good for all set-constraints Cin calC. When the collection calC is clear from context (as it is throughout this note), we omit mentioning of the set-constraints collection calC and just say that the string is \"good\". end-of-definition"
+    },
+    {
+      "block_id": "s9_p5",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Given above, it is easy to see that a set of strings Ssubseteq (0, 1)^n satisfies a set-constraint C (by ) iff S contains no C -bad strings and no C -longing strings"
+    },
+    {
+      "block_id": "s9_p6",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We now provide a way to quantify how far S is from satisfying C"
+    },
+    {
+      "block_id": "s9_p7",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-definition: [Satisfiability of set-constraints] Let S subseteq 1^n and C be a k -local set-constraint. Let B_C be the set of C -bad strings in S and L_C be the set of C -longing strings in S. Note that L_C cap B_C=emptyset. The setunsat value (which we sometimes refer to as the frustration ) of a set-constraint C with respect to S, is defined by setunsat(C, S) = frac(|B_C|)(|S|) + frac(|L_C|)(|S|) Given a collection of m k -local set-constraints calC = (C_1,..., C_m), its setunsat value (or frustration) with respect to S is defined as average frustration of the different set-constraints: setunsat(calC, S) = frac(1)(m)sum_(i=1)^m setunsat(C_i, S). We also define the frustration of the set collection calC: setunsat(calC) = min_(substack(S subseteq 1^n S ne emptyset)) (setunsat(calC, S)). We say that calC is satisfiable if setunsat(calC)=0 and for eps > 0, we say that calC is eps -frustrated if setunsat(calC)geq eps. end-of-definition"
+    },
+    {
+      "block_id": "s9_p8",
+      "heading": "Satisfiability, frustration and the definition of  setunsat(calC,S) .",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Notice that the normalization factors in guarantees that the setunsat value lies between 0 and 1"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We can present a standard instance consisting of constraints C_1, C_2,..., C_m as an instance of kSetCSP in the following way: For each constraint C_ell, ellin(1,..., m) out of the m constraints in the kCSP instance, we consider the following set-constraint C_ell': for every k -bit string s that satisfies C_ell, add the subset Y_s = (s) to C_ell'. We arrive at a collection calC of m set-constraints, where each set-constraint C_ell' in calC consists of single-string sets Y_i corresponding to all strings which satisfy C_ell"
+    },
+    {
+      "block_id": "s10_p1",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We claim that the resulting instance has setunsat(calC)=0 if and only if the original instance was satisfiable. First, if the original instance is satisfiable, we claim that for any satisfying string s we can define the set S=(s) consisting of that single string, and S indeed satisfies the collection of set-constraints defined above. To see this, note that in our case, there is no notion of C -neighbors (See Definition ), since all Y_i 's contain only a single string. Hence, there are no longing strings; By the definition of setunsat ( ) in this case setunsat(calC, S)=0 if all strings in S are good for all set-constraints C', namely each of them satisfies all constraints C in the original kCSP instance, which is indeed the case if we pick a satisfying assignment. For the other direction, assume setunsat(calC, S)=0 for some set S. This in particular means that all strings in S are C -good for all set-constraints in calC. By definition of our calC, this means any string sin S is a satisfying assignment"
+    },
+    {
+      "block_id": "s10_p2",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We give now some intuition about the setunsat quantity ( ). We first note that it generalizes the by-now-standard notion of (un)satisfiability in, which for a given string, counts the number of unsatisfied constraints, divided by m. We note that in, if S = (s), then |B_C| is either 0 or 1, depending on whether s satisfies the constraint or not. As previously remarked, in the notion of neighboring and longing strings does not exist, and so L_C will always be empty. Thus, in the case where S = (s) and all set-constraints containing single strings, is indeed the number of violated constraints by the string, divided by m which is exactly the standard CSP unsat used in PCP contexts [Dinur07]. (In the case of S containing more than one string, but all Y_i s are still single-strings, will just be the (non-interesting) average of the unsat of all strings in S )"
+    },
+    {
+      "block_id": "s10_p3",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "The interesting case is the general case, when the Y_i 's contain more than a single string, i. e., when the notions of neighbors and longing strings become meaningful. In this case, the left term in the RHS of quantifies how far the set S is from the situation in which it contains only \"good\" (not \"bad\") strings (this can be viewed as the standard requirement) but it adds to it the right term, which quantifies how far S is from being closed to the action of adding neighbors with respect to the set-constraints. Loosely put, the generalization from constraints to set-constraints imposes strong \"dependencies\" between different strings, and the number of longing strings, L_C, counts to what extent these dependencies are violated"
+    },
+    {
+      "block_id": "s10_p4",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "-hardness of _(1/ n ) In this subsection, we show the -hardness of SetCSP_(1/poly)"
+    },
+    {
+      "block_id": "s10_p5",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-lemma: There exists some inverse polynomial p(x) = Theta(1/x^3) such that for every inverse polynomial p' < p, the problem SetCSP_(p'(m)) is MA -hard. end-of-lemma"
+    },
+    {
+      "block_id": "s10_p6",
+      "heading": "Intuition and standard CSP as special case",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "To prove this lemma, we show how to reduce any language L in MA to a 6 - instance. Our approach here is to \"mimic\" the Quantum Cook-Levin theorem due to Kitaev [KitaevSV02], but given that we only need to deal with set of strings and not arbitrary quantum states, our proof can in fact be stated in set-constraints language"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "In the celebrated proof of the (classical) Cook-Levin theorem, an instance of an -language is mapped to an instance for 3 - SAT problem. More precisely, the verifier V of the -problem, which runs on an n -bit input string x and a poly(n) bit witness y, is mapped to a 3 - SAT formula. To do this, a different variable is assigned to the value of each location of the tape of the Turing machine of V at any time step; these variables are used to keep track of the state of the computation of V (namely what is written on the tape) at the different time steps (see for an example). The formula acts on strings of bits, which can be viewed as assignments to all these variables; such an assignment encodes the entire history of a single possible computation. The clauses of the Boolean formula check if the history given by the assignment, indeed corresponds to a correct propagation of an accepted computation. More precisely, the constraints check that a) the assignment to the n Boolean variables at the first time step, associated with the input to the -problem, is indeed correct (namely equal to the true input x ); b) the assignment of the variables corresponding to any two subsequent time steps is consistent with a correct evolution of the appropriate gate in the computation; and c) the output bit, namely the value of the output variable in the last time step, is indeed accept. There exists a valid history which ends with accept (i. e., x is in the language accepted by the verifier), iff the resulting is satisfiable; in which case a satisfying assignment encodes a history of a correct computation of the verifier"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Now, suppose we want to apply a similar construction for some verification. The random bits are also given to the verification circuit as an input, and one could hope that the reduction of the Cook-Levin theorem would still work. However, the problem is that there could be some choice of random coins that makes the verification algorithm accept even for no-instances, because the soundness parameter is not 0. Hence, the would be satisfiable in this case, even though the input is a NO instance. It is thus not sufficient to verify the existence of a single valid history. In order to distinguish between YES and NO instances of the problem, we have to check in the YES case that all (or at least many of the) initializations of the random bits lead to accept. The key difficulty is how to check that not only a single string satisfies the constraints, but many"
+    },
+    {
+      "block_id": "s11_p2",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "This is exactly the reason for introducing the set-constraints. These set-constraints are able to verify that the random bits are indeed uniformly random; then the standard Cook-Levin approach described above can verify that (given the right witness) most of them leads to acceptance"
+    },
+    {
+      "block_id": "s11_p3",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "In order to implement such an approach, we first explain how to modify the original Cook-Levin proof, of the completeness of satisfiability, so that the strings that we check are not entire histories of a verification process of some problem; rather, the strings represent snapshots of the tape (or evaluations of all bits involved in the circuit at a certain time) for different time-steps of the computation. A satisfying assignment is no longer a single string but a whole collection of strings, denoted S, which would be the collection of all snapshots of a single valid computation, at different times. In this case (note that we have still not included random bits in the discussion) we need to show how to create set-constraints that verify that the set S really does contain all snapshots, and it also needs to verify that S contains nothing else. More precisely, we need to verify that a) the strings in S are consistent with being snapshots of a valid evolution of the computation b) the input is correct in the string corresponding to the first snapshot, and the output is accept in the string corresponding to the last snapshot, and c) the set S indeed contains the whole history of the computation, i. e. all the snapshots in a correct evolution, and without any missing step"
+    },
+    {
+      "block_id": "s11_p4",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "It turns out that this can be done using set-constraints; We depict the differences between the \"original\" Cook-Levin proof and the \"set-constraints\" one in"
+    },
+    {
+      "block_id": "s11_p5",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "In reality, we need to do this not just for a single evolution but for the evolution over all possible assignments to the random strings. Moreover, we need to enforce that the random bits are indeed random; this requires further set-constraints (technically, this is done below in )"
+    },
+    {
+      "block_id": "s11_p6",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We note that the essence of the translation idea mentioned in the introduction appears already when there are no random bits involved at all; the reader is recommended to pretend that no random bits are used, at her first reading"
+    },
+    {
+      "block_id": "s11_p7",
+      "heading": "Intuition for how set-constraints can check histories",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We next explain the reduction from -verification algorithms to 6 - in, and then prove its correctness in"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "The reduction",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We assume, without loss of generality, that the verification algorithm is reversible, as described in: Given an input x in (0, 1)^n, we assume a verification circuit C_x whose input is yconcat 0^(a(n)) concat r, where y in (0, 1)^(p(n)) is the polynomial-size witness, the middle register consists of the circuit auxiliary bits (needed for reversibility) and r in (0, 1)^(q(n)) are the polynomially many random bits used during the verification. The circuit C_x consists of T gates G_1,..., G_(T), where G_i in (NOT, CNOT, CCNOT). At the end of the circuit, we assume WLOG that the first bit as the output bit. We describe now the reduction from the problem into a instance calC. We will show in the next section that if there is an witness that makes the verification algorithm accept with probability 1, then calC is satisfiable, whereas if every witness makes the verifier reject with probability at least 1 (2), then calC is at least inverse polynomially frustrated"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "The reduction",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We start with an MA verification circuit C_x (assumed to be reversible, as described in ) acting on an input consisting of a(n) 0 -bits, witness y of p(n) bits and q(n) random bits. Thus, the number of bits which the reversible verification circuit acts on is w(n)=a(n)+p(n)+q(n). The number of gates is T(n); denote these gates by G_1,..., G_T. Our set-constraint instance calC will act on strings of s(n) = T(n) + w(n) many bits. We omit n from such functions from now on, since it will be clear from the context"
+    },
+    {
+      "block_id": "s12_p2",
+      "heading": "The reduction",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We call the T first bits of such strings the clock register and the last w bits the work register. The work register comprises of three sub-registers: the witness register (first p(n) bits), the auxiliary register (middle a(n) bits) and the randomness register (last q(n) bits). We want to create set-constraints which force all the strings to be of the form z in 1^(s) such that z|_([T]) = unary(t) for some t in [T+1] (where unary(t) denotes the integer t written in unary representation), and z|_([s] setminus [T]) represents the snapshot of the computation at time t (as explained in above) for the initial string yconcat 0^(a(n)) concat r, for some witness y and some choice of random bits r"
+    },
+    {
+      "block_id": "s12_p3",
+      "heading": "The reduction",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We will construct calC in such a way that S subseteq (0, 1)^s satisfies calC if and only if i) it contains all snapshots of the computation for some witness y and for all bit strings r input to the randomness register; and ii) the computations whose snapshots are contained in S are not only correct (meaning also that the auxiliary bits are all initialized to 0 ) but that they are accepted computations (meaning that the output is 1 )"
+    },
+    {
+      "block_id": "s12_p4",
+      "heading": "The reduction",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We do this by providing set-constraints of four types, as follows"
+    },
+    {
+      "block_id": "s13_p0",
+      "heading": "Clock consistency.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We first impose that if z in S, then z|_([T]) = unary(t), for some t in [T+1]"
+    },
+    {
+      "block_id": "s13_p1",
+      "heading": "Clock consistency.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Notice that a string is a valid unary encoding iff it does not contain 01 as a substring. To guarantee that the clock bits are consistent with some unary representation of an allowed t, we add for every tin [T] the set-constraint C^(clock)_(t) defined by: Y(C^(clock)_(t)) = (((00), (10), (11))) and J(C^(clock)_(t)) = (t, t+1)"
+    },
+    {
+      "block_id": "s13_p2",
+      "heading": "Clock consistency.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Example: The string 010^(T-2) concat z is a bad string for C^(clock)_1 since w|_(J(C^(clock)_1)) = 01 notin Y(C^(clock)_1)"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Here, we want to check that 0^Tconcat y concat z concat r is not in S whenever z ne 0^a, which enforces the ancillary bits to be initialized to 0. In addition, we want to check that for any witness y, if one string of the form 0^Tconcat y concat 0^a concat r for some r is in S, then for all r' in 1^q, we have 0^Tconcat y concat 0^a concat r' in S. In conclusion, we need to check two things: that all auxiliary bits are initialized to 0 and that all possible initializations of the random bits are present"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "For each auxiliary bit j in [a] we add a set-constraint C^(aux)_j and for every random bit j in [q] we add the set constraint C^(rand)_j as follows"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We define Y(C^(aux)_j) = ((00), (10), (11)) and J(C^(aux)_j) = (0, T+p+j), which forces that for t = 0 (notice that the unique value of t for which unary(t) has the first bit 0 is t = 0 ), the j -th auxiliary bit must be 0, because the string (01) is forbidden. For t ne 0 this is not enforced by allowing any value of the j -th auxiliary bit when the first clock bit is 1 (and therefore t ne 0 )"
+    },
+    {
+      "block_id": "s14_p3",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Example: The string 0^T concat y concat 10^(a-1) concat r in S is bad for C^(aux)_0"
+    },
+    {
+      "block_id": "s14_p4",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "For the random bits, we want to make sure that the j -th random bit has both values 0 and 1, over all the random bits. Therefore we define the constraints C^(rand)_j by Y(C^(rand)_j) = ((00, 01), (10), (11)) text( and ) J(C^(rand)_j) = (0, T+p+a+j)"
+    },
+    {
+      "block_id": "s14_p5",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "These constraints will be useful in the following way. First, the propagation set-constraints that we will define soon, constrain S to make sure that there exists a string 0^T concat y concat 0^a concat r representing a snapshot at time 0 with some value of the random bits, r, which is indeed in S. The C^(rand) constraints enforce that given the existence of such a string in S, then for any other assignment to the random bits, r', the string 0^T concat y concat 0^a concat r' in S. Then, if many of these other strings are not in S, the frustration will be high"
+    },
+    {
+      "block_id": "s14_p6",
+      "heading": "Initialization of Input bits and Random bits.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Example: If s_1 = 0^T concat y concat 0^a concat 0^r in S but s_2 = 0^T concat y concat 0^a concat 10^(r-1) notin S, then s_1 is a C^(rand)_1 -longing string in S since s_1 and s_2 are C^(rand)_1 -neighbors"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Propagation.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Here we want to check that if unary(t-1) concat z in S for some 0< t < T, then unary(t) concat G_(t)left(zright) in S"
+    },
+    {
+      "block_id": "s15_p1",
+      "heading": "Propagation.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Let us consider the propagation constraint associated with the t -th timestamp (the one corresponding to the application of the t th gate, G_t ), for 1<t<T. Let us assume that the t -th gate acts on bits b_(t, 1),..., b_(t, k). For this we add the set-constraint C^(prop)_t defined as follows: Y(C^(prop)_t) = bigcup_(zin 1^(k)) ((100concat z, 110concat G_t(z))) and J(C^(prop)_t) = (t-1, t, t+1, b_(t, 1), b_(t, 2),..., b_(t, k)). For t=1 we simply erase the left clock bit from the above specification: Y(C^(prop)_1) = bigcup_(zin 1^(k)) ((00concat z, 10concat G_1(z))) and J(C^(prop)_1) = (1, 2, b_(1, 1), b_(1, 2),..., b_(1, k)). Likewise if t=T erase the right most clock bit from the above"
+    },
+    {
+      "block_id": "s15_p2",
+      "heading": "Propagation.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Example: If s_1 = unary(t) concat z in S but s_2 = unary(t+1) concat G_(t+1)(z) notin S, s_1 is a C^(prop)_(t+1) -longing string in S, since the two strings are C^(prop)_(t+1) - neighbors"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Output.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Finally, we need to check that for all strings of the form 1^Tconcat z, the first bit of z is 1, namely, the last snapshot corresponds to accept. We define C^(out) such that Y(C^(out)) = ((00), (01), (11)) and J(C^(out)) = (T, T+1). Here we use the fact that the T -th bit of unary(t) is 1 iff t = T. In this case, if this value is 1, we require that the output bit is 1, otherwise it could have any value"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Output.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Example: The string 1^T concat 0 concat z is bad for C^(out)"
+    },
+    {
+      "block_id": "s16_p2",
+      "heading": "Output.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "start-of-remark: We notice that for every set-contraint C that we constructed above, we have that Y(C) only contains sets of size 1 or 2. This property adds a bit more structure to SetCSP instances that are -hard, which could be useful in future work. end-of-remark"
+    },
+    {
+      "block_id": "s16_p3",
+      "heading": "Output.",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "1 10(T+1)q m"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Given some -verification circuit C_x, we consider the following 6 - instance calC_x = (C^(clock)_1,...., C^(clock)_T, C^(aux)_1,..., C^(aux)_a, C^(rand)_1,... C^(rand)_q, C^(prop)_1,..., C^(prop)_T, C^(out))"
+    },
+    {
+      "block_id": "s17_p1",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Let m be the number of terms in calC_x and when it is more convenient to us, we will refer to the set-constraints in calC_x as C_i for i in [m], where the terms have an arbitrary order. We show now that calC_x is satisfiable if x is a positive instance, and if x is a negative instance, then calC is at least -frustrated (where we remember that q is the number of random coins used by C_x ). Notice that m, the number of constraints in calC_x, is polynomial in T, which is also polynomial in |x|"
+    },
+    {
+      "block_id": "s17_p2",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "We start by proving completeness. start-of-lemma: [Yes-instances lead to satisfiable  SetCSP  instances] If x in L, then C _(x) is satisfiable. end-of-lemma start-of-proof: Let y be the witness that makes C_x accept with probability 1, and let S = left(unary(t) concat G_t... G_1(y, 0^(a), r): r in 1^q, t in [T+1]right). By construction, the initialization, clock and propagation constraints are satisfied by S. By the assumption that the MA verification circuit accepts with probability 1, the output constraints are also satisfied by S. end-of-proof"
+    },
+    {
+      "block_id": "s17_p3",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "Next we prove soundness. start-of-lemma: [NO-instances lead to frustrated  SetCSP  instances] If x notin L, then setunsat( C _(x), S) geq soundness for every non-empty S subseteq 1^n. end-of-lemma start-of-proof: Let S subseteq (0, 1)^(n) be a non-empty set, B the set of bad strings in S (namely a string in S which is C -bad for at least one set-constraint C ) and L the set of longing strings in S (namely the strings in S which are C -longing for at least one set-constraint C ). Our goal here is to consider a partition (K_i) of S, such that for every K_i, |K_icap (Bcup L)| geq |K_i| (10(T+1)q), and from this we will show that setunsat(calC_x, S) geq soundness. Let us start by defining S_(ic) subseteq S to be the subset of S with i nvalid c lock register. Notice that every x in S_(ic) is bad for at least one clock constraint and therefore |S_(ic) cap B| = |S_(ic)|. Now we notice that all other strings correspond to some valid clock register whose value (when read as a unary representation of some integer) is in [T+1]. Let us partition the strings in S setminus S_(ic) into disjoint sets H_1,..., H_ell (which indicate different history-sets to which the strings belong) as follows. We define the initial configuration of some string in S setminus S_(ic) like this. The string must be of the form unary(t) concat z for some t and z. Then initial(unary(t) concat z) = unary(0) concat G^(-1)_1... G^(-1)_t(z), which is the assignment of the initial bits that leads to the configuration z at the t 'th step. We say then that two strings s_1, s_2 in H_i iff initial(s_1) = initial(s_2) and we abuse the notation and call initial(H_i) = initial(s_1). Notice that for i ne j, H_i and H_j are disjoint because the computation is reversible; thus the H_i 's constitute a partition of Ssetminus S_(ic). Notice also that each H_i contains at most T+1 strings, and the different strings in each H_i have different values of the clock register. We call these H_i history-sets for the reason that they correspond to a correct propagation of the computation of the circuit C_x for some initialization of all its bits. Let us first consider the history-sets whose initial configuration is not valid, i. e., it contains i nvalid (or non-zero) a uxiliary bits: H ^(ia) = (H _i: initial(H_i) = 0^T concat y concat z concat r for some z ne 0^a). We note that for any H_i in H ^(ia), initial(H_i) is a C^(aux)_j -bad string in H_i for some j. If this string is in H_i, then we indeed have |H_i cap (Bcup L)|geq |H_i cap B| geq 1 geq |H_i| (T+1). However, if H_i does not contain its initial string, then consider the minimal t such that unary(t)concat zin H_i for some z, and by assumption we have t>0. This means that the string unary(t) concat z is a C^(prop)_t -longing string, because it is a neighbor of unary(t-1) concat G_t^(-1)(z) notin S. Hence, for such H_i we have |H_i cap (Bcup L)|geq |H_i cap L| geq 1 geq |H_i| (T+1). This completes handling all the strings in S within a history set H_i with invalid auxiliary bits in initial(H_i). We now need to consider history sets in (H_i) setminus H ^(ia), namely, the history sets whose initial string is of the form 0^T concat y concat 0^a concat r for some value of y and r. Let us group these history sets according to y, the value of the witness register. In other words, let us consider the sets of history sets: H _y = (H_i: H_i 's initial string is of the form 0^T concat y concat 0^a concat r ). We fix now some y and the following arguments hold for each y separately. Notice that each H_i in H _y corresponds to a computation corresponding to a different initial random string for the witness y. Let us denote the union of strings in all sets in H _y by S _y = bigcup_(H_i in H _y) (s|sin H_i). To finish handling all strings, we need to provide a bound on | S _y cap (Lcup B)| for all witnesses y. To proceed, we need some additional notation. We note that H _y can be written as the union of the history sets which contain their initial string, denoted H _y^(start), and the rest, denoted H _y^(nostart). We proceed by considering two cases separately: start-of-enumerate:. Let us first consider the simpler case in which | H _y^(nostart)|> | H _y| (10). As above, we have that each H_i in H _y^(nostart) has a longing string, and therefore we have that | S _y cap (Lcup B)| geq | S _y cap L| geq | H _y^(nostart)| > | H _y| (10)ge | S _y| (10(T+1)). The last inequality is due to the fact that each H_iin H _y contains at most T+1 strings. This finishes the treatment of all strings in S, in the case | H _y^(nostart)| > | H _y| (10).. In the second case | H _y^(start)|ge 9| H _y| (10). We further denote S _y^(init) = (s | s = initial(H_i), H_i in H _y^(start) ) as the set of the initial strings of each H_i in H _y^(start). Again (and for the last time) there are two cases. start-of-enumerate:. First, let us consider the case when | S ^(init)_y| geq 2^(q-1). This means that for this fixed y, for most values r of the random bits, the initial string 0^Tconcat y concat 0^a concat r of the history set corresponding to this y and r is present in S_y. We use the facts that xnotin L, and that at least 2/3 of the history sets must lead to rejection by. From these observations, we will conclude that there will be either many bad strings due to the final accept constraint C^(out), or many longing strings. Let Acc _y = (H_i in H _y: 1^T concat z in H_i and z = 1concat z' ) be the set of history sets in H _y that accept in the last step. We have that | Acc _y| is at most the number of rin (0, 1)^q which leads the circuit C_x to accept the witness y; since x notin L, we have that the probability to accept for any y is most 1/3. Hence | Acc _y|le 2^q (3) leq 2 | H _y| (3)leq frac(20| H ^(start)_y|)(27), where we used the fact that 2^(q-1) leq | S _y^(init)| = | H ^(start)_y| leq | H _y|, and in the last inequality, the fact that we are in the case | H _y^(start)|geq 9| H _y|/10. Hence, there are at least 2^q (10) history sets in H ^(start)_y which do not end in accept. Such H_i either contains the string 1^T concat 0 concat z (which is bad for C^(out) ), or does not contain a final state at all, namely does not contain a state of the form 1^Tconcat z for some z, resulting in a longing string. Thus, there are at least 2^q (10) strings in | S _y cap (Bcup L)|; and since | S _y| leq (T+1)| H _y| and | H _y| leq 2^q, resulting in | S _y| leq 2^q(T+1), we have that | S _y cap (Bcup L)| ge 2^q (10)ge | S _y| (10(T+1)).. Finally, let us consider the case where | S _y^(init)| leq 2^(q-1). This is where we will need to apply conductance arguments. Let G^(0)_(y) be the subgraph of G_( C ) induced by the vertices R_y = (0^Tconcat y concat 0^a concat r: r in (0, 1)^q). Notice that G^(0)_(y) is isomorphic to the q -dimensional hypercube. This is true because the only remaining edges on G^(0)_y come from the set-constraints C_j^(rand). Notice also that S _y^(init) is a subset of the vertices of G^(0)_(y). We now apply which states that the conductance of the q -dimensional hypercube is 1 (q). Applying this lemma to the graph G^(0)_(y) and the subset of its vertices, S _y^(init) we conclude that frac(| tial_(G^0_y)( S _y^(init))|)(q| S _y^(init)|)ge 1 (q), where we have used the fact that all vertices in G^(0)_(y) have the same degree, q, and the fact that we are now considering the case | S _y^(init)| leq 2^(q-1). We can conclude then that there exists at least | S _y^(init)| edges in the cut ( S _y^(init), R_y setminus S _y^(init)). Since each vertex in G^(0)_(y) (in particular, each vertex in S _y^(init) ) has q neighbors, it means that there exists at least frac(| S _y^(init)|)(q) longing strings in S _y^(init). We conclude this case by noticing that | S _ycap(Lcup B)| geq | S _ycap L|geq frac(| S _y^(init)|)(q) = frac(| H ^(start)_y|)(q) geq 9| H _y| (10q) geq 9| S _y| (10q(T+1)), where in the second inequality we use the fact that S _y^(init) subseteq S _y and there are at least frac(| S _y^(init)|)(q) longing strings in S _y^(init), the equality follows since | H _y^(start)| = | S _y^(init)|, the third inequality follows from our assumption that | H _y^(start)|ge 9| H _y| (10) and finally we have that |H_i| leq T+1 (and therefore | H _y| geq | S _y| (T+1) ). end-of-enumerate end-of-enumerate To finish the proof, notice that S = S_(ic) cup bigcup_(H in H ^(ia)) H cup bigcup_(y) S _y. Since each of these subsets has at least a 1 (10(T+1)q) -fraction of bad strings or longing strings, we have that |B cup L| geq |S| (10(T+1)q). It follows that setunsat(calC_x, S) = 1 (m) sum_(i) left( frac(|B_(C_i)|)(|S|) + frac(|L_(C_i)|)(|S|) right) geq |B| (m|S|) + |L| (m|S|) geq |Bcup L| (m|S|) geq 1 (10(T+1)q m), finishing the proof. end-of-proof"
+    },
+    {
+      "block_id": "s17_p4",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "From the two previous lemmas, we have the following"
+    },
+    {
+      "block_id": "s17_p5",
+      "heading": "Correctness",
+      "major_heading": "Set-Constraint Satisfaction Problem",
+      "text": "thm: repeat-hardness (restated) thm: repeat-hardness There exists some inverse polynomial p(x) = Theta(1/x^3) such that for every inverse polynomial p' < p, the problem SetCSP_(p'(m)) is MA -hard. thm: repeat-hardness start-of-proof: It follows directly from, together with the fact that, regarding the parameters in, we have that T, q leq m. end-of-proof"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "In this section we reduce the SetCSP problem to the ACleanCC, showing the containment of SetCSP in MA and the MA -hardness of ACleanCC"
+    },
+    {
+      "block_id": "s18_p1",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "Before showing the reduction, we prove a technical lemma that shows how, for a fixed S, the value of setunsat( C, S) and the number of bad and longing strings for C are related"
+    },
+    {
+      "block_id": "s18_p2",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "start-of-lemma: For some fixed non-empty S subset 1^n, let B_( C ) = bigcup_(i)B_(C_i) and L_( C ) = bigcup_(i)L_(C_i), the union of bad and longing strings for all set-constraints in C, respectively. We have that setunsat( C, S) leq 1 (|S|)( |B_( C )| + |L_( C )| ). end-of-lemma start-of-proof: By definition of setunsat( C, S) and setunsat(C_i, S), we have that setunsat(mathcal(C), S) &= frac(1)(m)sum_(i = 1)^m setunsat(C_i, S) = frac(1)(m |S|)sum_(i = 1)^m |B_(C_i)| + |L_(C_i)| leq frac(1)(m|S|)sum_(i = 1)^m |B_(mathcal(C))| + |L_(mathcal(C))| &= frac(1)(|S|)(|B_(mathcal(C))| + |L_(mathcal(C))|), where in the inequality we use the fact that B_(C_i) subseteq B_( C ) and L_(C_i) subseteq L_( C ). end-of-proof"
+    },
+    {
+      "block_id": "s18_p3",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "For some inverse polynomial eps, we consider an instance calC of kSetCSP_(eps). From calC, we construct the graph G_(calC) = ( 1^n, E), where (x, y) in E if there exists a set-constraint C in calC such that x and y are C -neighbors. We can define C_(G_(calC)) that on input x in 1^n, outputs all neighbors of x by inspecting all set-constraints of calC. Finally, we define C_M as the circuit that on input x in 1^n, outputs if x is a bad string for calC, again by inspecting all of its set-constraints"
+    },
+    {
+      "block_id": "s18_p4",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "start-of-lemma: [Reduction from  SetCSP  to  ACleanCC ] For every eps we have that: start-of-itemize:. If C = (C_1,..., C_m) is a yes-instance of kSetCSP_(eps), then (C_(G_(calC)), C_M) is a yes-instance of ACleanCC_(eps/2).. If C = (C_1,..., C_m) is a no-instance of kSetCSP_(eps), then (C_(G_(calC)), C_M) is a no-instance of ACleanCC_(eps/2). end-of-itemize end-of-lemma start-of-proof: To prove the first part, we show that a non-empty S subseteq 1^n such that setunsat(S, calC) =0 implies that the connected component of any string xin S in G_(calC) contains only good strings. To show this, we notice that S is a union of connected components of G_(calC). In this case, any of these connected components imply that (C_(G_(calC)), C_M) is a yes-instance of ACleanCC. Suppose towards contradiction that there exists a string x in S which is connected to a string y outside of S via an edge in G_(calC); that means that x and y are C -neighbors for some set-constraint C. But this means that x is a C -longing string for S, and this contradicts setunsat(S, calC) =0. We finish this part of the proof by stressing that, by assumption, no elements in S are marked, otherwise there would be a bad string in it. For the second part, we show that if there is a set of vertices S such that tial(S, S ) < eps|S|/2 on G_( C ) and the number of marked elements in S is strictly less than eps|S|/2, then setunsat(S, calC) < eps. In this case, if C is a no-instance of kSetCSP_(eps), then (C_(G_( C )), C_M) must be a no-instance of ACleanCC_(eps/2). Notice that if there are at most eps|S|/2 edges between S and S, then there are at most eps|S|/2 vertices in S that are connected to S and, by definition of the edges in G_( C ), we have that S has at most eps|S|/2 C -longing strings. We also have that the number of bad strings in S is, by definition, the number of marked elements which is also strictly less than eps|S|/2. Therefore, by, we have that setunsat(calC, S) < eps. end-of-proof"
+    },
+    {
+      "block_id": "s18_p5",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "We can now finally prove:"
+    },
+    {
+      "block_id": "s18_p6",
+      "heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "major_heading": "Reduction from  SetCSP  to  ACleanCC ",
+      "text": "thm: repeat-main (restated) thm: repeat-main There exists some inverse polynomial p(x) = Theta(1/x^3) such that for every inverse polynomial p' < p, the problems SetCSP_(p'(m)) and ACleanCC_(p'(m)) are MA -complete, where m is the size of the SetCSP or ACleanCC instance. thm: repeat-main start-of-proof: From we have that for some p = Theta(1/x^3), SetCSP_( p ) is MA -hard and from we have that ACleanCC_( p /2) is in MA. In, we show a reduction SetCSP_( p ) to ACleanCC_( p /2), which implies, together with the aforementioned results, that SetCSP_( p ) is in MA and that ACleanCC_( p /2) is MA -hard. Therefore, we can pick p(x) = p (x)/2 and our statement holds. end-of-proof"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Acknowledgements",
+      "major_heading": "Acknowledgements",
+      "text": "We notice that the ACAC problem did not appear in the first version of the this work and we thank an anonymous reviewer who pushed us to define more natural problems. We are grateful to Umesh Vazirani for asking the right question that led to this note. D. A. is grateful for the support of ISF grant 1721/17. Most of this work was done while A. G. was affiliated to CWI and QuSoft, and part of it was done while A. G. was visiting the Simons Institute for the Theory of Computing"
+    },
+    {
+      "block_id": "s20_p0",
+      "heading": "Complexity classes",
+      "major_heading": "Complexity classes",
+      "text": "def: NP A problem A=(ayes, ano) is in if and only if there exist two polynomials p, q and a deterministic algorithm D, where D takes as input a string xinSigma^* and a p(|x|) -bit witness y, runs in time q(|x|) and outputs a bit 1 (accept) or 0 (reject) such that: If xinayes, then there exists a witness y such that D outputs accept on (x, y). If xinano, then for any witness y, D outputs reject on (x, y)"
+    },
+    {
+      "block_id": "s20_p1",
+      "heading": "Complexity classes",
+      "major_heading": "Complexity classes",
+      "text": "We can then generalize this notion, by giving the verification algorithm the power to flip random coins, leading to the complexity class"
+    },
+    {
+      "block_id": "s20_p2",
+      "heading": "Complexity classes",
+      "major_heading": "Complexity classes",
+      "text": "def: MA A (promise) problem A=(ayes, ano) is in if and only if there exist two polynomials p, q and a probabilistic algorithm R, where R takes as input a string xinSigma^* and a p(|x|) -bit witness y, runs in time q(|x|) and decides on acceptance or rejection of x such that: If xinayes, there exists a witness y such that R accepts (x, y) with probability 1. If xinano, for any witness y, R accepts (x, y) with probability at most 1 (3)"
+    },
+    {
+      "block_id": "s21_p0",
+      "heading": "Reversible Circuits",
+      "major_heading": "Reversible Circuits",
+      "text": "In classical complexity theory, we usually describe the verification procedure for NP and as algorithms. Such polynomial time algorithms can be converted into a uniform family of polynomial-size Boolean circuits, which are usually described using AND, OR and NOT gates [AroraBarak09]. As we will see later, these circuits are not suitable in our context because we need our circuits to be reversible, namely made of reversible gates. By this we mean that the output string of the gate is a one-to-one function of the input string, and thus an inverse gate exists. Clearly, we can also invert the entire circuit made of such gates by running all inverses of the gates in reverse order"
+    },
+    {
+      "block_id": "s21_p1",
+      "heading": "Reversible Circuits",
+      "major_heading": "Reversible Circuits",
+      "text": "Boolean circuits consisting of the universal gateset (NOT, CNOT, CCNOT), can be made reversible, by making use of additional auxiliary bits initialized to 0. It is folklore that the overhead for this conversion is linear in the number of gates. We will assume all verifiers considered are reversible Boolean circuits"
+    },
+    {
+      "block_id": "s21_p2",
+      "heading": "Reversible Circuits",
+      "major_heading": "Reversible Circuits",
+      "text": "For randomized circuits, we can also assume the circuit uses only reversible gates, in the following way: we assume that the random bits are provided as part of the initial string on which the circuit acts; we can view it as part of the input. The rest of the circuit is reversible"
+    },
+    {
+      "block_id": "s21_p3",
+      "heading": "Reversible Circuits",
+      "major_heading": "Reversible Circuits",
+      "text": "For decision problems, we use the convention that the first bit is used as the output of the circuit, namely, accept or reject"
+    },
+    {
+      "block_id": "s22_p0",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "For some undirected graph G = (V, E), and v in V, let d_G(v) = |(u in V: (v, u) in E )| be the degree of v. We may define a weight function for the edges w: E rightarrow R ^+, and if it is not explicitly defined, we assume that w((u, v)) = 1 for all (u, v) in E. We slightly abuse the notation and for some E' subseteq E, we denote w(E') = sum_(e in E') w(e)"
+    },
+    {
+      "block_id": "s22_p1",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "For some set of vertices S subseteq V, we define the boundary of S as partial_G(S) = ((u, v) in E: u in S, v notin S), the neighbors of S as N_G(S) = (u in S: v in S, (u, v) in E) (where N_G(u) for some uin V is shorthand for N_G((u)) ); and finally the volume of S vol_G(S) = sum_(u in S, v in N_G(u)) w((u, v)) and the conductance of S, phi_G(S) = w(partial_G(S)) (vol_G(S))"
+    },
+    {
+      "block_id": "s22_p2",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "We define notions related to random walks on weighted graphs; definitions are taken from [GharanT12]. One step in the random walk on the weighted graph G starting on vertex v is defined by moving to vertex u with probability p_(v, u) = frac(w((u, v)))(vol_G((v))), & text(if ) (u, v) in E 0, & text(otherwise). One step in the lazy random walk on G starting on v is defined by staying in the same vertex with probability 1 (2), or with probability 1 (2), moving according to the above random walk. The conductance of the weighted graph is defined as phi(G) = min_(substack(S subseteq V vol_G(S) leq vol_G(V) (2)))phi_G(S)"
+    },
+    {
+      "block_id": "s22_p3",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "The (unique) stationary distribution pi_G of the lazy random walk on a connected weighted graph G is given by the following probability distribution on the vertices: pi_G(v) = frac(vol_G((v)))(vol_G(V)). The following lemma connects the conductance of a graph and its mixing time, i. e., the number of steps of a lazy random walk on G starting at an arbitrary vertex such that the distribution on the vertices is close to the stationary distribution"
+    },
+    {
+      "block_id": "s22_p4",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "start-of-lemma: [High conductance implies small mixing time [JerrumS89] ] Let G = (V, E) be a undirected connected graph. For any u, v in V, a left( 2 (phi(G)^2/4)ln 1 (eps min(pi_G(v)))right) -step lazy-random walk starting in u ends in v with probability p^T_(u, v) in [pi_G(v)-eps,pi_G(v)+eps]. end-of-lemma"
+    },
+    {
+      "block_id": "s22_p5",
+      "heading": "Graph theory and random walks",
+      "major_heading": "Graph theory and random walks",
+      "text": "We now prove thm: repeat-hitting (restated) thm: repeat-hitting [Escaping time of high conductance subset] Let G = (V =Acup B, E) be a simple (no multiple edges) undirected connected graph such that for every v in A d_G(v) leq d, and such that for some delta < 1 (2), for all A' subseteq A, we have that |partial_G(A')| geq delta |A'|. Then a left( stepsrandomwalk right) -step lazy random walk starting in any v in A reaches some vertex u in B with probability at least 4d. thm: repeat-hitting start-of-proof: Let us consider the graph G' = (V', E') where V' = A cup (b^*) and E' = ( (u, v) in E: u, vin A) cup ((u, b^*): u in A, v in B, (u, v) in E) (as a set, duplicate edges are removed). In other words, G' can be seen as the graph derived when we contract all vertices in B to one vertex (and call this vertex b^* ) and contract the parallel edges that appear when we perform the contraction of the vertices into a single edge. For some u in A, we define the weight of the edge (u, v) in E' as w((u, v)) = 1, & text(if ) v in A left|left((u, v'): (u, v')in E, v' in Bright)right|, &text(if ) v = b^*. Notice that the probability that a T -step weighted lazy random walk on G' starting in v in A passes by the vertex b^* is exactly the same as the probability that a T -step lazy random walk on G starting in v passes by some vertex in B. Therefore, we continue by lower bounding the former, and the statement will follow. Let us start by analyzing phi(G'). Notice that for all A' subseteq A, it follows that phi_(G')(A') = frac(| tial_(G')(A')|)(vol_(G')(A')) = frac(| tial_G(A')|)(sum_(vin A')2 d_G(v))geq frac(delta|A'|)(d|A'|)=frac(delta)(d). Let S = (b^*) cup A' for some A' subseteq A such that vol(S) leq frac(vol_(G')(V'))(2), we have that phi_(G')(S) = frac(w( tial_(G')(S)))( vol_(G')(S)) geq frac(w( tial_(G')(overline(S))))( vol_(G')(overline(S)))=frac(| tial_(G)(overline(S))|)(sum_(vin overline(S)) d_G(v)) geq frac(| tial_(G)(overline(S))|)( d|overline(S)|) geq frac(delta |overline(S)|)( d|overline(S)|) = frac(delta)(d), where in the first inequality we use the fact that tial_(G')(S) = tial_(G')( S ) and vol_(G')(S) leq vol_(G')( S ), in the second equality we use the definition of w, in the second inequality we use the fact that S subseteq A and every vertex in A has degree at most d, and the third inequality follows since S subseteq A, and so we can use the assumption of the lemma. From, we have that phi(G') geq d. We now analyze the stationary distribution of the lazy random walk associated with G'. Since delta|A|leq vol_(G')((b^*)) leq d|A| and for any vin A, 1leq vol_(G')((v)) leq d, we have that vol_(G')(V) leq (delta + d)|A| leq 2d|A|, pi_(G')(b^*)= frac(vol_(G')((b^*)))(vol_(G')(V)) geq delta |A| (2d|A|) = 2d, and for any v in A, pi_(G')(v) = frac(vol_(G')((v)))(vol_(G')(V)) geq 1 (2d|A|) geq 1 (2d|V|). We now apply, using eps= delta^2 (2d), min(pi_(G')(v)) geq 1 (2d|V|) and phi(G') geq d. We have that for T = 8 (phi(G')^2)ln 1 (eps min(pi_(G')(v))) leq 8 cdot d^2 (delta^2)ln 4d^2|V| (delta^2) leq stepsrandomwalk, a T -step lazy random walk starting from any vertex end in b^* with probability at least delta- delta^2 (2d), which is a lower bound on the probability that the lazy random walk passes by b^*. Since delta- delta^2 (2d)geq 4d this finishes the proof. end-of-proof"
+    },
+    {
+      "block_id": "s23_p0",
+      "heading": "Hypercube",
+      "major_heading": "Graph theory and random walks",
+      "text": "Given some parameter q, the q -dimensional hypercube is the graph where the vertices are all possible q -bit strings and two vertices are connected if the corresponding strings differ on exactly one bit"
+    },
+    {
+      "block_id": "s23_p1",
+      "heading": "Hypercube",
+      "major_heading": "Graph theory and random walks",
+      "text": "We use the following well-known fact about the expansion of the hypercube. start-of-lemma: [ [RV11] ] Let G be the q -dimensional hypercube. Then phi(G) = 1 (q). end-of-lemma"
+    },
+    {
+      "block_id": "s24_p0",
+      "heading": " PSPACE -completeness of   ",
+      "major_heading": " PSPACE -completeness of   ",
+      "text": "In this section we give a sketch of proof that the problem is PSPACE -complete"
+    },
+    {
+      "block_id": "s24_p1",
+      "heading": " PSPACE -completeness of   ",
+      "major_heading": " PSPACE -completeness of   ",
+      "text": "start-of-lemma: is in. end-of-lemma start-of-proof: [Proof sketch] In order to prove containment, we can follow two steps start-of-enumerate:. A variant of, called, is in.. The containment of in implies the containment of in. end-of-enumerate The problem consists of deciding if the connected component of a fixed node contains only unmarked elements. More concretely, it corresponds to the language ((x, C_G, C_M): the connected component of x in the graph G contains only unmarked elements ), where C_G and C_M are defined as in. We argue that is in, and since = [Ladner89], this proves the first claim. The algorithm consists of a 2^(n) -step random walk on G starting from x which rejects iff a marked element is encountered. If the connected component of x has no marked elements, so the algorithm never rejects, whereas for no-instances, the random walk finds the marked element with non-zero probability. We can devise a polynomial-space algorithm for CleanCC that iterates over all x in 1^n and accept iff for at least one of such x 's, (x, C_G, C_M) is a yes-instance of FixedCleanCC (which can be decided in PSPACE as described before). end-of-proof"
+    },
+    {
+      "block_id": "s24_p2",
+      "heading": " PSPACE -completeness of   ",
+      "major_heading": " PSPACE -completeness of   ",
+      "text": "start-of-lemma: is -hard. end-of-lemma start-of-proof: [Proof sketch.] Let L be a language in PSPACE. Since we can assume that any problem in PSPACE can also be solved in polynomial space by a reversible Turing machine [LangeMT00], we fix the reversible Turing Machine M that decides if x belongs to L in p(|x|) -space, for some polynomial p. A configuration of M consists of its internal state, the content of its tape and the position of the tape-head. For some configuration w, we denote pred(w) as the preceding configuration of w and succ(w) as its following configuration (and both can be efficiently computed from w since M is reversible). In the reduction to, we set n = p(|x|) + S, where S = O(p(|x|)) is the amount of memory to store a snapshot of the computation of M (meaning the current state of the Turing machine, the tape and the position of the head). Each string y in 1^n can be split in two parts: the first one is the \"clock\"-substring and the second one is the \"working\"-substring. The clock substring represents, in binary, a value in t in [2^(p(|x|))] (notice that M runs in time at most 2^(p(n)) ) and the working substring represents an arbitrary state of the Turing Machine at time t. We define then instance (C_G, C_M) of as follows: start-of-itemize:. On t concat w in 1^n, C_G outputs the string t-1 concat pred(w) and t+1 concat succ(w) (if t = 0 or t = 2^n, C_G only outputs the meaningful neighbors).. On t concat w in 1^n, C_M outputs 1 if t = 0 and w does not consist of the state of M at the beginning of the computation or if t = 2^(p(|x|)) and w does not consist of the state of M that would lead to acceptance. end-of-itemize It is not hard to see that if x in L, then the connected component of 0 concat x is clean, whereas if x notin L, all connected components have at least one marked element. end-of-proof"
+    }
+  ],
+  "load_seconds": 3.637753173999954
+}

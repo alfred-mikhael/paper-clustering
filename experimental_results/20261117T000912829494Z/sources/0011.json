@@ -1,0 +1,451 @@
+{
+  "arxiv_id": "2606.06272",
+  "title": "Your GFlowNet Secretly Learns an Optimal Transport Plan",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "Generative Flow Networks (GFlowNets) are a framework for sampling structured objects via stochastic trajectories in a directed graph. In this work, we establish a theoretical connection between non-acyclic GFlowNets and optimal transport (OT). We show that fixing the initial flow distribution in a minimum-flow GFlowNet reduces its objective to a Kantorovich OT problem with graph-induced shortest path costs. At the optimum, the learned GFlowNet policy therefore encodes an optimal transport plan from the source distribution to the target distribution: we show that sampling trajectories from the minimum-flow GFlowNet recovers the corresponding optimal coupling. Our formulation enables applying the GFlowNet learning framework to OT problems on large graphs via edge flows and neural parameterization. Experiments confirm agreement with exact OT solvers and demonstrate that GFlowNets can learn high-quality transport plans."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Generative Flow Networks (GFlowNets, [bengio2021flow] ) are a class of methods for sampling structured discrete objects from probability distributions given by unnormalized probability mass function. A GFlowNet constructs objects sequentially through stochastic transitions induced by a forward policy. GFlowNets have been successfully used in a range of applications, including molecule generation [bengio2021flow, shen2024tacogfn, koziarski2024rgfn, cretu2025synflownet], biological sequence design [jain2022biological, kim2024improvedoff], combinatorial optimization [zhang2023solving, zhang2023robust, kim2025ant], and the fine-tuning of large language models and diffusion models [hu2023amortizing, venkatraman2024amortizing, uehara2024understanding, zhang2024improving, kwon2024gdpo, lee2025learning, zhu2025flowrl]. The theoretical foundations of GFlowNets were established in [bengio2023gflownet, lahlou2023theory]"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "GFlowNet define a generation process that follows a sequence of stochastic transitions of discrete nature, inducing a graph structure cG. The generation starts at a special initial state s_0, and then moves along the edges of the graph until reaching a special sink state s_f. The last state x from which the process transitioned into s_f is then considered the final sample. While GFlowNets were initially developed to operate in acyclic graph environments [bengio2021flow], further works generalized them to non-acyclic graphs [brunswic2024theory, pmlr-v267-morozov25a]. In this setting, the expected length of a trajectory sampled in the graph becomes a key quantity controlling sampling efficiency. To effectively minimize it in practice, [brunswic2024theory] and [pmlr-v267-morozov25a] proposed flow regularization techniques. Moreover, non-acyclic GFlowNets have been recently applied to tasks that lie outside the domain of sampling, e. g., imitation learning [brunswic25ergodic], multi-agent learning [brunswic2025theory] and shortest path problems [morozov2026learningshortestpathsgenerative], further demonstrating the generality of the framework"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "Optimal transport, on the other hand, provides a principled way to compare probability distributions by taking into account the geometry and structure of the underlying space [villani2008optimal, peyre2019computational]. The central object is a transport plan: a coupling that specifies how much mass should be moved from each source point to each target point while minimizing a prescribed transportation cost. This formulation is especially attractive in machine learning because many data objects - images, documents, point clouds, empirical samples, and learned representations can naturally be viewed as discrete distributions. Unlike purely pointwise divergences, optimal transport distances remain meaningful and can exploit semantic or geometric structure through the ground cost. This has led to applications in image retrieval via Earth Mover’s Distance [rubner2000earth], natural language processing via Word Mover’s Distance [kusner2015word], domain adaptation [courty2017optimal], and generative modeling via Wasserstein objectives [arjovsky2017wasserstein], as well as representation learning and barycenter-based methods [tolstikhin2018wasserstein, agueh2011barycenters]"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "In this paper, we uncover a connection between the minimum-flow formulation of non-acyclic GFlowNets and discrete optimal transport. The main idea of this connection is based on two facts: 1) if an additional constraint is added to probabilities of transitions from the initial state s_0, GFlowNet effectively induces a transport plan between two probability distributions; 2) minimizing the total flow is equivalent to minimizing the graph distance transport cost of the aforementioned transport plan. This equivalence provides a novel view on the GFlowNet learning problem, as well as allows for the plethora of existing GFlowNet learning algorithms to be applied to OT problems"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The main contributions of the paper can be summarized as follows:"
+    },
+    {
+      "block_id": "s0_p5",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "start-of-enumerate:. We show that the minimum-flow non-acyclic GFlowNet learning problem [pmlr-v267-morozov25a] can be equivalently formulated as a linear programming problem. We then theoretically demonstrate that fixing the initial edge-flow distribution in it effectively turns the minimum-flow objective into a Kantorovich optimal transport problem where the cost is defined as a distance in the graph, which is also equivalent to the discrete graph-based formulation of the Beckmann problem [beckmann1952continuous, essid2018quadratically]. The optimal GFlowNet forward policy in this formulation samples optimal paths between the initial and the terminal distributions, thus inducing an optimal coupling. As a particular case, this construction recovers the shortest path theory of [morozov2026learningshortestpathsgenerative].. We show that the GFlowNet learning framework provides an effective way to approximate solutions to graph optimal transport problems. Based on a neural parameterization, GFlowNet objectives allow to learn a policy that aims to recover an optimal coupling. We experimentally demonstrate the ability of the framework to recover exact OT solutions in cases when they are tractable, as well as its scalability, exhibited by the ability to efficiently approximate solutions with the growth of the combinatorial space where exact solutions become intractable. We thus expand the generality of the GFlowNet framework, showing that it extends into the computational optimal transport domain. end-of-enumerate"
+    },
+    {
+      "block_id": "s0_p6",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "-0. 2cm"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Background",
+      "major_heading": "Background",
+      "text": "-0. 1cm"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "and [pmlr-v267-morozov25a] extend the theoretical construction of GFlowNets [bengio2023gflownet] to non-acyclic environments. We use theory and notation of [pmlr-v267-morozov25a] which is summarized below as a starting point"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "The sequential sampling process is described by a directed graph cG = ( S, E ), where S is a finite state space and E subseteq S times S is a finite set of edges (or transitions). We will write vout(s) for the set of children of s, and vin(s) for the set of parents of s"
+    },
+    {
+      "block_id": "s2_p2",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "Let cT be a set of all finite trajectories tau = left(s_0 to s_1 to ldots to s_(n_(tau)) to s_fright) from s_0 to s_f, where we use n_(tau) to denote the length of the trajectory tau. We use a standard convention that s_(n_(tau) + 1) = s_f. We will say that tau stops at s if its last transition is s to s_f. The edges of the form (s to s_f) are called terminating transitions, and the states s that have an outgoing edge into s_f are called terminal states. The set of terminal states is denoted by cX, and the probability distribution of interest cR(x) / cZ is defined on it, where cR(x) > 0 is called GFlowNet reward and cZ = sum_(x in X) cR(x) is an unknown normalizing constant"
+    },
+    {
+      "block_id": "s2_p3",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "GFlowNet is essentially a pair of bidirectional policies, where a forward policy PF(s' mid s) is a distribution over children of each state, and a backward policy PB(s mid s') is a distribution over parents of each state. GFlowNet is trained in a way to find such pair of policies that the distributions over trajectories they induce coincide: textstyle cP(tau) = prod_(t=0)^(n_tau) PF left(s_(t+1) mid s_(t)right) = prod_(t=0)^(n_tau) PB left(s_(t) mid s_(t+1)right). The main goal for sampling is to have such cP that for any x in X, probability that tau sim cP terminates in x coincides with cR(x) / cZ. This property is called the reward matching condition, and w. r. t PB it can be simply written as PB(x mid s_f) = cR(x) / cZ forall x in X. If both and are satisfied, PF can be used to sample terminal states from the reward distribution (see [bengio2023gflownet] and [pmlr-v267-morozov25a] for more details)"
+    },
+    {
+      "block_id": "s2_p4",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "[pmlr-v267-morozov25a] defines state and edge flows through the expected number of visits of a certain state cF(s) &= cZ cdot E_(tau sim cP)left[ sum_(t = 0)^(n_(tau)+1) ind(s_t = s)right], quad cF(s to s') &= cZ cdot E_(tau sim cP)left[ sum_(t = 0)^(n_(tau)) ind(s_t = s, s_(t+1) =s')right] It is clear from the definition that the flow functions satisfy the following conditions (Proposition 3. 6 of [pmlr-v267-morozov25a] ): sum_(s to s') cF(s to s') = sum_(s\" to s) cF(s\" to s) and cF(s_0) = cF(s_f) = cZ"
+    },
+    {
+      "block_id": "s2_p5",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "The main problem arising when extending standard GFlowNet framework to non-acyclic is that the n_tau is unbounded, since the policy can go in cycles. E[n_tau] exactly represents the mean trajectory length needed to obtain a sample from target distribution following actions sampled from forward policy, and it also signifies the practical efficiency of the sampler. Thus, it is natural to formulate the problem of training a non-acyclic GFlowNet that minimizes E[n_tau]. Using the above definition, one check that the expected trajectory length coincides with the normalized total flow E[n_tau] = 1 (cZ) sum_(s in cS setminus (s_0, s_f)) cF(s), thus [pmlr-v267-morozov25a] gives a theoretical ground for learning a model with the smallest E[n_tau] which is equivalent to learning a model with the smallest total flow"
+    },
+    {
+      "block_id": "s2_p6",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "[pmlr-v267-morozov25a, morozov2026learningshortestpathsgenerative] formulates the non-acyclic GFlowNet problem as the following constraint optimization problem. Define the set of internal states I: = cS setminus (s_0, s_f)., then: &min_(cF, PF, PB)quad sum_(sin I) cF(s) text(s. t. )quad & cF(s)PF(s'mid s)=cF(s')PB(smid s'), forall (s, s')in cE, & cF(s_f)PB(xmid s_f)=cR(x), quad xin X. The constraint cF(s)PF(s'mid s)=cF(s')PB(smid s') is referred to as the detailed balance condition. As shown in [bengio2023gflownet, malkin2022trajectory, pmlr-v267-morozov25a], satisfying detailed balance for every adjacent pair of states is equivalent to the trajectory balance condition"
+    },
+    {
+      "block_id": "s2_p7",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "This optimization problem naturally encodes all necessary constraints needed for training GFlowNet. Equality constraints satisfy Equations &, while the objective minimizes total flow, which is equivalent to minimizing E[n_tau] as per [pmlr-v267-morozov25a]"
+    },
+    {
+      "block_id": "s2_p8",
+      "heading": "Non-Acyclic GFlowNets",
+      "major_heading": "Background",
+      "text": "The simplest approach to this problem proposed in [brunswic2024theory] and further explored in [pmlr-v267-morozov25a] is to add lambda cF_theta(s) to the utilized GFlowNet loss e. g detailed balance [bengio2023gflownet] or variants of trajectory balance loss [madan2023learning, malkin2022trajectory, morozov2026learningshortestpathsgenerative], where lambda is a regularization coefficient"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Kantorovich OT via Linear Programming",
+      "major_heading": "Background",
+      "text": "While GFlowNet framework aims to sample from some target distribution cR(x)/cZ, optimal transport problem on the other hand seeks an optimal coupling of two given source and target distributions, that moves probability mass from the source distribution to the target with respect to the defined cost function [villani2008optimal]. start-of-definition: Let mu and nu be two probability measures on a finite discrete spaces cX and cY. A coupling of mu and nu is a joint probability distribution Pi on space cX timescY such that: sum_(i=1)^(n)Pi_(i, j) = nu_j, quad sum_(j=1)^(m) Pi_(i, j) = mu_i end-of-definition"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Kantorovich OT via Linear Programming",
+      "major_heading": "Background",
+      "text": "Suppose we have two finite set of states (x_1, dots x_n) and (y_1 dots y_m) with probability distributions mu, nu. Then Kantorovich OT problem is formulated as follows: textstyle minlimits_(Pi geq 0) quad & textstyle sum_(i, j=1)^(n, m)d(x_i, y_j)Pi_(i, j) textstyle text(s. t. )quad & textstyle sum_(i)Pi_(i, j) = nu_j, quad sum_(j)Pi_(i, j) = mu_i. where d(x_i, y_j) is some cost of moving mass form x_i to y_j. Usually this linear programming problem is solved via classical methods e. g. simplex-method [dantzig1951maximization]"
+    },
+    {
+      "block_id": "s4_p0",
+      "heading": "GFlowNets and Optimal Transport",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "Consider a non-acyclic GFlowNet environment graph cG = (cS, cE). We impose the following assumptions on the structure of the graph cG, similarly to [essid2018quadratically]: Next, define a cost function d(u, x) for pairs of u in U and x in X as d(u, x) = |tau_(u, x)|, where tau_(u, x) is a shortest path from u to x and |tau_(u, x)| denotes its length. Thus, one can consider a Kantorovich OT problem between distributions cL and cR with the cost function d(u, x): textstyle minlimits_(Pi geq 0) quad & textstyle sum_(i, j=1)^(n, m)d(u_i, x_j)Pi_(i, j) textstyle text(s. t. )quad & textstyle sum_(i)Pi_(i, j) = cR(x_j), quad sum_(j)Pi_(i, j) = cL(u_i). Where Pi in R _(geq 0)^(n times m) is a matrix which defines some coupling between the distributions cL(u) on U and cR(x) on X. Here |U| = n, and |X| = m. It is also worth noting that this graph optimal transport with shortest-path ground costs has a classical min-cost-flow formulation [essid2018quadratically]. We next show that the minimum-flow objective arising in non-acyclic GFlowNets, once the initial edge-flow distribution is fixed, reduces exactly to this graph OT problem"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "We start with the GFlowNet minimum-flow problem that was introduced in [pmlr-v267-morozov25a]. The detailed balance constraints in are bilinear in the decision variables, since cF(sto s') = cF(s)PF(s'mid s)=cF(s')PB(smid s'). The problem becomes linear after policies PF and PB are eliminated and replaced by independent state and edge-flow variables. We will now treat every state-flow cF(s), sin cS, and edge-flow cF(sto s'), sto s'in cE, as an independent variable. In this case, the detailed balance condition from the optimization problem can be substituted with the flow matching constraint, allowing for an equivalent reformulation of as a linear program. We provide the proof of this equivalence in Appendix"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "We fix the distribution cL(u) defined on U which we will call Leward (left reward). Then we fix the first-step distribution induced by the underlying GFlowNet similarly to the reward matching condition: cF(s_0 to u) = cL(u). After adding this constraint, the extended GFlowNet linear programming problem writes as &min_(cF(s), cF(s to s'))quad sum_(sin I) cF(s) text(s. t. )quad & sum_(vinvout(s)) cF(s to v)=cF(s), quad sin cSsetminus(s_f), & sum_(uinvin(s)) cF(u to s)=cF(s), quad sin cSsetminus(s_0), & cF(x to s_f)=cR(x), quad xin X, & cF(s_0 to u)=cL(u), quad uin U, & cF(s to s')ge 0, quad (s, s')in cE"
+    },
+    {
+      "block_id": "s5_p2",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "From GFlowNets theoretical construction, it is unclear whether such problems with additional equality constraints has a feasible solution. However, we further show that a solution always exists (Theorem )"
+    },
+    {
+      "block_id": "s5_p3",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "Extended primal problem can be reduced by omitting the flow variable cF(s). Define E^circ: = (sto s'in cE: sneq s_0, s'neq s_f)"
+    },
+    {
+      "block_id": "s5_p4",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "The reduced primal formulation is: &min_(cF(s to s')ge 0)quad sum_(sto s'in E^circ) cF(s to s') text(s. t. )quad & sum_(v: sto vin E^circ) cF(s to v) &- sum_(u: uto sin E^circ) cF(u to s)=cL(s) - cR(s), qquad sin I. Note that when reducing the initial problem, we have the relation sum_(s in I) cF(s) &= sum_(s_0 to u) cF(s_0 to u) + sum_(s to s' in E^circ) cF(s to s') &= 1 + sum_(s to s' in E^circ) cF(s to s')"
+    },
+    {
+      "block_id": "s5_p5",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "We will omit this constant, as it does not change minimum of the problem"
+    },
+    {
+      "block_id": "s5_p6",
+      "heading": "Minimum-flow LP formulation",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "Note that if one sums up flow-matching constraint for all internal states, one would have: sum_(x in X) cR(x) = sum_(u in U) cL(u). This equality imposes a mass-balance constraint: the two functions must either have equal total mass or be normalized as probability distributions. We adopt the latter formulation, as it eliminates the need to handle an unknown normalizing constant. This is advantageous both in the theoretical analysis and in practical implementations, where the constant would otherwise need to be learned or estimated. Accordingly, we include this condition in Assumption"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "We are now ready to establish the equivalence between the Kantorovich OT problem and the GFlowNet problem. Denote by GFlow ^star the optimal value of the functional and by OT ^star the optimal value of the functional in the Kantorovich problem. Then the following equivalence holds:"
+    },
+    {
+      "block_id": "s6_p1",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "start-of-theorem: Under Assumption, the reduced primal problem is equivalent to the OT Kantorovich problem between cL on U and cR on X, that is, text(GFlow)^(star) = text(OT)^(star). Moreover, if cP^(star) is the trajectory distribution induced by the solution of GFlow ^star, it induces an optimal coupling Pi^(star)_(u, x): = sum_(tau: uleadsto x) cP^(star)(tau), u in U, x in X in. end-of-theorem"
+    },
+    {
+      "block_id": "s6_p2",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "start-of-proof: 1. Suppose that we are given an optimal coupling Pi_(u, x)^star which is the solution of the minimization problem. Existence of Pi_(u, x)^star is guaranteed by Theorem 4. 1 from [p. 43, villani2008optimal]. We construct a feasible flow in a sense of as follows. For every u in U and x in X, we choose an arbitrary shortest path tau_(u, x) from u to x. Then we set cF(s to s') = sum_(uin U)sum_(xin X) Pi_(u, x)^star cdot I [s to s' in tau_(u,x)] Let us check the feasibility of this flow. Define for s in I, u in U, and x in X, the auxiliary function Delta^(u, x)_(s) = sum_(v: sto v in E) I [sto v in tau_(u,x)] - sum_(v: vto sin E) I [v to s in tau_(u,x)]. Since tau_(u, x) is a directed path, it has only outgoing edge at its start, only incoming edge at its end, and equal incoming/outgoing counts at every intermediate node. So we can equivalently write Delta^(u, x)_(s) = I [s = u] - I [s = x] Let DeltacF(s) denote the left-hand side of the equality constraint in. Using Delta_s^(u, x)=ind[s=u]-ind[s=x] and the marginal constraints of Pi^star, we have DeltacF(s) &= sum_(uin U, xin X) Pi_(u, x)^star bigl(ind[s=u]-ind[s=x]bigr) &= sum_(uin U)ind[s=u]cL(u) - sum_(xin X)ind[s=x]cR(x) &= cL(s)-cR(s). The above equations implies the equality constraint from, therefore we have checked that the flow we defined is feasible, thus the solution set is non-empty. Now let us compute the value of: sum_(s to s' in E^circ)&cF(s to s') = sum_(substack(s to s' in E^circ uin U, xin X)) Pi_(u, x)^star mathbb(I)[s to s' in tau_(u,x)] &= sum_(uin U, xin X)Pi_(u, x)^star sum_(sto s'in E^circ)mathbb(I)[s to s'  in tau_(u,x)] &= sum_(uin U, x in X) Pi_(u, x)^star |tau_(u, x)|, where |tau_(u, x)| is the length of the path from u to x. Since tau_(u, x) is a shortest path, |tau_(u, x)| = d(u, x), and sum_(s to s' in E^circ) mathcal(F)(s to s')= sum_(u, x) d(u, x)Pi_(u, x)^(star). The flow we constructed is feasible, but might not be optimal. Hence, we obtain the inequality text(GFlow)^star leq text(OT)^star. 2. Note that the optimal solution exists under Assumptions and by the fact that our problem is bounded below. Take this optimal solution to the problem, and denote it by cF^(star)(s to s'). This flow follows equivalence establised in, this means that we now may introduce forward policy: PF^star(s' | s) = cF^(star)(s to s') / sum_(sto s\") cF^(star)(s to s\") and the respective probability over trajectories tau=(v_0 = s_0, v_1 dots v_(n_tau -1), v_(n_tau) = s_f): cP^star(tau) = prod_(i = 0)^(n_tau) PF^(star)(v_(i+1) | v_i). Then the definition from [pmlr-v267-morozov25a] implies that cF^(star)(s to s')= cZ sum_(tau in cT) cP^star(tau) sum_(t = 0)^(n_(tau)) ind[s_t = s, s_(t+1) =s']. Assumption implies that cZ = 1, so we omit it in further derivations. Now define the joint distribution Pi on U times X by Pi_(u, x): = sum_(tau: uleadsto x) cP^(star)(tau), quad u in U, quad x in X. It is clear that sum_(x in X)Pi_(u, x) &= sum_(xto s_f)sum_(tau: uleadsto x) cP^(star)(tau) &= sum_(tau ni s_0 to u) cP^(star)(tau)= PF^(star)(u | s_0)= cL(u), and, similarly, sum_(u in U)Pi_(u, x) = cR(x). Thus, the joint distribution Pi defined above is a coupling of cR(x) and cL(u). Let us write down the value of primal problem using our flow: text(GFlow)^star &= sum_(s to s' in E^circ) cF^(star)(s to s') &=sum_(s to s'in E^circ) sum_(tau) cP^(star)(tau) sum_(t = 0)^(n_(tau)) ind[s_t = s, s_(t+1) =s'] &= sum_(tau) cP^(star)(tau) sum_(s to s'in E^circ) sum_(t = 0)^(n_(tau)) ind[s_t = s, s_(t+1) =s'] &= sum_(tau) |tau|cP^(star)(tau). Recall that |tau_(u, x)| geq d(u, x), since d(u, x) is the length of the shortest path. Thus: sum_(tau) |tau| cP^(star)(tau) &=sum_(s_0to u)sum_(x to s_f)sum_(tau: uleadsto x) |tau|cP^(star)(tau) &ge sum_(s_0to u)sum_(x to s_f)sum_(tau: uleadsto x) d(u, x)cP^(star)(tau) &= sum_(s_0to u)sum_(x to s_f) d(u, x)sum_(tau: uleadsto x)cP^(star)(tau) &= sum_(u in U)sum_(x in X) d(u, x)Pi_(u, x). Hence, we constructed a coupling Pi such that GFlow ^star ge sum_(u in U)sum_(x in X) d(u, x)Pi_(u, x). For the optimal coupling Pi^star, therefore, it holds that text(GFlow)^star geq text(OT)^(star). Combining and, we obtain that the GFlow optima is the same as the OT optima, therefore is proved. end-of-proof"
+    },
+    {
+      "block_id": "s6_p3",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "This theorem give us characterization of a GFlowNet as an implicit way to solve Kantorovich optimal transport, as a corollary we obtain dual equivalence, this essentially follows from the strict duality of linear programming optimization problems. Detailed derivation of the dual to GFlowNet problem in terms of OT functional can be found in Appendix"
+    },
+    {
+      "block_id": "s6_p4",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "Furthermore, under appropriate structural assumptions, the optimal transport problem admits a reduction to a shortest-path problem. We show that, in this regime, non-acyclic GFlowNets implicitly recover such shortest-path solutions. The result is stated formally below"
+    },
+    {
+      "block_id": "s6_p5",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "start-of-theorem: Consider the dual to the primal problem without first-step condition. max_(pi) quad & sum_(xin X) cR(x)pi_x text(s. t. ) quad & pi_(s_0)=0, & pi_(s')-pi_s le 1, quad forall (s to s') text( with ) s' neq s_f. Then: 1. every feasible solution pi satisfies: pi_s le d(s) quad forall sneq s_f; 2. the function d(cdot) = |tau_(s_0, cdot)| is a feasible dual solution, and it is dual-optimal; if cR(x)>0 for every xin X, then every optimal solution pi^star satisfies: pi_x^star = d(x) quad forall xin X. Moreover, complementary slackness conditions in the optimum gives us the following relation: cF^(star)(s to s') (pi_(s')^star - (1 + pi_s^star)) = 0 which is also a primal-dual gap. end-of-theorem"
+    },
+    {
+      "block_id": "s6_p6",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "The complementary slackness conditions provide a characterization of the optimal flow: it can be non-zero only on the tight subgraph, where (pi_(s')^star - (1 + pi_s^star)) = 0. Since pi_x^star coincides with the shortest-path metric, it follows that the flow can be supported only on a subgraph of shortest paths. This recovers the corresponding claim of [morozov2026learningshortestpathsgenerative]. Detailed proof of Theorem can be found in Appendix"
+    },
+    {
+      "block_id": "s6_p7",
+      "heading": "GFlowNet-OT equivalence",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "3pt"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Learning-based algorithm",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "To approximate the solution to with neural networks, we utilize non-acylic GFlowNet training methodology. While one can apply various existing GFlowNet losses with flow regularization to train the model [brunswic2024theory, morozov2024improving], [morozov2026learningshortestpathsgenerative] recently showed the effectiveness of trajectory balance (TB) objective [malkin2022trajectory] for training non-acyclic GFlowNets in pathfinding problems, which we also found the most suitable in our setup"
+    },
+    {
+      "block_id": "s7_p1",
+      "heading": "Learning-based algorithm",
+      "major_heading": "GFlowNets and Optimal Transport",
+      "text": "For each state in the graph, the model predicts transition probabilities for forward and backward policies PF and PB. During training, we sample a batch of trajectories using the forward policy PF, and compute the regularized TB objective: cL_(mathtt(TB))(theta, tau) &= bigg( log frac( cL(s_1) prod_(t=1)^(n_tau) PF(s_(t+1) | s_(t), theta))(cR(s_(n_tau))prod_(t=0)^(n_tau - 1) PB(s_(t) | s_(t + 1), theta)) bigg)^2 &+ lambda frac(cR(s_(n_tau)))(PF(s_f | s_(n_tau), theta)). The difference from the usual TB objective is the appearance of leward cL due to the additional conditions on the initial distribution in. In terms of the policies, reward matching can be written as PB(s mid s_f) = cR(s), and leward matching as PF(s mid s_0) = cL(s), which explains the form of the loss in. The regularizer cR(s) / (PF(s_f | s)) corresponds to the state flow cF(s) in terminal states due to the reward matching conditions in. [morozov2026learningshortestpathsgenerative] also showed that if each internal state in cG is terminal, i. e. cX = I, the objective can be computed for every prefix of the sampled trajectory, resulting in a more sample-efficient approach. We utilize this option in our experiments"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "Experiments",
+      "major_heading": "Experiments",
+      "text": "In this section, we experimentally evaluate the proposed GFlowNet-based method for solving graph OT tasks. We consider the tasks based on the environments studied in [brunswic2024theory, pmlr-v267-morozov25a]. On a smaller hypergrid task, we empirically demonstrate that the exact solution to the GFlowNet LP formulation is equivalent to Kantorovich OT formulation, and can be obtained both by the exact LP solver and learning-based neural network approximation described in Section. We then validate our learning-based method on larger-scale permutation environments. In particular, we recover the optimal OT solution for permutations of length n=4 and n=8, and demonstrate convergence for n=20. Finally, we ablate the effect of the state-flow regularization parameter lambda, illustrating its impact on the optima reached by the method"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Hypergrids",
+      "major_heading": "Experiments",
+      "text": "We evaluate our method on OT tasks on non-acyclic hypergrid environments proposed in [brunswic2024theory]. Since these environments remain small enough for exact LP optimization, they allow direct comparison between the learned sampler and the optimal OT solution. For additional details see Appendix"
+    },
+    {
+      "block_id": "s9_p1",
+      "heading": "Hypergrids",
+      "major_heading": "Experiments",
+      "text": "States are lattice points in (0, ldots, H-1)^D augmented with source and terminal states s_0, s_f. Sampling starts from U with distribution cL and transitions modify a single coordinate by pm1 while remaining inside the grid. Every state also admits a terminating transition to s_f. We assume that leward cL admits tractable sampling, and focus on measuring two quantities: 1) what is the average transport cost of the trained model and 2) how close is the distribution of terminal states sampled from the model to the reward distribution cR"
+    },
+    {
+      "block_id": "s9_p2",
+      "heading": "Hypergrids",
+      "major_heading": "Experiments",
+      "text": "We consider multimodal rewards with modes near the grid corners [bengio2021flow] and use moon-shaped and ball-shaped leward distributions. Sampling quality is measured via the total variation distance between the reward distribution and the empirical distribution of 2cdot10^5 model samples. Table reports the resulting TV, compares it with the perfect-sampler reference TV ^star (it is non-zero because and empirical distribution is considered), and evaluates convergence to the OT optimum OT ^star using the mean trajectory length. One can clearly see that our learned policy recovers optimal OT ^(star) without biasing the sampling across all selected leward distributions and all hypergrid sides. All results are averaged over three seeds"
+    },
+    {
+      "block_id": "s9_p3",
+      "heading": "Hypergrids",
+      "major_heading": "Experiments",
+      "text": "Figure additionally visualizes the OT solution for H = 10 and cL = Moon, as well as the exact solution of the equivalent GFlowNet LP formulation obtained via scipy. linprog solver [2020SciPy-NMeth]"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "Permutations",
+      "major_heading": "Experiments",
+      "text": "Next, we consider the environment induced by the Cayley graph of the symmetric group S _n, the group of permutations of n elements (1, 2, dots, n), proposed in [pmlr-v267-morozov25a]. Each internal state s in cS s_0, s_f corresponds to a permutation of fixed length, (s(1), dots, s(n)), Transitions are defined by adjacent transpositions: from a given state, one may swap two neighboring entries s(k) and s(k+1). We take cL to be the uniform distribution over all permutations, and use the reward distribution as cR(s) = expleft( 1 (2)sum_(k=1)^n I (s(k) = k)right)/cZ ( [pmlr-v267-morozov25a] derived closed form expression for its normalizing constant). We adopt the diagnostic protocol of [pmlr-v267-morozov25a]; a detailed description of the corresponding metric is provided in Appendix. Table reports results on permutation environments, measuring both the reward sampling quality and transport cost similarly to Section. All results are averaged over three random seeds"
+    },
+    {
+      "block_id": "s10_p1",
+      "heading": "Permutations",
+      "major_heading": "Experiments",
+      "text": "For small permutation sizes, n=4 and n=8, our method recovers solutions very close to optimal, achieving an average trajectory length almost equal to OT ^star. For larger permutations, such as n=20, computing the exact optimal OT solution is no longer tractable; nevertheless, our method produces a reasonable approximation. We further ablate the effect of the state-flow regularization coefficient lambda. Consistently with [pmlr-v267-morozov25a], we observe that lambda controls a trade-off between the trajectory length of the learned sampler and sampling optimality. The larger lambda brings bias to the sampling but reduces the trajectory length, on the contrary, the lower value induces accurate sampling but larger trajectories"
+    },
+    {
+      "block_id": "s10_p2",
+      "heading": "Permutations",
+      "major_heading": "Experiments",
+      "text": "-0. 15cm"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Conclusion",
+      "major_heading": "Conclusion",
+      "text": "-0. 1cm"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Conclusion",
+      "major_heading": "Conclusion",
+      "text": "We extended the theoretical framework of non-acyclic GFlowNets by establishing an equivalence with optimal transport on graphs. Unlike standard OT approaches that only learn a coupling, our framework learns a stochastic policy that transports samples through feasible local moves with near-optimal expected path cost, thereby addressing both where and how transport occurs. We further provided a novel interpretation of the shortest-path formulation of GFlowNets from [morozov2026learningshortestpathsgenerative]. The equivalence established in Theorem opens several promising directions, including backward policy optimization algorithms [jang2024pessimistic, gritsaev2024optimizing] and reinforcement learning techniques motivated by the connection of GFlowNets to entropy-regularized RL [tiapkin2024generative, deleu2024discrete, mohammadpour2024maximum, lau2024qgfn, morozov2024improving, he2025random]. Future work could also address practical challenges highlighted by our experimental evaluation. While presenting a computationally efficient training method, non-acyclic GFlowNets include the regularization coefficient lambda that must be carefully tuned to balance OT optimality and sampling quality. In addition, existing GFlowNet methodology could be potentially applied to learn transport maps between unnormalized probability distributions"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Acknowledgements",
+      "major_heading": "Acknowledgements",
+      "text": "This research was supported in part through computational resources of HPC facilities at HSE University [kostenetskiy2021hpc]. We would like to thank FORTUNA 812 for his inspirational music that kept us sane during this research"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "Consider original minimum-flow formulation, we will now proof that it could be indeed reformulated as linear programming problem"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "min_(cF, PF, PB)quad & sum_(sin I) cF(s) text(s. t. )quad & cF(s)PF(s'mid s)=cF(s')PB(smid s'), &qquad sto s'in cE, & cF(s_f)PB(xmid s_f)=cR(x), && xin X"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proposition: [Elliminating forward policy] Fix s neq s_f. The following are equivalent: start-of-enumerate:. There exists a probability distribution PF(cdot mid s) in Delta( out (s)) such that cF(s to v) = cF(s) PF(v mid s), qquad forall v in out (s).. The variables cF(s to v) satisfy the linear conditions cF(s to v) ge 0 quad forall v in out (s), qquad sum_(v in out (s)) cF(s to v) = cF(s). end-of-enumerate end-of-proposition"
+    },
+    {
+      "block_id": "s14_p3",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: Assume (i). Since PF(cdot mid s) is a probability distribution, sum_(v in out (s)) cF(s to v) = sum_(v in out (s)) cF(s) PF(v mid s) = cF(s) sum_(v in out (s)) PF(v mid s) = cF(s), and clearly cF(s to v) ge 0 for all v. Now assume (ii). If cF(s) > 0, define PF(v mid s): = cF(s to v) (cF(s)), qquad v in out (s). Then PF(v mid s) ge 0 and sum_(v in out (s)) PF(v mid s) = 1 (cF(s)) sum_(v in out (s)) cF(s to v) = 1. Hence PF(cdot mid s)in Delta( out (s), and by construction cF(s to v) = cF(s) PF(v mid s). If cF(s) = 0, then sum_(v) cF(s to v)=0 and cF(s to v)ge0 imply cF(s to v)=0 for all v, so any choice of PF(cdot mid s)in Delta( out (s)) works. end-of-proof"
+    },
+    {
+      "block_id": "s14_p4",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proposition: [Eliminating the backward policy] Fix s' neq s_0. The following are equivalent: start-of-enumerate:. There exists a probability distribution PB(cdot mid s') in Delta( in (s')) such that cF(u to s') = cF(s') PB(u mid s'), qquad forall u in in (s').. The variables cF(u to s') satisfy the linear conditions cF(u to s') ge 0 quad forall u in in (s'), qquad sum_(u in in (s')) cF(u to s') = cF(s'). end-of-enumerate end-of-proposition"
+    },
+    {
+      "block_id": "s14_p5",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: The proof is identical to the previous one, with incoming edges in place of outgoing edges. end-of-proof"
+    },
+    {
+      "block_id": "s14_p6",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-corollary: [Lifted LP] After eliminating PF and PB, the minimum-total-flow problem becomes textup((P))qquad min_(cF(s), cF(s to s'))quad & sum_(sin I) cF(s) text(s. t. )quad & sum_(vin text(out)(s)) cF(s to v) = cF(s), && forall s in Ssetminus(s_f), & sum_(uin text(in)(s)) cF(u to s) = cF(s), && forall s in Ssetminus(s_0), & cF(x to s_f) = cR(x), && forall x in X, & cF(s to s') ge 0, && forall (s, s') in E. This is a linear program. end-of-corollary"
+    },
+    {
+      "block_id": "s14_p7",
+      "heading": "Correctness of LP formulation",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: The objective is linear in (cF(s), cF(s to s')), and all constraints are affine. end-of-proof"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Duality proofs",
+      "major_heading": "Full theoretical results",
+      "text": "For notational convenience define the cost vector c by c_s: = 1, & sin I, 0, & sin (s_0, s_f). Then the primal objective is c^top cF = sum_(sin I) cF(s)"
+    },
+    {
+      "block_id": "s15_p1",
+      "heading": "Duality proofs",
+      "major_heading": "Full theoretical results",
+      "text": "Introduce dual variables: start-of-itemize:. alpha_s in for the outgoing-flow constraints, sin Ssetminus(s_f);. beta_s in for the incoming-flow constraints, sin Ssetminus(s_0);. eta_x in for the terminal constraints, xin X. end-of-itemize"
+    },
+    {
+      "block_id": "s15_p2",
+      "heading": "Duality proofs",
+      "major_heading": "Full theoretical results",
+      "text": "We also define padded vectors alpha, beta by alpha _s: = alpha_s, & sneq s_f, 0, & s=s_f, qquad beta _s: = beta_s, & sneq s_0, 0, & s=s_0"
+    },
+    {
+      "block_id": "s15_p3",
+      "heading": "Duality proofs",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proposition: The dual of is qquad max_(alpha, beta, eta)quad & sum_(xin X) cR(x)eta_x text(s. t. )quad & c = bar(alpha) + bar(beta), & alpha_s + beta_(s') ge 0, && forall s to s' text( with ) s' neq s_f, & eta_x le alpha_x + beta_(s_f), && forall xin X. Moreover, this dual can be reduced: max_(pi)quad & sum_(xin X) cR(x)pi_x text(s. t. )quad & pi_(s_0)=0, & pi_(s')-pi_s le 1, && forall (s, s')in E text( with ) s' neq s_f. end-of-proposition"
+    },
+    {
+      "block_id": "s15_p4",
+      "heading": "Duality proofs",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: The Lagrangian is L(cF(s), cF(s to s'), alpha, beta, eta) &= c^top cF + sum_(sneq s_f) alpha_s Bigl(sum_(vintext(out)(s)) cF(s to v) - cF(s)Bigr) &qquad + sum_(sneq s_0) beta_s Bigl(sum_(uintext(in)(s)) cF(u to s) - cF(s)Bigr) + sum_(xin X) eta_x bigl(cR(x) - cF(x to s_f)bigr). Now collect all terms involving cF(s) and cF(s to s'). Since each edge sto s' contributes alpha_s through the outgoing constraint at s, and beta_(s') through the incoming constraint at s', we obtain L(cF(s), cF(s to s'), alpha, beta, eta) &= sum_(xin X) cR(x)eta_x + sum_(sin S) bigl(c_s - bar(alpha)_s - bar(beta)_sbigr) cF(s) &qquad + sum_(substack((s, s')in E s'neq s_f)) (alpha_s+beta_(s')) cF(s to s') &qquad + sum_(xin X) (alpha_x+beta_(s_f)-eta_x) cF(x to s_f). The dual function is g(alpha, beta, eta): = inf_(cF(s), cF(s to s')ge0) L(cF(s), cF(s to s'), alpha, beta, eta). We now determine when this infimum is finite. Step 1: minimization over cF(s). The variables cF(s) are unrestricted in sign inside the Lagrangian. Therefore the infimum over cF(s) is finite if and only if each coefficient of cF(s) is zero: c_s - alpha _s - beta _s = 0, qquad forall sin S. Equivalently, c = alpha + beta. Step 2: minimization over cF(s to s'). Each variable cF(s to s') is constrained only by cF(s to s') ge 0. Hence the infimum over cF(s to s') is finite if and only if each coefficient of cF(s to s') is nonnegative: alpha_s + beta_(s') ge 0, qquad forall (s to s') with s'neq s_f, and alpha_x + beta_(s_f) - eta_x ge 0, qquad forall xin X. The latter condition is equivalent to eta_x le alpha_x + beta_(s_f), qquad forall xin X. Under these conditions, g(alpha, beta, eta) = sum_(xin X) R(x)eta_x. Therefore the dual problem is exactly. Since R(x)>0 for every xin X, the optimal choice of eta_x saturates the inequality eta_x le alpha_x + beta_(s_f), hence eta_x = alpha_x + beta_(s_f). Therefore is equivalent to max_(alpha, beta)quad & sum_(xin X) R(x)bigl(alpha_x+beta_(s_f)bigr) text(s. t. )quad & c = bar(alpha) + bar(beta), & alpha_s + beta_(s') ge 0, && forall (s to s') text( with ) s' neq s_f. From c= alpha + beta, we obtain alpha_(s_0)=0, qquad beta_(s_f)=0, qquad beta_s = 1-alpha_s quad forall sin I. Substituting into the edge inequalities gives alpha_s+beta_(s') ge 0 quad Longleftrightarrow quad alpha_s + (1-alpha_(s')) ge 0 quad Longleftrightarrow quad alpha_(s')-alpha_s le 1. Renaming alpha_s as pi_s yields. Note that the derivation of dual to the extended problem is exactly the same up to an additional equality constraint from the fixed first step. end-of-proof"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Shortest Path via Dual Potentials",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-theorem: [Shortest paths dual characterization] Consider the dual to the primal problem max_(pi) sum_(xin X) cR(x)pi_x qquad subject to qquad pi_(s_0)=0, qquad pi_(s')-pi_sle 1 quad forall (s to s') with s'neq s_f. For every non-sink state s, define d(s): =minleft(kge 0: exists s_0=v_0to v_1to cdots to v_k=sright). Then: start-of-enumerate:. every feasible solution pi satisfies pi_s le d(s) qquad forall sneq s_f;. the function d(cdot) is a feasible dual solution, and it is dual-optimal;. if cR(x)>0 for every xin X, then every optimal solution pi^star satisfies pi_x^star = d(x) qquad forall xin X. end-of-enumerate Moreover, complementary slackness conditions in the optimum gives us the following relation: cF^(star)(s to s') (pi_(s')^star - (1 + pi_s^star)) = 0 which is also a Primal-Dual gap. end-of-theorem"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Shortest Path via Dual Potentials",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: We prove the three statements one by one. Step 1: every feasible pi satisfies pi_sle d(s). Let pi be any feasible solution of the dual problem, and fix a state sneq s_f. Take any directed path from s_0 to s: s_0=v_0 to v_1 to cdots to v_k=s. For every edge v_ito v_(i+1) in this path, feasibility gives pi_(v_(i+1))-pi_(v_i)le 1. Now sum these inequalities over i=0, dots, k-1: sum_(i=0)^(k-1)bigl(pi_(v_(i+1))-pi_(v_i)bigr)le sum_(i=0)^(k-1)1 = k. The left-hand side is a telescoping sum, so it simplifies to pi_(v_k)-pi_(v_0) = pi_s-pi_(s_0). Since pi_(s_0)=0, we obtain pi_sle k. This holds for every path from s_0 to s. Therefore, taking the minimum over all such paths, pi_sle d(s). This proves part (i). Step 2: the function d(cdot) is feasible. Define pi^(max)_s: = d(s). We show that pi^(max) satisfies all dual constraints. First, pi^(max)_(s_0)=d(s_0)=0. Next, take any edge sto s' with s'neq s_f. By definition of d(s), there exists a shortest path from s_0 to s of length d(s): s_0=v_0to v_1tocdotsto v_(d(s))=s. Appending the edge sto s' gives a path from s_0 to s' of length d(s)+1. Since d(s') is the length of the shortest path from s_0 to s', we must have d(s')le d(s)+1. Equivalently, d(s')-d(s)le 1. Thus pi^(max)_(s')-pi^(max)_s le 1. So pi^(max) is feasible. Step 3: d(cdot) is dual-optimal. Let pi be any feasible solution. By Step 1, for every terminal state xin X, pi_xle d(x). Since the rewards are nonnegative, sum_(xin X) cR(x)pi_x le sum_(xin X) cR(x)d(x). But Step 2 shows that the choice pi^(max)_s=d(s) is feasible, and for this choice the objective value is exactly sum_(xin X) cR(x)d(x). Therefore no feasible solution can have a larger objective value, and d(cdot) is dual-optimal. This proves part (ii). Step 4: Every optimal solution agrees with d on terminals. Let pi^star be any optimal solution. By Step 1, pi^star_xle d(x) qquad forall xin X. Suppose, for contradiction, that there exists some terminal state x_0in X such that pi^star_(x_0)<d(x_0). Because all rewards are strictly positive, this would imply sum_(xin X)cR(x)pi^star_x < sum_(xin X)cR(x)d(x). But the right-hand side is the optimal value, since it is attained by the feasible solution d(cdot). This contradicts the optimality of pi^star. Hence no such x_0 can exist, and therefore pi^star_x=d(x) qquad forall xin X. This proves part (iii). end-of-proof"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Proof of dual equivalence of OT and GFlowNet",
+      "major_heading": "Full theoretical results",
+      "text": "start-of-proof: It is easy to see that dual to the extended primal problem is of the following nature (see Appendix for derivation) max_(pi) quad &sum_(xin X) cR(x) pi_x + sum_(u in U) cL(u)(-pi_u) text(s. t. )quad & pi_(s') - pi_s le 1, forall srightarrow s': s neq s_0, s' neq s_f & pi_(s_0) = 0 if we now redefine a_x = pi_x, b_u = -pi_u, then taking any path p: a_x + b_u = pi_x -pi_u=sum_(i=0)^(|p|) pi_(p_(i + 1)) - pi_(p_i) leq d(u, x) Hence: max_(a, b) quad &sum_(xin X) cR(x) a_x + sum_(u in U) cL(u)b_u text(s. t. )quad & a_x + b_u le d(u, x) Which has exactly the same functional form in decision variables a_x, b_u as Dual to Problem end-of-proof"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Experimental details",
+      "major_heading": "Experimental details",
+      "text": "All models are parameterized by MLP with 2 hidden layers and 128 hidden size, which accept a one-hot encoding of s as input. cF_(theta)(s), PF(s' mid s, theta), PB(s mid s', theta) share the same backbone, with different linear heads predicting the logits of the forward policy and the logits of the backward policy. We train our models on-policy, using batch size 512. We use AdamW optimzier with lr =10^(-3) for all our experiments and weight decay 10^(-4). Our implementations are based on the published code of [pmlr-v267-morozov25a]. All experiments were performed on CPUs"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "We define moon shaped distribution by the following formula: cL(s) triangleq indleft[ z-c _2^2 le r_( out )^2right]left(1-indleft[ z-(c-delta e_1) _2^2 le r_( in )^2right]right)left(0. 5+2minleft(1, maxleft(0, 1- z-b _2 (r_( out ))right)right)right)+varepsilon"
+    },
+    {
+      "block_id": "s19_p1",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "Where: z= s (M-1), qquad c=left(frac12, dots, frac12right), qquad e_1=(1, 0, dots, 0), qquad b=c+frac(r_( out ))(2)e_1. and r_( in ), r_( out ) are inner and outer balls radius"
+    },
+    {
+      "block_id": "s19_p2",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "The ball-shaped distribution defined as follows:"
+    },
+    {
+      "block_id": "s19_p3",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "cL(s) triangleq indleft[ z-c _2^2 le r_( out )^2right]left(0. 5+2minleft(1, maxleft(0, 1- z-b _2 (r_( out ))right)right)right)+varepsilon"
+    },
+    {
+      "block_id": "s19_p4",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "The corner-shaped distribution definition follows previous works [madan2023learning, malkin2022trajectory]: cR(s) triangleq R_0 + R_1 prod_(i = 1)^D I left[0.25 < left| s^i (H-1)-0.5right|right] + R_2 prod_(i = 1)^D I left[0.3 < left| s^i (H-1)-0.5right| < 0.4right]eqsp"
+    },
+    {
+      "block_id": "s19_p5",
+      "heading": "Hypergrid distribution definitions",
+      "major_heading": "Experimental details",
+      "text": "See Figure for visualization"
+    },
+    {
+      "block_id": "s20_p0",
+      "heading": "Permutations",
+      "major_heading": "Experimental details",
+      "text": "Denote C(k) as the probability that a permutation sampled from the reward distribution has k fixed points. We compute the L^1 error between the vector (C(0), C(1), dots, C(n)) and its empirical estimate over the last 10^5 samples seen in training for convergence diagnostics"
+    },
+    {
+      "block_id": "s20_p1",
+      "heading": "Permutations",
+      "major_heading": "Experimental details",
+      "text": "Suppose that x_1, dots, x_m is a set of GFlowNet samples (terminal states of trajectories sampled from PF ). Then, the empirical L_1 error of fixed point probabilities is defined as: sum_(k=0)^N left| C(k) - 1 (m)sum_(i=1)^m I (x_i(k)=k)right|, We use the exact formula from [pmlr-v267-morozov25a] for exact computation of C(k)"
+    }
+  ],
+  "load_seconds": 17.548262330004945
+}

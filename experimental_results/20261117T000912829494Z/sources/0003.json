@@ -1,0 +1,433 @@
+{
+  "arxiv_id": "0801.3143",
+  "title": "Exact Ground States of Large Two-Dimensional Planar Ising Spin Glasses",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "Studying spin-glass physics through analyzing their ground-state properties has a long history. Although there exist polynomial-time algorithms for the two-dimensional planar case, where the problem of finding ground states is transformed to a minimum-weight perfect matching problem, the reachable system sizes have been limited both by the needed CPU time and by memory requirements. In this work, we present an algorithm for the calculation of exact ground states for two-dimensional Ising spin glasses with free boundary conditions in at least one direction. The algorithmic foundations of the method date back to the work of Kasteleyn from the 1960s for computing the complete partition function of the Ising model. Using Kasteleyn cities, we calculate exact ground states for huge two-dimensional planar Ising spin-glass lattices (up to 3000x3000 spins) within reasonable time. According to our knowledge, these are the largest sizes currently available. Kasteleyn cities were recently also used by Thomas and Middleton in the context of extended ground states on the torus. Moreover, they show that the method can also be used for computing ground states of planar graphs. Furthermore, we point out that the correctness of heuristically computed ground states can easily be verified. Finally, we evaluate the solution quality of heuristic variants of the Bieche et al. approach."
+    },
+    {
+      "block_id": "s0_p0",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The determination of spin-glass ground states has raised the interest of both physicists and computer scientists. For an introduction we refer to [ hartmannrieger02,rieger98, hartmann08 ]. On the one hand, an analysis of the ground-state properties sheds light on the ruling physics of the system. On the other hand, several different algorithms have been developed and used for the ground-state determination of different models"
+    },
+    {
+      "block_id": "s0_p1",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "For the two-dimensional Edwards-Anderson model [ EA75 ] (EA) with free boundaries in at least one direction, ground states can be determined exactly with fast algorithms. In fact, the problem is solvable in time bounded by a polynomial in the size of the input. The latter can be achieved by a transformation to a well known graph theoretical problem the minimum-weight matching problem, for which efficient implementations exist. For general non-planar or three- or higher-dimensional lattices, however, calculating exact ground states is NP -hard [ papadimitriou82 ]. Loosely speaking, this means we cannot expect to be able to design a polynomial-time solution algorithm. In practice, one can use, e. g. branch-and-cut algorithms [ ljrr04 ]"
+    },
+    {
+      "block_id": "s0_p2",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "In this work, we focus on the polynomially solvable case of two-dimensional lattices with free boundaries in at least one direction. We first review and compare the main known approaches which are those of Bieche et al. [ bieche80 ] and of Barahona [ barahona82a, barahona82b ]. Then we present the approach inspired by Kasteleyn [ kasteleyn63 ]. All method basically follow the same idea: An associated graph is constructed in which a minimum-weight perfect matching is determined that is used to construct an exact ground state. Differences occur in the constructed associated graph. It turns out that the approach inspired by Kasteleyn is the most favorable. In fact, using the latter method, we can determine exact ground states for lattice sizes up to 3000^2, while the possible sizes computed earlier with heuristic variants of the approach of Bieche et al. were considerably smaller. In a forthcoming article [ gregorfraukeflorent08 ], we will analyze the physics of the system. Kasteleyn cities were recently also used by Thomas and Middleton [ middleton07 ]. While focussing on extended ground states on the torus, they show that the Kasteleyn-city approach can be successfully used in the planar case, too. Furthermore, they compared their implementation with an implementation of Barahona's method. It turned out that the approach with Kasteleyn cities is less memory consumptive and faster. Apart from this recent work, we are not aware of other computational studies using Barahona's method"
+    },
+    {
+      "block_id": "s0_p3",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "We show how to either prove correctness of heuristically determined ground states or how to correct them using linear programming. Despite the fact that this is fast, it is still advantageous to use the method based on Kasteleyn cities. Finally, we evaluate the quality of the solutions generated with heuristic variants of the Bieche et al. approach"
+    },
+    {
+      "block_id": "s0_p4",
+      "heading": "Introduction",
+      "major_heading": "Introduction",
+      "text": "The outline of the article is as follows. In Section, we introduce the model. In Section we introduce definitions necessary for the literature review in Section. Finally, we report the results in Section"
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "The Model",
+      "major_heading": "The Model",
+      "text": "In the Edwards-Anderson model N spins are placed on a lattice. We focus on quadratic ( N=L^2 ) lattices with free boundary conditions in at least one direction. Toric boundary conditions may be applied to at most one lattice axis. The Hamiltonian of the system is mathcal(H) = -sum_(<i, j>) J_(ij)S_(i)S_(j), where the sum runs over all nearest-neighbor sites. Each spin S_i is a dynamical variable which has two allowed states, +1 and -1. The coupling strengths J_(ij) between spins i and j are independent identically distributed random variables following some probability distribution. The concentration of anti-ferromagnetic ( J_(ij) < 0 ) and ferromagnetic bonds ( J_(ij) > 0 ) depends on the underlying distribution. The Gaussian and the bimodal pm J distributions are often used. A spin configuration attaining the global minimum of the energy function H is called a ground state"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "In this section, we briefly summarize some basic definitions from graph theory. For further details, we refer to [ harary69,\n  diestel06, bollobas98 ] and the references therein. We associate a spin-glass instance with a graph G=(V, E) with vertices V (spin sites) and edges E (bonds). The edge set consists of unordered pairs (i, j), with i, jin V. More specifically, for two-dimensional Ktimes L lattices with free boundaries, the graph is called a grid graph and is denoted by G_(K, L). In case periodic boundaries are present in one direction, we call the graph a half-torus or a ring. The degree deg (v) of a vertex v is the number of edges (v, w_i) in E incident at v. A path, pi = v_1, v_2,..., v_k, v_i in V, is a sequence of vertices such that (v_1, v_2), (v_2, v_3),..., (v_(k-1), v_k) are edges of G and the v_i are distinct. A closed path pi = v_1, v_2,..., v_k, v_1 is a cycle"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "In many applications a rational cost or a weight w(e) is associated with an edge e. Let G=(V, E) be a weighted graph. For each (possibly empty) subset Qsubseteq V, a cut delta(Q) in G is the set of all edges with one vertex in Q and the other in Vsetminus Q. The weight of a cut is given by w(delta(Q)) = sumlimits_(e=(v, w) in delta(Q)) w(e). A minimum cut ( min-cut ) asks for a cut delta(Q) with minimum weight among all vertex sets Qsubseteq V. Let K_n denote the complete graph with n vertices and edge set E = V times V. A subgraph of G is a graph G_H such that every vertex of G_H is a vertex of G, and every edge of G_H is an edge in G also. G=(V, E) is called Eulerian if and only if each vertex of G has even degree. A graph G is planar if it can be drawn in the plane in such a way that no two edges meet each other except at a vertex. Any such drawing is called a planar drawing. Any planar drawing of a graph G divides the plane into regions, called faces. One of these faces is unbounded, and called the outer face or unbounded face. A geometric dual graph G_D of a connected planar graph G is a graph G_D with the property that it has a vertex for each face of G and an edge for each edge touching two neighboring faces in G"
+    },
+    {
+      "block_id": "s2_p2",
+      "heading": "Preliminaries",
+      "major_heading": "Preliminaries",
+      "text": "A matching in a graph G=(V, E) is a set of edges M subseteq E such that no vertex of G is incident with more than one edge in M. A matching M is perfect if every vertex is incident to an edge in the matching. A maximum matching is a matching of maximum weight w(M) = sumlimits_(e in M) w(e). Solving the perfect matching problem on general graphs in time bounded by a polynomial in the size of the input remained an elusive goal for a long time until Edmonds [ edmonds65a,\n  edmonds65b ] gave the first polynomial-time algorithm \\ the blossom algorithm. More details about matching theory can be found in [ lovasz86 ]"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Review of the Known Algorithmic\n  Approaches",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Bieche et al. [ bieche80 ] showed that the problem of finding a ground state for two-dimensional planar Ising spin glasses can be transformed to a well known graph theoretical problem the minimum-weight perfect matching problem (MWPM) on general graphs. The method follows the scheme shown in Algorithm in which an optimum matching is used to construct a spin configuration minimizing the total energy"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Review of the Known Algorithmic\n  Approaches",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Most commonly used exact methods, like the approaches of Bieche et al. [ bieche80 ] and Barahona [ barahona82a,\n  barahona82b ], follow this scheme. In the following, we briefly summarize these two methods. Afterwards, we present a method following the construction introduced by Kasteleyn [ kasteleyn63 ]. More details can be found in the recent tutorial [ hartmann08 ] on algorithms for computing ground states in two-dimensional Ising spin glasses"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "The Approach of Bieche et al.",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Bieche et al. [ bieche80 ] consider the weighted grid graph G_(K, L)=(V, E) where each vertex i in V is assigned an initial spin value S^0_i=pm 1. Each edge e=(i, j) receives a weight w(e)=-J_(ij)S^0_iS^0_j, cf. Fig.. Often, the trivial configuration S ^0 = +1 forall S_i, i in V is used"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "The Approach of Bieche et al.",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "An instance can not only be described in terms of spins and bonds, but also by frustrated plaquettes and paths of broken edges. Plaquettes consist of the 4-cycles in the graph. An edge is said to be satisfied if it attains its minimal weight ( -J_(ij)S^0_iS^0_j = -lvert J_(ij) rvert ), otherwise it is called unsatisfied. A plaquette is frustrated if there is no spin configuration satisfying all edges. In this case the plaquette has an odd number of negative edges. For the remainder let F be the set of frustrated plaquettes in G_(K, L) and P the set of all plaquettes in G_(K, L)"
+    },
+    {
+      "block_id": "s5_p2",
+      "heading": "The Approach of Bieche et al.",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Bieche et al. identify the frustrated plaquettes as vertices of a graph, G_F=(F, E_F) with F=(fmid f is a frustrated plaquette in G) and E_F = Ftimes F. Each edge e=(f_i, f_j) in E_F is assigned a weight w(e) equal to the sum of the absolute weights of the edges in G_(K, L) crossed by a minimum path connecting f_i with f_j. Figure shows the graph G_F for the grid graph of Figure. The underlying dual graph is shown in Figure"
+    },
+    {
+      "block_id": "s5_p3",
+      "heading": "The Approach of Bieche et al.",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "It is easy to see that minimizing the sum of the weights of unsatisfied edges connecting frustrated plaquettes yields a spin configuration of minimum energy. The latter is achieved by determining a minimum-weight perfect matching in G_F. Finding a ground state is thus reduced to finding a minimum-weight perfect matching M of the graph G_F, and its energy is given as: mathcal(H) & = & - sumlimits_(<i, j>) J_(ij)S_iS_j & = & - sumlimits_(<i, j>) lvert J_(ij)rvert + 2 sumlimits_(textit(unsatisfied edges)) lvert J_(ij)rvert & = & - sumlimits_(<i, j>) lvert J_(ij)rvert + 2 w(M) For a detailed description of this method we refer to [ hartmann08 ]"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Limits of Bieche's Approach",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "The approach of Bieche et al. is simple and intuitive, but comprised two major practical obstacles. First of all, in order to obtain the dual edge weights, one has to calculate shortest paths in G_D between all pairs of vertices. Although this can be done in time and space bounded by a polynomial in the size of the input, the calculations can take long in practice or require a large amount of memory. Equipped with the weights, one can construct the complete graph G_F of frustrated plaquettes. Treatable system sizes are practically limited by the number of edges present in G_F. Assuming 32 bits for representing an edge, one needs nearly 4 GB of memory just for representing E_F for a 300times 300 grid graph, assuming 50% of the plaquettes are frustrated. For a 400times 400 grid graph, almost 12 GB of memory are necessary, which goes beyond the hardware resources available in ordinary modern computers"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Simple Improvement for  pm J -distributed\n  Samples  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "For pm J distributed instances, one can obtain the length of the shortest paths directly without shortest paths calculations. For this, we project the geometric dual graph G_D on the plane so that each vertex v is provided with definite coordinates (x_v, y_v) preserving the distance function using rectilinear edges. Different vertices are assigned to different coordinates. Then the length of paths between i and j, pi = (x_i, y_i), sigma_1, sigma_2 ldots, sigma_r, (x_j, y_j) (with sigma_l = (x_l, y_l) = l in V ) traversing only through the grid graph G_(K, L) without crossing its border, is given as the Manhattan distance c = lvert x_i - x_jrvert + lvert y_i - y_jrvert. This value is to be compared with the length of the path passing through the outer face o, pi_o = (x_i, y_i), sigma_1, ldots, sigma_k, o, sigma_(k+1), ldots sigma_r, (x_j, y_j). The weight of this path is given as c_o = min(x_i, y_i, K-x_i, L-y_i) + min(x_j, y_j, K-x_j, L-y_j). The shortest path from i to j is the shorter of the two. In a half-torus graph, analogous calculations can be performed"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "The Approach of Barahona",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Barahona [ barahona82a, barahona82b ] constructs the geometric dual graph that contains a vertex for each plaquette and edges in case the corresponding two plaquettes share an edge. Here the outer face is also interpreted as a plaquette. In formulas, G_D = (P, E_D) of G_(K, L), where P = (p mid p is a plaquette in G_(K, L)) cup (o mid o is the outer face plaquette ) and E_D = (e =(p_i, p_j) mid forall p_i, p_j in P, p_i cap p_j neq emptyset ). Each dual edge is assigned a weight according to the absolute weight of the edge in G_(K, L) crossed by the dual edge. Vertices p_i in P are called odd if they represent a frustrated plaquette, otherwise even"
+    },
+    {
+      "block_id": "s8_p1",
+      "heading": "The Approach of Barahona",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Subsequently, the graph G_D is transformed into a graph G^(ast). In order to do this, first every vertex p_i in P with deg (p_i) > 3 is expanded to ( deg (p_i)-2) copies of degree 3. Any even vertex remains even, expanding an odd vertex makes one of its copies (arbitrarily) odd and the others even. From now on, one works with vertices of degree 3 only. Next, each vertex is transformed to a K_3 subgraph: Each edge incident to an even vertex is replaced by an intermediate vertex and two edges. At most two new vertices are inserted for each edge connecting two even vertices"
+    },
+    {
+      "block_id": "s8_p2",
+      "heading": "The Approach of Barahona",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Original edges keep their weight, new edges obtain weight zero. For the details, we refer to [ barahona82a, barahona82b ]"
+    },
+    {
+      "block_id": "s8_p3",
+      "heading": "The Approach of Barahona",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "On G^(ast) a MWPM is computed. Any even vertex has an even number (including zero) of outgoing matching edges, however, any odd vertex has an odd count of those edges. After the matching is calculated, the afore expanded vertices are shrunken, and the remaining matching edges raise shortest paths connecting frustrated plaquettes"
+    },
+    {
+      "block_id": "s8_p4",
+      "heading": "The Approach of Barahona",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "As the total length of the induced paths is minimal among all possible paths, the induced set of unsatisfied edges has minimum weight. Following Bieche, this corresponds to a configuration of minimum weight"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Evaluation of Barahona's Approach",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Barahona's transformation consists of two steps and is a bit more involved than the method of Bieche et al. For a quadratic L times L grid graph with free boundary conditions, G^(ast) has lvert V^(ast)rvert approx 12(L-1)[(L-1)+2]-12 - b_(odd) many vertices, where b_(odd) = 3cdot lvert ( odd vertices ) rvert is the number of odd vertices in the graph G_D. The graph G^(ast) is sparse as each vertex in G^(ast) has degree 3, lvert E^(ast) rvert = 3 (2)lvert V^(ast)rvert. Assuming 50% frustrated plaquettes, the number of vertices increases approximately by a factor of 10. Given that for bigger lattices this transformation needs less space than the one by Bieche et al., it is preferable to the former. However, in the next section we describe a method that works with an even smaller graph"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "In this section, we follow an idea first described by Kasteleyn [ kasteleyn63, kasteleyn61 ] and Fisher [ fisher66 ]. In these works, the goal was to calculate the configurational partition function for dimer coverings on a lattice. The authors exploited that the calculation of the partition function of the Ising model can be reduced to the number of ways in which a given number of edges can be selected to form closed polygons [ domb60 ], i. e., a polygon configuration such that each lattice vertex has even degree of selected incident polygon edges. The latter can be computed as follows. First, one constructs a so-called cluster lattice graph which is generated by replacing each vertex of the lattice by a Kasteleyn city (a K_4 subgraph). Now the expanded graph is oriented such that the associated skew-symmetric Matrix D shows the property that lvert Pf (D) rvert, where Pf (D) denotes the Pfaffian of the skew-symmetric matrix, gives the number of dimer coverings. As there is a one-to-one correspondence between the number of polygon configurations and the number of dimer coverings, this method yields the generating function for polygon configurations and therefore the generating function for the Ising model"
+    },
+    {
+      "block_id": "s10_p1",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Thomas and Middleton used Kasteleyn cities for calculating extended ground states on the torus in order to gain relevant information about the physics of spin glasses on toroidal lattices. Furthermore, they point out that the method yields an exact ground-state algorithm on planar lattices"
+    },
+    {
+      "block_id": "s10_p2",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "A closely related approach was used later by Galluccio et al. to design an exact algorithm for the computation of the partition function for the Ising problem that runs in polynomial time for several models of interest [ galluccio00, galluccio99I, galluccio99II ], e. g., for two-dimensional toroidal lattices with pm J distribution"
+    },
+    {
+      "block_id": "s10_p3",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Here, we focus on planar grid graphs. The distribution of the edge weights is arbitrary. G_(K, L) is transformed into a pseudo-dual graph G_(K_4) as shown in Figure. For simplicity, we confine ourselves to quadratic grid graphs in the following, however all results can be easily transformed to general grid graphs"
+    },
+    {
+      "block_id": "s10_p4",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Formally, first the geometric dual of the grid graph G_(L, L) is constructed, then the outer face vertex is expanded into 2L+1 ( L in the half-torus case) copies, such that the resulting graph is an intermediate grid graph G_(L+1, L+1) ( G_(L, L+1) ). The edge weights of G_(L+1, L+1) are set to the weights of the edges of G_(L, L) that are crossed by the edges of G_(L+1, L+1). Edges that do not cross any other edge obtain weight zero. Next, each vertex of G_(L+1, L+1) is expanded to a K_4 subgraph. Again, newly constructed edges receive weight zero"
+    },
+    {
+      "block_id": "s10_p5",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "The transformation for the half-torus graph is done similarly, but the intermediate graph is a grid-half-torus graph G_(L, L+1) which is a grid with L-1 additional edges. Edge weights are set as just described. Finally, all vertices are expanded to a K_4 subgraph as before. We denote by G_( inter ) the intermediate graph either for the underlying grid or half-torus graph"
+    },
+    {
+      "block_id": "s10_p6",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "On the transformed graph G_(K_4) we calculate a minimum-weight perfect matching M"
+    },
+    {
+      "block_id": "s10_p7",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "The next step is to shrink all the K_4 -subgraphs back, resulting in the graph G_( inter ). Also all copies of the outer face vertex are shrunken. Dealing again with the geometric dual graph of G_(L, L), we take the subgraph G_S=(Q, delta(Q)) of the geometric dual graph that consists only of dual edges that were matched, and all dual vertices with degree greater zero restricted to matched edges. This subgraph G_S is an Eulerian graph as each dual vertex is incident to an even number of matching edges. It is well known that there exists a one-to-one correspondence between Eulerian subgraphs in the dual graph and cuts in the original graph. So, Q defines a cut delta(Q) in the graph G_(L, L), cf. Fig"
+    },
+    {
+      "block_id": "s10_p8",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "In order to show the correctness of the transformation, we exploit that each ground state corresponds exactly to a min-cut delta(Q) in the grid graph G_(L, L). A cut separates the vertex set into two disjoint sets W and Vsetminus W. Vertices in the same partition get assigned the same spin value. Cut edges are those connecting a pair of vertices with different spin values. The Hamiltonian can be stated as: mathcal(H) &=& -sum_(<i, j>) J_(ij)S_(i)S_(j) &=& -sum_(<i, j>) J_(ij) + 2 w(delta(Q)) nonumber"
+    },
+    {
+      "block_id": "s10_p9",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "We show that the edge set determined with the method described above corresponds to a minimum cut. w(M) &=& sum_(tilde(e) in E cap M) w(tilde(e)) nonumber &underbrace(=)_(w(tilde(e)) = w(e))& sum_(e in delta(Q)) w(e) nonumber &=& w(delta(Q)) nonumber"
+    },
+    {
+      "block_id": "s10_p10",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "As w(M) is the weight of a minimum-weight perfect matching, the weight of the subgraph G_S is minimum, and thus also the weight of the cut delta(Q)"
+    },
+    {
+      "block_id": "s10_p11",
+      "heading": "The New Approach   Following in Kasteleyn's\n  Footsteps  ",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "As Kasteleyn's original method yields the complete partition function, one might ask why the algorithm was modified so that only the ground state is determined. The reason for this is twofold. First of all, minimum-weight perfect matchings can be computed in graphs with millions of vertices, provided they are sparse, which allows us to go to very large system sizes. Furthermore, the partition function does not encode the ground-state configuration itself but only its energy"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Advantages of the New Approach",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "The method is intuitive and its implementation is straightforward. We present some computational results in Section. For a quadratic L_1 times L_1 grid graph G_(L_1, L_1) we construct a graph G_(K_4)^(L_1, L_1) with lvert V_(K_4)^(L_1, L_1) rvert = 4(L_1+1)(L_1+1) vertices and 2lvert V_(K_4)^(L_1, L_1) rvert - 4(L_1+1) edges. For an L_2 times L_2 ring graph G_(L_2, L_2) the construction yields a graph G_(K_4)^(L_2, L_2) with lvert V_(K_4)^(L_2, L_2) rvert = 4L_2(L_2+1) vertices and 2lvert V_(K_4)^(L_2, L_2) rvert - 2L_2 - 4 edges. In any case, the resulting graphs are very sparse. More specifically, let us compare for an Ltimes L grid the sizes of the graphs in which a minimum-weight perfect matching is computed. Assuming that around 50% of the original plaquettes are frustrated, the graph based on Kasteleyn cities contains only about one third of the number of vertices and one fourth of the number of edges contained in the graph constructed with Barahona's method"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Advantages of the New Approach",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "As the running time of the matching algorithm scales with the number of vertices and edges in the graph, the Kasteleyn construction is preferable to both the Bieche et al. and the Barahona construction"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Computing Domain Walls",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "For the computation of domain walls, we follow the usual approach [ mcmillan84, riegeretaljuenger96,kawarieger97 ]. A ground state of the system is calculated, having energy E_0. To introduce a domain wall, the system is then usually perturbed by flipping all couplings along a row or a column in the lattice. The ground state for this new system is calculated, having energy E^(pert)_0. The domain-wall energy for a given sample is then given by Delta E = lvert E^(pert)_0 - E_0rvert. We proceed as described in [ hartyoung01,fisch07 ], by first determining a ground state of an EA spin glass with periodic boundary conditions in one direction, say along the x -axis. Then the signs of L edges in one column along the y -axis are flipped. The symmetric difference of these ground states yields a domain wall"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "Computing Domain Walls",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "With the help of linear programming [ chvatal83,nemhauser99 ], one does not need to calculate the second ground state from scratch but can flip the weight of the specific L edges one by one, each followed by a reoptimization step. It is also possible to flip all signs at the same time and do a global reoptimization step. However, in practice for pm 1 distributed weights it often does not pay off to do the reoptimization steps, and so we calculate both ground states from scratch"
+    },
+    {
+      "block_id": "s13_p0",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "As argued above, the original approach of Bieche et al. suffers from an extensive memory usage. In order to overcome these limits, some modifications have been proposed that yield heuristic methods for low-energy states that are however not necessarily exact ground states. In these heuristics, a reduced graph G _(red) is used instead of a complete one"
+    },
+    {
+      "block_id": "s13_p1",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "An approach often used is to introduce in G _(red), only those edges with weight less than or equal to a fixed value c_(max) (often c_(max)=cJ_(max) is chosen, with c=4, 5, 6 ). For continuous spin systems, Weigel [ weigel07 ] recently suggested to introduce for each vertex only the k lightest edges. He used this cutoff-rule successfully for a matching routine embedded in a genetic algorithm"
+    },
+    {
+      "block_id": "s13_p2",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "The reasoning behind this is that `heavy'-weighted edges are rarely contained in an optimum solution. This can assumed to be true for, e. g., pm 1 distributed couplings and 50% negative weights, for which very often true ground states are reached in practice"
+    },
+    {
+      "block_id": "s13_p3",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Using the reduced graph G _(red), Hartmann and Young determined high-quality heuristic ground states for Ltimes L lattices with pm 1 distribution. They could go up to Lleq 480 [ hartyoung01 ]. Also using the heuristic variant based on the approach of Bieche et al., Palmer and Adler report results for Lleq 1801 with the choice of c_(max)=6J_(max) [ palmeradler99 ]"
+    },
+    {
+      "block_id": "s13_p4",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "For different, especially smaller, percentage of negative weights, the quality of the heuristic decreases. This can be understood as follows. An edge (u, v) in the transformed graph is assigned a weight that equals the sum of the absolute weights of the edges in G_(K, L) crossed by a minimum path connecting u and v. u and v correspond to a pair of frustrated plaquettes. The latter can be assumed to be spread all over the system. In case of small p, the total number of frustrated plaquettes is small. Therefore, the weight of a minimum path connecting a pair of them can become large which can cause a heuristic with a limited value of c_(max) to fail"
+    },
+    {
+      "block_id": "s13_p5",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Furthermore, for a different distribution of the couplings e. g., Gaussian couplings, this heuristic variant has to be used carefully, as good values for c_(max) are not evident. Certainly, removing heavy-weighted edges will result in reduced graphs, but it is not clear beforehand which weights should be considered heavy. Applying different cut-off rules, e. g. vertex-degree constraints, might be helpful as they were already used for thinning graphs, but suitable cut-off values depend still on the underlying distribution of the couplings"
+    },
+    {
+      "block_id": "s13_p6",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "An experimental evaluation will be given in Section"
+    },
+    {
+      "block_id": "s13_p7",
+      "heading": "Modified Approach of Bieche et al.   Review of\n  a Heuristic Method",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "In the next section, we describe how the correctness of heuristic ground states can be verified using linear programming"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": " Checking Whether a Spin\n  Configuration Actually Defines a Ground State",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Suppose we have a spin configuration at hand that has been computed by determining an optimum matching on the graph only containing `light' edges and we want to test whether it is a correct ground state"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": " Checking Whether a Spin\n  Configuration Actually Defines a Ground State",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "First, we compute an optimum matching on the same reduced graph. In so-called pricing steps, we determine whether yet neglected edges exist that need to be taken into account in order to ensure correctness. In case such an edge is reported by pricing, it is introduced in the reduced graph. The process is iterated until no edge is returned any more. Pricing is a general feature in linear programming and combinatorial optimization. For more details, we refer to [ chvatal83,cook98,nemhauser99 ]"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": " Checking Whether a Spin\n  Configuration Actually Defines a Ground State",
+      "major_heading": "Review of the Known Algorithmic\n  Approaches",
+      "text": "Pricing steps can be performed with Cook and Rohe's state-of-the-art Blossom IV code [ rohe99 ] by implementing small modifications. We give some computational results in Section"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": " Computational Results",
+      "major_heading": " Computational Results",
+      "text": "The method proposed in Section can be used for any distribution of the couplings. Here, we focus on pm 1 distributed instances. The concentration p of anti-ferromagnetic bonds was set to 0. 5. For the computations we used Intel Xeon CPU with 2. 3 GHz and AMD Opteron Processor 248 with 2. 2 GHz, each with less than 16 GB RAM. The largest instances L > 1500 were done on Xeon processors with 16 GB RAM. The physics analysis done with our method will be presented in a forthcoming article [ gregorfraukeflorent08 ]"
+    },
+    {
+      "block_id": "s15_p1",
+      "heading": " Computational Results",
+      "major_heading": " Computational Results",
+      "text": "Running times for different sizes of grid graphs ( K=L=100, 150, 250, 500, 700, 1000, 2000, and 3000 ) together with the number of computed samples, are shown in Table. For smaller grids with Lleq 500, we computed between 2*10^5 and 5*10^5 instances per size. For medium sized lattices 700leq Lleq 1500, we ran several thousand samples for each size, whereas for the largest systems of 3000^2 spins we generated results for 157 samples. Lattices with Lleq 500 can be computed within less than 2 minutes on average, whereas one ground-state determination for the biggest size requires on average 24h CPU time on a single processor. Results of samples for spin glasses with periodic boundary conditions in one direction are presented in Table. The running times given in Tables and scale with L^(3. 50(5)) for Ltimes L spin glasses. In total we invested about 600 CPU days for our experiments"
+    },
+    {
+      "block_id": "s15_p2",
+      "heading": " Computational Results",
+      "major_heading": " Computational Results",
+      "text": "It turns out that free boundary samples are computationally a bit more demanding than samples with periodic boundaries in one direction because the intermediate graphs G_( inter ) are larger. For other concentrations of anti-ferromagnetic bonds the presented data (running times, memory usage, etc. ) are comparable, as our method, unlike the method of Bieche et al., does not depend on the concentration of anti-ferromagnetic bonds but only on the grid-graph size KL"
+    },
+    {
+      "block_id": "s15_p3",
+      "heading": " Computational Results",
+      "major_heading": " Computational Results",
+      "text": "Table reflects the average over the maximal memory usage needed in the ground state calculations. The memory usage roughly scales with L^(1. 9) for Ising spin glasses with free boundary conditions and with L^(1. 6) for Ising spin glasses with periodic boundaries in one direction. Both from the CPU time and from the necessary memory we conclude that the method is very fast. It needs considerably less memory than the commonly used method of Bieche et al., which in its heuristic variant allows to treat only smaller system sizes than reported here. However, we also note that a good statistics for system sizes beyond 3000^2 would currently be hard to reach"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "In this section, we explore the quality of the heuristic ground-state calculation using the method of Bieche et al. for two-dimensional pm J Ising spin glasses with free boundary conditions. Within this we use the verification technique explained in Section"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "We consider planar Ltimes L lattices with L = 164 and pm 1 distributed couplings. First we study these lattices with a concentration p = 0. 5 of anti-ferromagnetic bonds. It turns out that out of 9912 computed samples 9 ( 0. 091% ) were wrong when using c_(max)=4. Thomas and Middleton [ middleton07 ] stated 1. 5% inexact solutions on toric samples with L leq 128 and c=8J_(max). We conclude that in practice the heuristic almost always returns true ground states if c_(max) and p are suitably chosen"
+    },
+    {
+      "block_id": "s16_p2",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "The overall average running time was 45. 26 sec., comparing an average of 82. 97 sec. when pricing was necessary with 45. 23 sec. without pricing. In our tests, one pricing step was always sufficient to correct a wrong ground state. Using the Kasteleyn approach, a ground state computation takes on average only around 1 second for this lattice size (on Xeon processors), as can be seen in Table"
+    },
+    {
+      "block_id": "s16_p3",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "In order to assess the influence of the cut-off parameter c_(max) on the number of wrong results and the time to correct them, we varied p and c_(max) for the pm 1 164times 164 lattices (using the AMD Opteron processors). In Table we show results, always averaged over 100 instances"
+    },
+    {
+      "block_id": "s16_p4",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "Several conclusions can be drawn from this experiment. Firstly, small values of c_(max) lead to many wrong results. E. g., for c_(max)=3 up to 100% of the results were wrong, and the solutions have to be handled with care. Then, the quality of the heuristic increases with increasing c_(max). For large enough value, the solutions are very often correct and only need a verification step in order to prove their correctness"
+    },
+    {
+      "block_id": "s16_p5",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "Apart from this trend, the results suggest that the quality of the results highly depends on the chosen combination of c_(max) and p. Clearly, for small percentage p one has to choose a higher cut-off value c_(max) in order to generate high-quality solutions. E. g. for c_(max)=3, all 100 results were wrong when the percentage of negative edges was chosen as p=0. 1, whereas 39 results were wrong for p=0. 5. This can also be seen by looking at different c_(max) values but fixed p values. For c_(max) leq 6 and p=0. 1 always at least one percent is wrong. This means that especially for smaller values of p, one has to make sure that the cut-off value is chosen big enough. The reason for this behavior is that the weight of a minimum path connecting a pair of frustrated plaquettes can become large for small p. Therefore, the minimum-weighted perfect matching might contain heavy edges. c_(max) has to be chosen large enough in order to ensure that these heavy edges are contained in the reduced graph. As argued before, the necessity of having to choose high cut-off values can lead to memory problems as the edge density of the generated reduced graphs increases. These difficulties can be avoided by using the approach based on Kasteleyn cities"
+    },
+    {
+      "block_id": "s16_p6",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "From Table we see that pricing takes only negligible running time. As a conclusion, if the Bieche et al. algorithm is used to determine ground-state properties, it is advantageous to do the pricing steps, too, independent of the size of the reduced graph G _(red). However, despite the fact that pricing is very fast, the heuristic together with the verification is still considerably slower than the method proposed here based on Kasteleyn cities, cf. Table"
+    },
+    {
+      "block_id": "s16_p7",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "It is also interesting to assess the quality of the heuristic for different distribution of the couplings, e. g. for Gaussian distributed couplings. We study grid graphs G_(L, L) with L=50, 100, 150. The grid graph size L was limited due to the fact that the generation of the graphs G_F takes a long time. This is explainable as one is in the need of all-pair shortest path calculations for the set of frustrated vertices on the dual graph. The latter is a polynomially solvable problem, however the computations can take long. In our tests, computing the shortest paths usually takes much longer than computing the ground states itself. In Table the running times for the matching on the different reduced graphs can be seen"
+    },
+    {
+      "block_id": "s16_p8",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "As it is not clear beforehand how big the cut-off parameter c_(max) should be, we let ourselves be guided by the corresponding values used in instances with bimodal distribution. More specifically, for some value of c_(max) (we used c_(max) = 5 ) we compute the average percentage of 'light' edges from G_F that are contained in the reduced graph G _(red) in instances with bimodal distribution. For L=50, we find that in pm 1 distributed instances with p=0. 5 on average the 8% lightest edges are used (this percentage reduces to an average of 2% for L=100 and to 1% for L=150 )"
+    },
+    {
+      "block_id": "s16_p9",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "For Gaussian distributed instances, we build the reduced graphs with the same percentages of light edges, i. e., 8% ( 2% or 1% ) light edges for L=50 ( L=100, L=150 resp. ) Results are shown in Table. First of all, it turns out that for small grid graphs many results are wrong. For L=50, about 12. 5% of the calculated instances do not find correct ground states, and a higher cut-off value has to be used. Considering larger grid graphs the situation looks similar. 47% ( 52% ) instances computed the wrong ground state for L=100 ( L=150 )"
+    },
+    {
+      "block_id": "s16_p10",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "For L=50, we have to go up to a percentage of 16% lightest edges (corresponding to c_(max) approx 8 ), for L=100 to 4% (corresponding to c_(max) approx 7 ) and for L=150 we have to take into account the 2. 5% lightest edges, corresponding to c_(max) approx 8, in order to ensure correctness of the results for our test data. Again, when comparing the running times for 150^2 lattices, it is by roughly a factor of 25 faster to use the Kasteleyn city approach instead of a heuristic Bieche method"
+    },
+    {
+      "block_id": "s16_p11",
+      "heading": "Heuristic Ground States and Their Correction",
+      "major_heading": " Computational Results",
+      "text": "As the performance of the matching routine scales with the graph sizes, more specifically with the number of vertices and edges, we study the reduced graphs with respect to these two entities. Usually, the graphs for computing the matchings are dense. This is especially true for small grid graphs ( L=50 ), where 16% of the light edges are needed. Increasing the grid graphs leads to a considerable decrease of needed light edges, and decreasing density. (The density of a graph with n vertices is defined as the number of its edges divided by the number of edges of the complete graph K_n. ) Nevertheless, in our experiments the grid graphs with L=100 ( L=150 ) contain on average |V| = 4901pm 5 ( |V| = 11103pm 8 ) vertices. Taking 4% ( 2. 5% ) of all edges means in absolute numbers 4. 803(9)*10^5 ( 1. 541(2)*10^6, resp. ) edges, which are large and dense graphs. This has to be compared with the graphs used within the Kasteleyn approach. Here we have for L=100 ( L=150 ) graphs with |V| = 40804 ( |V| = 91204 ) and 8. 120*10^4 ( 1. 818*10^5 ) edges. In fact, the graphs we deal with have more vertices but are considerably sparser. The Blossom IV routine can compute matchings in very large graphs, provided their density is low. This fact is also reflected in the better running times for the Kasteleyn approach presented in this section. Comparing with the situation for instances with bimodal distributed edge weights, we see from Table that a value c_(max) = 4 in the case of p=0. 5 yields good results. For L=100 ( L=150 ) we have |V|=4901pm 4 ( |V|=11114pm 7 ) with |E|=1. 58(7)*10^5 ( |E|=3. 66(1)*10^5 ), which are about 1. 3% ( 0. 6% ) edges of the complete graph. Thus, the graphs with bimodal distribution can be chosen sparser than in the Gaussian case (for c_(max)=4 ). However, these graphs are usually denser than the graphs used in the Kasteleyn approach"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Conclusions",
+      "major_heading": "Conclusions",
+      "text": "We presented a simple algorithm (Section ) based on Kasteleyn cities. The algorithmic foundations of this method date back to the work of Kasteleyn [ kasteleyn63 ] from the 1960s in which he computed the complete partition function for the Ising model. Using this approach, we can compute exact ground states for two-dimensional planar Ising spin-glass instances. The method is easy to implement, fast and has only limited memory requirements. According to our knowledge, the treatable system sizes are considerably bigger than the ones computed earlier and are always provably exact. Thomas and Middleton [ middleton07 ] used Kasteleyn cities for studying extended ground states. Furthermore, they state that the method can also be used for determining exact ground states of planar graphs"
+    },
+    {
+      "block_id": "s17_p1",
+      "heading": "Conclusions",
+      "major_heading": "Conclusions",
+      "text": "We evaluated different established exact methods and compared them with respect to running time and memory requirements. It turned out that the approach presented here is both considerably faster and needs less memory than the methods proposed earlier. We showed how heuristically computed ground states can be verified or corrected fast using mathematical optimization. However, the method based on Kasteleyn cities still outperforms this approach. Finally, we evaluated the solution quality of heuristic variants of the Bieche et al. approach"
+    },
+    {
+      "block_id": "s17_p2",
+      "heading": "Conclusions",
+      "major_heading": "Conclusions",
+      "text": "In the future, we will make our program available in public domain via the Cologne Spin Glass Server that can be found at start-of-center: =http: //cophy. informatik. uni-koeln. de/=. end-of-center"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Acknowledgments",
+      "major_heading": "Acknowledgments",
+      "text": "We thank Michael Junger for fruitful discussions and Vera Schmitz for adapting Blossom IV's pricing method as described above. Thanks to Frank Baumann and Olivier C. Martin for commenting on an earlier version of this article and to Alan Middleton for helpful communications. We are indebted to two anonymous referees for their valuable comments. Last but not least, we thank Oliver Melchert for stimulating discussions and for providing us with some ground-state data. Financial support from the German Science Foundation is acknowledged under contract Li 1675/1-1. Partially supported by the Marie Curie RTN Adonet 504438 funded by the EU"
+    }
+  ],
+  "load_seconds": 3.64132791897282
+}

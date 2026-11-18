@@ -1,0 +1,709 @@
+{
+  "arxiv_id": "2211.09075",
+  "title": "Keeping it sparse: Computing Persistent Homology revisited",
+  "blocks": [
+    {
+      "block_id": "abstract",
+      "heading": "Abstract",
+      "major_heading": "Abstract",
+      "text": "In this work, we study several variants of matrix reduction via Gaussian elimination that try to keep the reduced matrix sparse. The motivation comes from the growing field of topological data analysis where matrix reduction is the major subroutine to compute barcodes, the main invariant therein. We propose two novel variants of the standard algorithm, called swap and retrospective reductions. We test them on a large collection of data against other known variants to compare their efficiency, and we find that sometimes they provide a considerable speed-up. We also present novel output-sensitive bounds for the retrospective variant which better explain the discrepancy between the cubic worst-case complexity bound and the almost linear practical behavior of matrix reduction. Finally, we provide several constructions on which one of the variants performs strictly better than the others."
+    },
+    {
+      "block_id": "s1_p0",
+      "heading": "Motivation",
+      "major_heading": "Introduction",
+      "text": "Persistent homology is arguably the most important tool in the thriving area of topological data analysis. The presence of efficient algorithms for computing the barcode, its main invariant, has been an important contributing factor to its success. In the so-called standard algorithm [top_per_and_simp], this computation boils down to a \"restricted\" Gaussian elimination of a boundary matrix of a filtered simplicial complex: no swapping of rows or columns, only column operations are allowed, and the additions are only from left to right"
+    },
+    {
+      "block_id": "s1_p1",
+      "heading": "Motivation",
+      "major_heading": "Introduction",
+      "text": "Since Gaussian elimination has cubic worst-case complexity in the size of the matrix, barcodes can be computed in polynomial time. This makes it already efficient compared to many other topological invariants, which are usually (NP-)hard to compute or not computable at all. In practice, however, the performance is even better: we observe a close-to-linear practical behavior that allows computing the barcode for matrices with billions of columns [phat_paper, roadmap]. This happens because the matrices to be reduced are sparse (that is, the number of nonzero entries per column is a small constant) and tend to remain so during the reduction"
+    },
+    {
+      "block_id": "s1_p2",
+      "heading": "Motivation",
+      "major_heading": "Introduction",
+      "text": "Gaussian elimination on sparse matrices is cheaper because column additions can be performed more efficiently with appropriate choices of sparse matrix data structures [phat_paper]. However, the sparsity of the input matrix does not alter the worst-case cubic bounds for matrix reduction. Indeed, carefully crafted constructions force a matrix to become dense in the elimination process, making later column additions expensive [morozov2005worst-case]. On the other hand, such situations seem to be pathological and do not happen in practice (and also not on average [average_complexity] ). Therefore, the practical efficiency of reduction procedures can be linked to the preservation of the sparsity of the matrix during the elimination process"
+    },
+    {
+      "block_id": "s1_p3",
+      "heading": "Motivation",
+      "major_heading": "Introduction",
+      "text": "The standard algorithm has been optimized in several ways, exploiting the special structure of boundary matrices. This led to significant further improvements in practice (which are discussed below). However, the impact of sparsity on the reduction has not been adequately studied. We pose the following questions in this paper: are there variants of the standard algorithm, possibly performing different operations, that keep the matrix sparser than the standard one, and do these variants exhibit better practical behavior than existing methods?"
+    },
+    {
+      "block_id": "s2_p0",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "We first observe that some of the restrictions imposed on the Gaussian elimination can be relaxed: any operation preserving the ranks of certain submatrices is allowed ( ). This observation enables us, for example, to swap certain columns and to perform some right-to-left column operations"
+    },
+    {
+      "block_id": "s2_p1",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "With this insight, we then introduce two new variants of the standard algorithm. The first one, called the swap algorithm, introduces one extra rule: before adding a column c_1 to a column c_2, it swaps c_1 and c_2 if c_2 is sparser (i. e., has fewer nonzero entries). Note that checking the size of a column, as well as swapping two columns, requires constant time for most matrix representation types, and hence the overhead of this variant is negligible as long as the column data structure allows for easy retrieval of the size. We show in extensive experimental tests that the swap algorithm is usually competitive with the fastest known algorithms and sometimes leads to significant speedup"
+    },
+    {
+      "block_id": "s2_p2",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "The other variant is called the retrospective algorithm. It is based on the (well-known) idea that, once the pivot of a column has been found, we can perform additional column operations to further eliminate entries in the column (sometimes, this is called the \"full\" or the \"exhaustive\" reduction). The retrospective variant pushes this idea further: it eliminates entries also via right-to-left additions of newly reduced columns. We show significant speedup over the state-of-the-art by experimental comparison for this variant as well. Moreover, the retrospective strategy links the non-zero entries of a column with the (persistent) homology classes at that step, providing complexity bounds that depend on the topology of the underlying data set and are therefore output-sensitive"
+    },
+    {
+      "block_id": "s2_p3",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "For practical efficiency, both variants are combined with existing improvements of the standard algorithm, namely the clear and compress optimization [clearcompress] which typically save a lot of operations in matrix reduction"
+    },
+    {
+      "block_id": "s2_p4",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "We also show that none of the proposed algorithms is strictly better than the others in the following sense. Having chosen one of the three algorithms (standard, swap, and retrospective reduction), we can find a family of inputs for which the chosen algorithm performs a linear number of operations whereas the other two have quadratic complexity"
+    },
+    {
+      "block_id": "s2_p5",
+      "heading": "Results",
+      "major_heading": "Introduction",
+      "text": "We also investigate other variants to ensure sparsity. For instance, during the exhaustive reduction, we generate several intermediate columns which are all valid representations for the rest of the algorithm, and we pick the sparsest column among these. Remarkably, whilst this strategy appears to improve on both the standard and the exhaustive variants, in practice it performs worse than both of them. This shows that ensuring sparsity is not the only reason for the good practical performance of computing barcodes"
+    },
+    {
+      "block_id": "s3_p0",
+      "heading": "Related work",
+      "major_heading": "Introduction",
+      "text": "The library [phat_paper] contains a collection of algorithms and matrix representation types to test various approaches for Gaussian elimination on boundary matrices in a unified framework. Our work contributes several new algorithms to the library. We confirm the earlier observation that the quality of different elimination strategies significantly depends on the chosen data structure"
+    },
+    {
+      "block_id": "s3_p1",
+      "heading": "Related work",
+      "major_heading": "Introduction",
+      "text": "There are numerous other libraries to compute the barcode; we just refer to some comparative studies [minimal_userguide, roadmap, Cufar_Virk]. We point out that, in there, all tested libraries include further functionalities, in particular, generating a boundary matrix out of a point cloud, whereas, as well as the present paper, focuses entirely on the Gaussian elimination step. is among the most efficient libraries for this substep, as demonstrated, for instance, in [phat_paper] and [roadmap]"
+    },
+    {
+      "block_id": "s3_p2",
+      "heading": "Related work",
+      "major_heading": "Introduction",
+      "text": "Even more efficient algorithms have been developed for special cases of simplicial complexes, for instance, Vietoris Rips complexes [bauer2021ripser, henselman2016matroid] and cubical complexes [gvt-dms, kaji2020cubical, wagner-socg-2023, Wagner2012]. The improvements in these specialized implementations are not based on optimized reduction strategies such as the ones considered in the present paper. However, not all of the reduction strategies considered here are compatible with these implementations, which is why we focus on the general-purpose framework PHAT for our comparisons. There have also been several approaches that have focused specifically on parallel and distributed computation [clearcompress, dipha, lewis2015parallel, zhang2020gpu] for performance gains. Another approach, taken for example in [collapse1, collapse2], is to simplify the filtration without modifying the homology. This approach effectively downsizes the matrix but does not sparsify it"
+    },
+    {
+      "block_id": "s3_p3",
+      "heading": "Related work",
+      "major_heading": "Introduction",
+      "text": "The best worst-case complexity for computing the barcode is O(n^omega), where omega is the matrix multiplication constant [milos]. However, this approach is not based on Gaussian elimination and is not competitive in practice. There is no sub-cubic complexity bound known for any barcode algorithm based on Gaussian elimination. The output-sensitive bounds that we derive still lead to cubic worst-case bounds, but can be tighter depending on the topological properties of the input. These bounds refine the bound by Chen and Kerber [twist]"
+    },
+    {
+      "block_id": "s3_p4",
+      "heading": "Related work",
+      "major_heading": "Introduction",
+      "text": "Computing homology with respect to Z coefficients requires computing the Smith normal form using integer Gaussian elimination [Chapter 1, munkres]. In that context, fill-in of matrices is a minor concern, whereas a significant challenge comes from the fact that the size of intermediate entries during matrix reduction can grow exponentially [worstsmith]"
+    },
+    {
+      "block_id": "s5_p0",
+      "heading": "Matrix reduction",
+      "major_heading": "Preliminaries",
+      "text": "The algorithms presented in can be stated and implemented for other field coefficients with minor changes. However, for simplicity, throughout the paper, we work with Z _2 coefficients. Given a matrix M with entries in Z _2, M^i denotes its i -th row, M_j its j -th column, M_j^i its element in position i, j, and M_j the number of nonzero entries in M_j. N denotes the number of columns of M"
+    },
+    {
+      "block_id": "s5_p1",
+      "heading": "Matrix reduction",
+      "major_heading": "Preliminaries",
+      "text": "The pivot of a column, denoted by M_j, is the (row) index of the lowest nonzero element in M_j. A left-to-right column operation is the addition of M_j to M_i with j<i. A matrix is reduced if all its nonzero columns have pairwise distinct pivots. The process of obtaining a reduced matrix using column additions is called matrix reduction. A pivot pair is a pair of indices (i, j) such that i= M_j in the reduced matrix. reduces the columns from left to right in order and is usually referred to as the standard algorithm for matrix reduction"
+    },
+    {
+      "block_id": "s5_p2",
+      "heading": "Matrix reduction",
+      "major_heading": "Preliminaries",
+      "text": "algorithm2e Boundary matrix D Reduced matrix R R = D j = 1, dots, N lowp(R_(j'))= R_j neq 0 for j' < j add R_(j') to R_j algorithm2e"
+    },
+    {
+      "block_id": "s6_p0",
+      "heading": "Filtered simplicial complex and boundary matrix",
+      "major_heading": "Preliminaries",
+      "text": "We apply matrix reduction on a class of matrices that arise from computational topology"
+    },
+    {
+      "block_id": "s6_p1",
+      "heading": "Filtered simplicial complex and boundary matrix",
+      "major_heading": "Preliminaries",
+      "text": "A simplicial complex altcomplex over a finite set V is a collection of subsets (called simplices ) of V closed under inclusion, i. e. with the property that if sigmain altcomplex and tausubsetsigma, also tauin altcomplex. A simplex with (k+1) -elements is called k -simplex and its dimension, dim(sigma), is k. The dimension of complex is the maximal dimension of its simplices. For k=0, 1, 2 the terms vertices, edges, and triangles are also used, respectively. For a k -simplex sigmain altcomplex, we call a (k-1) -simplex tau with tausubsetsigma a facet of sigma. The set of facets of sigma is called its boundary"
+    },
+    {
+      "block_id": "s6_p2",
+      "heading": "Filtered simplicial complex and boundary matrix",
+      "major_heading": "Preliminaries",
+      "text": "A simplexwise filtered simplicial complex is a sequence of nested simplicial complexes emptyset=altcomplex_(0)subseteq cdotssubseteq altcomplex_N=altcomplex such that altcomplex_isetminus altcomplex_(i-1)= (sigma_(i)) for all i=1, dots, N. We denote the dimension of a simplex sigma_i by d_i. The boundary matrix D of a filtered simplicial complex is the (Ntimes N) -matrix such that D_j^i=1 if sigma_i is a facet of sigma_j, and 0 otherwise. In other words, the j -th column of D encodes the boundary of the j -th simplex of the filtration. Note that the boundary of a k -simplex consists of exactly k+1 facets, so under the reasonable assumption that the maximal dimension of a simplicial complex is a small constant, D has only a constant number of nonzero entries in each column"
+    },
+    {
+      "block_id": "s7_p0",
+      "heading": "Persistence pairs",
+      "major_heading": "Preliminaries",
+      "text": "Matrix reduction on boundary matrices reveals topological properties of the underlying filtered simplicial complex. We use standard notations for the necessary concepts that originate from (persistent) homology theory. We also informally describe their topological meaning, although no deeper understanding of these concepts is required for the results of the paper"
+    },
+    {
+      "block_id": "s7_p1",
+      "heading": "Persistence pairs",
+      "major_heading": "Preliminaries",
+      "text": "Fixing a filtration boundary matrix D, matrix reduction yields a collection of pivot pairs (i, j). The corresponding pair of simplices (sigma_i, sigma_j) is called a persistence pair. For a persistence pair, dim(sigma_j)=dim(sigma_i)+1. Informally, the meaning of a persistence pair is that when sigma_i is added to the filtered simplicial complex (at step i ), it gives rise to a new \"hole\" in the complex (more precisely, a homology class). This hole disappears when sigma_j enters the filtered simplicial complex (e. g., sigma_j fills up that hole). For formal definitions of these concepts, see [Sec. VII, edel_harer2010computational]"
+    },
+    {
+      "block_id": "s7_p2",
+      "heading": "Persistence pairs",
+      "major_heading": "Preliminaries",
+      "text": "Pivot pairs of boundary matrices have special properties that are not true for other types of matrices: first of all, every pivot pair (i, j) satisfies i<j, because a filtration boundary matrix is necessarily upper-triangular, and this property is preserved by matrix reduction. Moreover, every index j appears in at most one pivot pair: this is based on the fact that inserting a k -simplex into a simplicial complex either creates a homology class in dimension k or kills a homology class in dimension k-1 [Pag. 154, see also Sec. V.4, edel_harer2010computational]. This allows us to classify simplices of the filtered simplicial complex into three types: we call a simplex positive if it appears as the first entry in a persistence pair, negative if it appears as the second entry in a persistence pair, and essential if it does not appear in any persistence pair. In topological terms, essential simplices create a hole that is not filled up during the course of the filtration"
+    },
+    {
+      "block_id": "s7_p3",
+      "heading": "Persistence pairs",
+      "major_heading": "Preliminaries",
+      "text": "In what follows, we blur the difference between pivot pairs (of indices) and persistence pairs (of simplices) and identify sigma_i, its index i in the filtration, and the i -th column/row of the filtration boundary matrix. Hence, whenever convenient, we also talk about positive/negative indices and rows/columns"
+    },
+    {
+      "block_id": "s8_p0",
+      "heading": "Clear and compress",
+      "major_heading": "Preliminaries",
+      "text": "The special structure of boundary matrices allows for simple but effective speedups of matrix reduction. We describe two speedup heuristics that are relevant in this work, discussed extensively in [clearcompress]. Both are based on the observation that every index appears in at most one pivot pair"
+    },
+    {
+      "block_id": "s8_p1",
+      "heading": "Clear and compress",
+      "major_heading": "Preliminaries",
+      "text": "For the first heuristic, let us fix a negative index i and a column D_j with D_j^ineq 0. It is then easy to see that i cannot become the pivot of D_j during the reduction process (because then, either D_j itself or another column must end up with i as the pivot, contradicting the assumption that i is negative). Hence, we can simply remove the index i from D_j without changing the pivot pairs. We call the process of removing all negative row indices from a column compressing a column. For the second heuristic, let us fix a positive index i and consider its column D_i. It can be readily observed that in the reduced matrix, D_i cannot have a pivot because that would imply that i is negative. Therefore, D_i can just be set to zero without changing the pivot pairs. We call this step clearing a column"
+    },
+    {
+      "block_id": "s8_p2",
+      "heading": "Clear and compress",
+      "major_heading": "Preliminaries",
+      "text": "Note that to make use of clearing, the simplices of the simplicial complex have to be processed in decreasing dimensions; we refer to this variant of matrix reduction with clearing as twist reduction; the pseudocode can be obtained from by removing. On the other hand, using compression requires proceeding in increasing dimensions, so clear and compress mutually exclude each other, except for more sophisticated approaches [clearcompress]. As shown in [phat_paper], the twist reduction has a very satisfying practical performance and is the default choice in the library"
+    },
+    {
+      "block_id": "s9_p0",
+      "heading": "Column representations",
+      "major_heading": "Preliminaries",
+      "text": "A crucial design choice when implementing matrix reduction is how to store the columns of the matrix. Since boundary matrices are initially sparse, and usually do not fill up too much in the reduction process, a dense vector over Z _2 is a bad choice for its memory consumption. A data structure whose size is proportional to the number of nonzero entries in a column is preferred. A natural choice is to simply store the indices of nonzero entries in a sorted dynamic array (vector). Adding two such columns requires a merge of the two arrays canceling double-occurrences and is therefore proportional to the combined size of both columns. Storing the indices in heap order instead, we can realize the addition of M_i to M_j by inserting every entry of M_i into the heap of M_j which is possible in logarithmic time per entry in M_i. This approach does not eliminate double-occurrences of entries, but their removal can be delayed to a later point when either a pivot is queried or sufficiently many operations have been performed on a column such that a linear scan of the heap is affordable. Using such a \"lazy-heap\", the amortized cost of adding M_j to M_i is proportional to the size of M_i plus logarithmic overhead. We remark that sorted linked lists and balanced binary search trees can be used instead of vectors and heaps, respectively, to obtain similar performance guarantees in theory, but these data structures suffer from the lack of locality in storing the data which results in many cache misses and makes them significantly slower in most application scenarios"
+    },
+    {
+      "block_id": "s9_p1",
+      "heading": "Column representations",
+      "major_heading": "Preliminaries",
+      "text": "Furthermore, while storing the non-zero indices of a column as a vector (or heap) is an efficient choice, it can be worthwhile to transform a column to a different data structure when reducing it. For instance, while storing every column as 0 - 1 -vector is prohibitive because of the memory consumption, it can be beneficial to \"expand\" the dense array of non-zero indices to a long array of 0, and 1, perform column additions on this column, and transform it back into a dense column once the column is reduced. An alternative is to use a lazy heap solely for the column to be reduced, and sorted arrays for all other columns"
+    },
+    {
+      "block_id": "s9_p2",
+      "heading": "Column representations",
+      "major_heading": "Preliminaries",
+      "text": "The software library implements the all aforementioned data representations and several additional ones we refer to the paper for more extensive explanations of the data structures. We emphasize that the performance of matrix reduction depends not only on the reduction algorithm but on combining that algorithm with a suitable column representation; see [Tables 1 and 4, phat_paper]"
+    },
+    {
+      "block_id": "s10_p0",
+      "heading": "Dualization",
+      "major_heading": "Preliminaries",
+      "text": "Given a simplex sigma, the collection of all the simplices that have sigma as a facet is the coboundary of sigma. As we did for the boundary, we can define the filtration coboundary matrix. The crucial observation is that the two matrices are (almost) anti-transposes of each other, and their pivot pairs are in bijection. We do not enter the details here, referring to [dualities] for the precise statements, but this observation has important consequences in practice. As already observed [phat_paper, roadmap], it is much faster to reduce the coboundary matrix than the boundary matrix for some inputs, in particular, for Vietoris Rips filtrations. An explanation of this phenomenon is given in [bauer2021ripser]. Anti-transposing the matrix is called the dualization process, and it adds another degree of freedom when comparing the efficiency of the reductions"
+    },
+    {
+      "block_id": "s11_p0",
+      "heading": "Sparsification variants",
+      "major_heading": "Sparsification variants",
+      "text": "The Pairing Lemma [Pag. 154, edel_harer2010computational] shows that the presence of a pivot pair (i, j) is related to an inclusion-exclusion formula of ranks of D[geq ast, leq bullet], submatrices of D given by the last ast rows of the first bullet columns. It is usually used to prove the correctness of, but it is much more general, as it implies:"
+    },
+    {
+      "block_id": "s11_p1",
+      "heading": "Sparsification variants",
+      "major_heading": "Sparsification variants",
+      "text": "start-of-corollary: Any matrix reduction algorithm that preserves the ranks of the submatrices D[geq i, leq j], for all i, jin (1, dots, N) is a valid barcode algorithm. end-of-corollary"
+    },
+    {
+      "block_id": "s11_p2",
+      "heading": "Sparsification variants",
+      "major_heading": "Sparsification variants",
+      "text": "In other words, any reduction whose operations do not alter the ranks of lower-left submatrices will result in the same barcode decomposition"
+    },
+    {
+      "block_id": "s11_p3",
+      "heading": "Sparsification variants",
+      "major_heading": "Sparsification variants",
+      "text": "start-of-proof: Consider a reduction algorithm satisfying the hypothesis, and assume it obtains the pivot pair (i, j). By the Pairing Lemma, (i, j) is a pivot pair if and only if rankleft(D[geq i,leq j]right)-rankleft(D[geq i+1,leq j]right)+rankleft(D[geq i+1,leq j-1]right)-rankleft(D[geq i,leq j-1]right)=1. Since all these ranks are preserved by the reduction, the claim follows. end-of-proof"
+    },
+    {
+      "block_id": "s11_p4",
+      "heading": "Sparsification variants",
+      "major_heading": "Sparsification variants",
+      "text": "Notably, this interpretation of matrix reduction generalizes the common assumption that the reduced matrix R is obtained from the original boundary matrix D by left-to-right column additions, or equivalently, by multiplication with an invertible rank upper-triangular matrix. While this restriction ensures that the reduction data determines a decomposition of the filtered chain complex (see, e. g., [bauer2021ripser, edelsbrunner2017persistent] ), the above observation shows that a weaker condition is sufficient if one is only interested in the barcode itself and not in the representative cycles or cocycles. This insight opens the possibility of many new variants of the barcode algorithm that go beyond the use of left-to-right column additions. We now present some that try to keep the matrix sparse during the reduction"
+    },
+    {
+      "block_id": "s12_p0",
+      "heading": "Swap reduction",
+      "major_heading": "Sparsification variants",
+      "text": "Our first major variant is based on the following simple idea: assume that the standard algorithm adds column R_i to R_j (hence i<j and R_i and R_j have the same pivot). Before doing so, we can check first whether R_j has fewer entries than R_i; in this case, we swap columns R_i and R_j first and perform the addition afterward (which still results in replacing R_j with R_i+R_j ). This swap is not only profitable in the column additions performed in this step, but also in every later column addition that involves column R_i"
+    },
+    {
+      "block_id": "s12_p1",
+      "heading": "Swap reduction",
+      "major_heading": "Sparsification variants",
+      "text": "We call this variant the swap reduction. This variant appeared in Schreiber's PhD Thesis [p. 77, SchreiberThesis] as a tool to control the size of the boundary matrix in a theorem on average complexity of matrix reduction; see also [ks-casc]. The first indications of its practical performance appeared in [schmid_bachelor]. We also point out that the swap reduction can easily be combined with the clearing optimization; see for the pseudocode for this variant"
+    },
+    {
+      "block_id": "s12_p2",
+      "heading": "Swap reduction",
+      "major_heading": "Sparsification variants",
+      "text": "For correctness, assume that columns 1, ldots, i-1 are already reduced and that column i has the same pivot of a previous column, call it i'. Then the ranks of all lower-left submatrices up to i are unchanged if we swap i and i'. The correctness follows from"
+    },
+    {
+      "block_id": "s12_p3",
+      "heading": "Swap reduction",
+      "major_heading": "Sparsification variants",
+      "text": "algorithm2e Boundary matrix D of a simplicial complex of dimension d Reduced matrix R R = D delta=d, d-1, ldots, 0 j = 1, dots, N R_j has simplex-dimension delta lowp(R_(j'))= R_j neq 0 for j' < j R_j <sizep(R_(j')) swap R_j and R_(j') add R_(j') to R_j R_jneq0 Set R_i to 0 for i= R_j algorithm2e"
+    },
+    {
+      "block_id": "s13_p0",
+      "heading": "Exhaustive reduction",
+      "major_heading": "Sparsification variants",
+      "text": "We review the exhaustive reduction, discussed in [Edel-Olsb], even if the idea was already present in [linkingnumbers, CZ05]. The idea is that after the pivot of the reduced matrix has been identified, further (left-to-right) column additions are performed to eliminate nonzero entries with indices smaller than the pivot. Note that this algorithm produces the lexicographically smallest possible representative for the column given by left-to-right column additions. We omit the pseudocode for brevity (see [Edel-Olsb] ). The exhaustive reduction is combined with the compress-optimization (i. e. removing negative entries from a column before processing it) [CZ05]. In this way, the exhaustive reduction guarantees that the number of nonzero entries in R_ell after reduction is at most the number of homological classes in altcomplex_ell"
+    },
+    {
+      "block_id": "s14_p0",
+      "heading": "Retrospective reduction",
+      "major_heading": "Sparsification variants",
+      "text": "Our second major variant is the retrospective reduction, based on the idea of using (previous and subsequent) pivots to eliminate entries in a column when it needs to be added. An entry in R_k^i is unpaired at ell if there does not exist a pivot pair (i, j) with j leq ell, and paired at ell otherwise. Whenever we add a column R_ell to R_k, we first update R_ell by removing through appropriate column additions all entries that have been paired meanwhile. Note that, if the addition of R_m to R_ell is needed for this purpose, then R_m has to be updated first, so the step is recursive. The recursion stops because the pivot of a column is strictly decreasing in every recursive call. Since these right-to-left column additions involve only entries whose index is smaller than the pivot in the respective column, none of them changes the rank of any lower-left submatrix. Therefore, this reduction is correct by"
+    },
+    {
+      "block_id": "s14_p1",
+      "heading": "Retrospective reduction",
+      "major_heading": "Sparsification variants",
+      "text": "The retrospective algorithm has the property that whenever R_j gets added to another column during iteration k, its size is at most the number of homological classes persisting from j to k (see ). That is, it tries to sparsify columns \"that matter\", i. e. the columns that get added to other columns"
+    },
+    {
+      "block_id": "s14_p2",
+      "heading": "Retrospective reduction",
+      "major_heading": "Sparsification variants",
+      "text": "algorithm2e Boundary matrix D Reduced matrix R main Main red Reduce myproc Procedure D R = D, P=emptyset j= 1, dots, N Remove the negative entries from R_j j j exists paired entries in R_j Let ell be the largest index for which R_(j)^(ell) is paired Add P[ ] to R_j R_j neq 0 P[  Pivot (R_j)] gets j R_j algorithm2e"
+    },
+    {
+      "block_id": "s15_p0",
+      "heading": "Representative cycles",
+      "major_heading": "Sparsification variants",
+      "text": "A representative cycle is a set of simplices that loop around a hole in the complex, and its computation is often of interest, in addition to the one of the associated persistence pair [bauer2021ripser, Dey_Wang_2022, hang2021umatch, minimal_userguide, obayashi2018volume]. In the standard algorithm, at the end of the reduction, the nonzero column providing the persistence pair (i, j) encodes such a representative cycle directly; this is not true in the swap and in the retrospective reductions. However, it holds that during the execution of either algorithm, once the persistence pair (i, j) is identified (i. e., before any swapping of column j or any right-to-left column additions on column j ), the column represents a valid representative for the homology class. So, while the representatives are not encoded in the final matrix, they can be stored with little extra effort"
+    },
+    {
+      "block_id": "s16_p0",
+      "heading": "Further variants",
+      "major_heading": "Sparsification variants",
+      "text": "There are numerous alternatives to obtain reduced columns of (potentially) smaller size. We mention two more variants: recall that the exhaustive algorithm performs a sequence of further column additions after the pivot has been determined. In this process, it computes a sequence of columns c_1, ldots, c_r, all with the same pivot and therefore being valid choices for the reduced matrix. In the mixed strategy, we simply remember which column has the smallest size and use its reduced column. Since this variant \"locally\" improves the size of a reduced column compared to both the standard and exhaustive variant, one could hope that the mixed strategy improves on both of them"
+    },
+    {
+      "block_id": "s16_p1",
+      "heading": "Further variants",
+      "major_heading": "Sparsification variants",
+      "text": "A (perhaps obvious) further variant is to compute the column with the smallest size among all possible alternatives. This problem can be re-phrased as follows. Given a vector W and n vectors U_1, dots, U_n in Z _2^m, find a_1, dots, a_n in Z _2 such that W + a_1 U_1 + dots + a_n U_n has the minimum number of nonzero coefficients. This problem is called the Nearest Codeword Problem ( NCW ), which is known to be NP-hard and NP-hard to approximate within any constant factor [arora]. For completeness, we show a simple reduction from MaxCut"
+    },
+    {
+      "block_id": "s16_p2",
+      "heading": "Further variants",
+      "major_heading": "Sparsification variants",
+      "text": "start-of-proposition: NCW is NP-hard. end-of-proposition"
+    },
+    {
+      "block_id": "s16_p3",
+      "heading": "Further variants",
+      "major_heading": "Sparsification variants",
+      "text": "start-of-proof: Let G = (V, E) be a graph, with set of vertices V=(v_1, dots, v_n) and edges E=(e_1, dots, e_m), and M(G) in Z _2^(m times n) its vertex-edge incidence matrix. Set W=[1,dots,1], and U_1, dots, U_n as the columns of M(G). Given a_1, dots, a_nin Z _2, let W'=W + a_1 U_1 + dots + a_n U_n. For e_j=(v_i, v_k), we have that W'[j]=0 if and only if a_i=0 and a_k=1, or a_i=1 and a_k=0. Therefore, setting A=(i colon a_i = 0 ) and B=(i colon a_i = 1 ), we have vert (j colon W'[j]=0) vert = vert (e=(v_i, v_k) in E colon (iin A wedge k in B) vee (kin A wedge i in B) ) vert Thus, maximizing the number of zeros of W' is equivalent to finding a maximum cut of G, so we can reduce MaxCut to NCW, establishing the NP-hardness of NCW [karp]. end-of-proof"
+    },
+    {
+      "block_id": "s17_p0",
+      "heading": "Experiments",
+      "major_heading": "Experiments",
+      "text": "We have implemented our new algorithmic variants ( swap, retrospective, and mix ) as an extension of the publicly available library [phat_paper]. We also implemented the exhaustive reduction for comparison. All our algorithms are implemented such that they can be combined with any of the data structures provided by (which required minor extensions of the interface), and are included in version 1. 7 of the library. Moreover, we included a branch called keeping_it_sparse_experiments that contains further modifications and test scripts required to reproduce the experiments of this section. Finally, the datasets that were used in our experiments together with the required scripts to produce them are available in a public repository [repo]"
+    },
+    {
+      "block_id": "s17_p1",
+      "heading": "Experiments",
+      "major_heading": "Experiments",
+      "text": "We address three questions in our experimental evaluation: start-of-itemize:. sep0em. To what extent do our novel approaches really sparsify the reduced boundary matrix, and does this sparsification lead to a reduction in the number of matrix operations performed?. What are the most appropriate data structures to represent columns for our novel approaches?. How do the best combinations perform in comparison with the default options of? end-of-itemize"
+    },
+    {
+      "block_id": "s17_p2",
+      "heading": "Experiments",
+      "major_heading": "Experiments",
+      "text": "For our tests, we ran our experiments on a workstation with an Intel Xeon E5-1650v3 CPU and 64 GB of RAM, running Ubuntu 18. 04. 6 LTS, with gcc version 9. 4. 0 and optimization flags - -O3 - -DNDEBUG. The implementation is not parallelized"
+    },
+    {
+      "block_id": "s18_p0",
+      "heading": "Datasets",
+      "major_heading": "Experiments",
+      "text": "We cover different types of filtered simplicial complexes to investigate the performance in a broader context. In particular, we used Vietoris Rips filtrations of high-dimensional point clouds, taken from the benchmark set in [roadmap] (in all cases, we restricted to the 2 -skeleton without imposing a limit on the edge length), we generated alpha shape filtrations of random points clouds on a cube, a swissroll and a torus (generated with [tadaset] ) and lower star filtrations generated from publicly available three-dimensional scalar fields [images_database]. The latter are not simplicial but cubical complexes all concepts in this paper carry over to this case without difficulty"
+    },
+    {
+      "block_id": "s18_p1",
+      "heading": "Datasets",
+      "major_heading": "Experiments",
+      "text": "We also include the shuffled filtration: it is obtained by adding n vertices, then all n (2) edges in random order, and finally all n (3) triangles in random order. Such filtrations tend to perform significantly more column operations than the standard examples. Therefore, we consider them as a \"stress-test\" for challenging reduction tasks that have recently shown up in the context of image persistence [bauer-schmahl-image] and two-parameter persistence computation using cohomology [bauer-lenzen-lesnick-cohomology]"
+    },
+    {
+      "block_id": "s19_p0",
+      "heading": "Sparsity and bitflips",
+      "major_heading": "Experiments",
+      "text": "We examine the number of nonzero entries of each variant's final reduced boundary matrices, called the fill-in. Moreover, we count the number of column additions for each variant to see the effect on efficiency. For a more detailed picture, we also count the number of bitflips of the algorithm: when adding a column R_k to R_ell, the size of R_k equals the number of entries in R_ell that needs to be flipped, and the number of bitflips is the accumulated number of such flips over all column additions. We remark that the name \"bitflip\" is a slight abuse, as it refers to a model where each boundary matrix entry is stored as 1 bit, which is not necessarily what happens in practice, but it is nevertheless a descriptive name, which is why we chose it. We expect the number of bitflips to be a good indicator of the practical performance of an algorithm, as the bulk of the running time of matrix reduction is usually spent on column additions"
+    },
+    {
+      "block_id": "s19_p1",
+      "heading": "Sparsity and bitflips",
+      "major_heading": "Experiments",
+      "text": "The choice of the column representation has no influence on this experiment. On the contrary, the number changes dualizing the input matrix. Therefore, we tested each algorithm both on the primal and on the dual matrix"
+    },
+    {
+      "block_id": "s19_p2",
+      "heading": "Sparsity and bitflips",
+      "major_heading": "Experiments",
+      "text": "show the outcome for one instance per filtration type. We can see that swap reduction consistently leads to smaller reduced matrices and also reduces the number of column operations and bitflips, compared to twist reduction (with the exception of dualized Vietoris Rips filtrations, where the number of column operations is very small). The difference is sometimes marginal, though. Consistently across the datasets, we can see that the retrospective, followed closely by the mix, outputs much sparser matrices, with the notable exception of dualized Vietoris Rips. However, the number of column operations and bitflips is generally not decreasing. The exhaustive reduction is also producing similarly sparse matrices, but for shuffled filtrations. However, the number of bitflips seems to be generally higher than for the retrospective. Note that in some examples, the ratio of column operations and bitflips for exhaustive and retrospective is close to one (e. g., in the middle part of Table 1), meaning that the majority of column operations add columns with a single non-zero entry. This shows that the compression strategy is particularly beneficial for these instances. Finally, the numbers indicate that mix reduction is not a successful strategy: even if it manages to obtain sparse reduced matrices, often sparsifying comparably to the retrospective, it requires many more column operations and many more bitflips (to an extent that surprised the authors)"
+    },
+    {
+      "block_id": "s19_p3",
+      "heading": "Sparsity and bitflips",
+      "major_heading": "Experiments",
+      "text": "Hence, our novel variants do improve sparsity quite consistently, but this does not automatically lead to improved performances. According to these experiments, there is no direct correlation between sparser matrices and fewer bitflips"
+    },
+    {
+      "block_id": "s20_p0",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "We consider the runtime next. In particular, we look at the influence of the column representation on the performance of the algorithm. For that, we run each of our algorithms with each of the 8 available representations in (we refer to [phat_paper] for an extensive description of the data structures). We show the running times for an alpha shape filtration and a Vietoris Rips filtration in, for a lower star filtration and shuffled filtration in. Note that these tables show only the running time for the matrix reduction; the time to read the input file into memory and to (potentially) dualize the matrix (both of which usually take more time than the reduction itself) is not shown"
+    },
+    {
+      "block_id": "s20_p1",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "First of all, the tables confirm the earlier findings in [phat_paper]: the performance of the twist algorithm highly varies depending on the chosen data structure, and the best results are achieved using the A-Bit-Tree representation, which is also the default in. Moreover, for Vietoris Rips filtrations, it is highly beneficial to dualize the matrix"
+    },
+    {
+      "block_id": "s20_p2",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "The swap reduction generally performs similarly to twist, working fast with dualization on Vietoris Rips complexes. Remarkably, it performs much better if run with A-Full on the lower star filtration. Swap is generally slower on the data structures Heap, A-Heap, and A-Bit-Tree. The explanation lies in the way how we use these data structures to represent columns, which does not permit a constant-time access to the size of a column. As the size is queried before every column addition, this results in a considerable slow-down for the swap algorithm"
+    },
+    {
+      "block_id": "s20_p3",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "We observe that the performance for the retrospective algorithm seems more stable across different data structures than for other algorithms on alpha and lower star filtrations. We speculate that the reason for this general stability is the general sparsity of the columns, which reduces the importance of how the entries are stored in memory. We also observe that it sometimes, but not always, improves on the exhaustive algorithm. Remarkably, the retrospective is competitive in practice (for example, on the alpha filtration) even if it is not implemented with the clearing optimization. We are not aware of other variants with this characteristic"
+    },
+    {
+      "block_id": "s20_p4",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "As expected from, the mix algorithm generally has the poorest practical performance among all tested algorithms. We therefore leave it out in further comparisons"
+    },
+    {
+      "block_id": "s20_p5",
+      "heading": "Data structures",
+      "major_heading": "Experiments",
+      "text": "Based on our experiments, we identified that twist works most efficiently in combination with A-Bit-Tree (as previously known), and the retrospective and the exhaustive algorithms work best with the Vector representation but for the shuffled filtrations, where exhaustive should be paired with A-Bit-Tree. The swap reduction sometimes works best with Vector and sometimes with A-Full. Since the advantage of A-Full was generally more significant, we chose A-Full for subsequent experiments"
+    },
+    {
+      "block_id": "s21_p0",
+      "heading": "Performance on large datasets",
+      "major_heading": "Experiments",
+      "text": "We now compare the performance on larger instances. We focus on the combinations that were identified to be most efficient in the previous experiments. We run each algorithm on the original matrix and its dual and pick the better of the two runtimes"
+    },
+    {
+      "block_id": "s21_p1",
+      "heading": "Performance on large datasets",
+      "major_heading": "Experiments",
+      "text": "The results are displayed in. We observe that retrospective is systematically by 1 or 2 orders of magnitude better than twist for shuffled, and worse by one or two orders of magnitude for Vietoris Rips filtrations. Also, it is interesting that whenever twist is faster after dualizing, retrospective is faster without dualization and vice versa. We observe that swap is always as fast or slightly slower than the twist on the first three filtrations. It is decidedly faster only on shuffled filtrations; however, it is not as fast as retrospective. Moreover, swap and twist mostly perform better on the same type of matrices: original for alpha shape and lower star filtrations, and dual on Vietoris Rips. Remarkably, swap performs better on shuffled filtrations without dualization, unlike the twist reduction. Interesting is the case of lower star filtrations: while here it is clear that swap and exhaustive are not the best performing, it is more difficult to choose between twist and retrospective. Indeed, while retrospective is generally better than twist, sometimes the latter takes only half the time. This behavior does not correlate with the input sizes. We theorize that it depends on the number of short-lived bars: when there are more, the sparsification of the retrospective pays off (as it happens in the bonsai image), while when there are fewer, like in the skull image, it does not. Finally, the exhaustive scales as retrospective on alpha shape filtrations but is slower by two orders of magnitude on the shuffled filtration. Moreover, exhaustive performs slightly better than retrospective on Vietoris Rips filtrations, even if not as good as swap and twist"
+    },
+    {
+      "block_id": "s21_p2",
+      "heading": "Performance on large datasets",
+      "major_heading": "Experiments",
+      "text": "In general, we see that our variants keep the matrix sparse for the shuffled filtration and this leads to a significant improvement in efficiency. Likely, this happens because, in the reduction of random filtrations, each column is added several times. Thus, keeping it sparse pays off"
+    },
+    {
+      "block_id": "s22_p0",
+      "heading": "Memory consumption",
+      "major_heading": "Experiments",
+      "text": "We also tested the memory peak consumption of the algorithms ( ). For the alpha shape filtrations, the twist and the swap are better than the retrospective and exhaustive. On the other three filtrations, the exhaustive is generally better than any other algorithms. Twist and swap are quite similar on alpha and Vietoris Rips filtrations, but swap uses considerably less memory on shuffled, possibly because it does not need to dualize. In these experiments, the memory overhead for dualizing the input matrix is included in these numbers, which might partially explain why the dualized instances usually take more memory"
+    },
+    {
+      "block_id": "s23_p0",
+      "heading": "Summary of the experiments",
+      "major_heading": "Experiments",
+      "text": "The experiments show that, while the sparsity of the matrix is a necessary condition for efficiency, it is, perhaps surprisingly, not always a sufficient one. The general behavior appears to be that the more structured the data, the less it pays off to sparsify"
+    },
+    {
+      "block_id": "s23_p1",
+      "heading": "Summary of the experiments",
+      "major_heading": "Experiments",
+      "text": "For highly structured data, such as Vietoris Rips and alpha filtrations, the price of keeping the matrix sparse exceeds its advantages. Indeed, the only competitive sparsifying algorithm in this situation is the swap algorithm, which does only a few extra operations and does not sparsify aggressively"
+    },
+    {
+      "block_id": "s23_p2",
+      "heading": "Summary of the experiments",
+      "major_heading": "Experiments",
+      "text": "On the other hand, for random data such as the shuffled filtration, sparsifying is a winning strategy. In this situation, the retrospective, which tries most aggressively to sparsify the matrix, is by two orders of magnitude faster than the twist, and the swap outperforms the twist by one order of magnitude"
+    },
+    {
+      "block_id": "s23_p3",
+      "heading": "Summary of the experiments",
+      "major_heading": "Experiments",
+      "text": "Another emerging behavior is that exhaustive performs quite badly across all input data. Possibly, this depends on the fact that while it does many operations, it keeps the matrix less sparse than other sparsifying algorithms. In other words, it pays a price to sparsify but the payoff is lower"
+    },
+    {
+      "block_id": "s23_p4",
+      "heading": "Summary of the experiments",
+      "major_heading": "Experiments",
+      "text": "Last but not least, the experiments on the lower star filtrations indicate that the winning strategy is to use either the twist or the retrospective, but there is no emerging trend indicating when to use which. Even more, usually the retrospective is faster, but when it is not it performs much worse than the twist. A possible explanation is that this depends on the number of shorter bars: when there are more, and therefore more computation is required, sparsifying pays off"
+    },
+    {
+      "block_id": "s24_p0",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "The idea of the retrospective reduction is to keep reducing the columns-to-be-added using the newly found pivots. This, together with the fact that pivots encode information about persistence pairs, allows us to bound the number of bitflips with the persistence Betti numbers. To prove the bounds, we group the column additions into complementary classes: forward/backward, depending on if the addition is left-to-right or right-to-left, and non-/ interval, according to whether the column indices are outside or inside some persistence interval. The first bound is then obtained by counting the bitflips from forward additions directly and the ones from backward using interval additions. The second bound follows by counting the bitflips from non-interval additions directly and the ones from intervals using forward and backward additions"
+    },
+    {
+      "block_id": "s24_p1",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "Let us write P for the set of pivot pairs of a filtered simplicial complex and P: = Pcup((i, N+1)mid sigma_i is essential ). The Betti number k for 1leq kleq N is defined as k: = # ((i, j)in P mid ileq k < j)). The topological interpretation is that ell is the number of holes in the complex altcomplex_(ell). The persistent Betti number k, ell, for 1leq k leq ell leq N is defined as k, ell: = # ((i, j)in P mid ileq k, j > ell) and gives the number of holes that are persistently present in all complexes altcomplex_(k), ldots, altcomplex_(ell). In algorithm_lr_red, R_k is pivoted after the procedure Reduce is invoked with k as the argument in the for loop of the procedure"
+    },
+    {
+      "block_id": "s24_p2",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "The addition of R_k to R_(ell) is called forward if k < ell and backward if k > ell. A forward (resp. backward ) bitflip is a bitflip resulting from a forward (backward) addition. For integers k, ell, the bitflip of R_(ell)^i when adding R_k to R_(ell) is an interval bitflip for a pair (i, j)in P if k, ell in (i+1, dots, j), and non-interval otherwise. For the retrospective algorithm, the interval bitflips dominate the cost. Moreover, this cost can be bounded in terms of persistence Betti numbers and index persistence"
+    },
+    {
+      "block_id": "s24_p3",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-lemma: If k < ell and R_ell is added to R_k, all the resulting bitflips are interval. end-of-lemma"
+    },
+    {
+      "block_id": "s24_p4",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proof: By Observation, if the addition of R_ell to R_k flips the i -th entry, then i leq R_k. Thus, i<k<ell. For the other inequality, by Observation, it follows that when R_ell is added to R_k the entries in R_ell are not paired with indices less than ell. end-of-proof"
+    },
+    {
+      "block_id": "s24_p5",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-lemma: Any two columns are added to each other at most once backward and at most once forward. end-of-lemma"
+    },
+    {
+      "block_id": "s24_p6",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proof: Fix 1leq k < ell leq N. R_k is added to R_(ell) only once when R_(ell) is being pivoted. R_(ell) is added to R_k only if ell is paired to j and R_k^(j)neq 0. Once R_k^(j) is eliminated from R_k, it is not reintroduced, since j is now paired, and therefore R_(ell) is added to R_k at most once. end-of-proof"
+    },
+    {
+      "block_id": "s24_p7",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-lemma: Let (i, j) be a pivot pair. Once R_(j) is pivoted, sizep(R_(j)) is always leq 1 + i, j. end-of-lemma"
+    },
+    {
+      "block_id": "s24_p8",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proof: By Observation, immediately after R_j is pivoted, the entries above i= R_j are unpaired at j, and hence sizep(R_(j)) leq 1 + i, j. Subsequently, R_ell is added to R_j only if ell > j and lowp(R_(ell)) <i. Moreover, when R_ell is added to R_j, by Observation, the entries above R_ell are unpaired at ell. Hence, sizep(R_(j)) leq 1 + i, j is maintained in subsequent additions into R_j. end-of-proof"
+    },
+    {
+      "block_id": "s24_p9",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "As an immediate corollary, we have:"
+    },
+    {
+      "block_id": "s24_p10",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-corollary: Let (i, j)in P. The number of bitflips of an addition to or from R_j is leq 1+beta_(i, j). end-of-corollary"
+    },
+    {
+      "block_id": "s24_p11",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proposition: The total number of bitflips in is bounded by sum_((i, j) in P) ( i, j + 1) cdot min ( i, j + 1, j-i+1) + sum_(k = 1)^N (d_k+1)left( k +1right). end-of-proposition"
+    },
+    {
+      "block_id": "s24_p12",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proof: The first term is obtained by bounding the backward bitflips in two fashions: into and from R_j. Fix a pivot pair (i, j). By any additions involving R_j has at most 1+beta_(i, j) bitflips, providing the first factor. We now count how many columns are added to R_j, how many columns R_j is added to, and take the minimum. Backward additions into R_j are executed to zero out a formerly unpaired entry that is now paired, and at most i, j +1 entries from R_j need to be zeroed out. By, R_j is added only to columns R_(ell) for i+1leq ell leq j-1, and by the backward additions happen at most once. The second term bounds forward bitflips. Fix ell < k. By Observation, before R_ell is added to R_k, R_ell leq 1+ k. The paired entries in R_k before R_k is pivoted is bounded by d_k+1. Hence, d_k+1 is the maximum number of columns that need to be added to R_k to zero out, and each is added only once ( ). So, the total number of forward bitflips in R_k is bounded by (d_k+1)( k +1). end-of-proof"
+    },
+    {
+      "block_id": "s24_p13",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proposition: The total number of bitflips required to reduce D in is bounded by sumlimits_( ((i, j) in P )) ( j - i)^2 + sum_(k=1)^(N)(d_k+1). end-of-proposition"
+    },
+    {
+      "block_id": "s24_p14",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "start-of-proof: The two addends are bound, respectively, by the interval and non-interval bitflips. Let (i, j) in P. For i < k < ell leq j, by, the elements R_(k)^i and R_(ell)^i are added to each other at most once. So, the total number of forward and backward interval bitflips in row i is bounded by (j-i)^2/2 each, and the first term follows. By, all non-interval bitflips are forward bitflips. By Observation, if R_k is added to R_ell for k<ell, the entries above R_k are not paired until ell, and lead to interval bitflips in R_ell. As a result of adding R_k, the only non-interval bitflips in R_ell occur in the row index of R_k. Since D is a boundary matrix, at the beginning every column k has at most d_k+1 unpaired entries which need to be zeroed out, proving the claim. end-of-proof"
+    },
+    {
+      "block_id": "s24_p15",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "If we restrict the matrix D to the p -simplices of the complex, we obtain the p -dimensional boundary matrix D^((p)). We then have a finer analysis of. The bound for the number of bitflips required to reduce D^((p)) is sumlimits_( ((i, j) in P ), d_j = p) ( j - i)^2 + N(p+1)"
+    },
+    {
+      "block_id": "s24_p16",
+      "heading": "Output-sensitive bounds",
+      "major_heading": "Output-sensitive bounds",
+      "text": "Using Observation and, the maximum number of entries in R_i for i=1, dots, N during the course of the algorithm is d_i + i + 1. Let beta_(max) = max_(i=1, dots, N) i. Then the peak memory consumption for is bounded by O(N (max_i d_i+beta_(max)))"
+    },
+    {
+      "block_id": "s25_p0",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Our experiments have shown that, in practice, retrospective and swap reductions have the potential to run faster than twist. However, there exist constructions for which either of the three mentioned algorithms performs asymptotically better than the other two. Specifically:"
+    },
+    {
+      "block_id": "s25_p1",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "start-of-proposition: Let Ain( twist, swap, retrospective ). Then there exists an infinite family of filtered simplicial complexes with increasing size n, such that the number of bitflips for matrix reduction using A is bounded by O(n), where the number of bitflips for the other two algorithms is Omega(n^2). end-of-proposition"
+    },
+    {
+      "block_id": "s25_p2",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "We prove this statement by four constructions of filtered simplicial complexes with the following properties: start-of-itemize:. sep0em. Complex K_1 causes O(n) bitflips for retrospective, and Omega(n^2) bitflips for twist and swap,. Complex K_2 causes O(n) bitflips for twist and swap, and Omega(n^2) bitflips for retrospective.. Complex K_3 causes O(n) bitflips for swap, and Omega(n^2) bitflips for twist.. Complex K_4 causes O(n) bitflips for twist, and Omega(n^2) bitflips for swap. end-of-itemize"
+    },
+    {
+      "block_id": "s25_p3",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "The statement follows directly from these 4 constructions"
+    },
+    {
+      "block_id": "s25_p4",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Each construction consists of two parts: the complexity study of the reduction of a specific boundary matrix, and the existence of a simplicial complex realizing said boundary matrix"
+    },
+    {
+      "block_id": "s25_p5",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Existence of simplicial complex K_1. The complex is depicted in. We start with a structure that we call an (open) wheel: it consists of n triangles incident to a wheel center vertex such that subsequent triangles share an edge, but the first and last triangles do not share an edge. The edges incident with the wheel center are called spoke edges. The two that are part of only one triangle are called the initial and the final spoke edge, respectively. The edges not-incident with the wheel center are called tire edges. We enumerate these edges as follows: first the initial spoke edge, then all the tire edges along the wheel starting with the one adjacent to the initial spoke, and finally all the remaining spoke edges following the wheel starting with the spoke forming a triangle with the initial spoke edge. We then sort the triangles following the wheel starting from the final spoke edge (that is, in the opposite direction w. r. t. the spoke edges). Note that by design, the tire edges are merging components in the filtration and are, therefore negative"
+    },
+    {
+      "block_id": "s25_p6",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Next, we attach a fan of size n to the final spoke edge. This means we introduce n additional vertices v_1, ldots, v_n and form n fan triangles, each joining one v_i with the final spoke edge. The two edges of a fan triangle, not being the final spoke edge, are called fan edges. We call the fan edge incident to the center center fan edge, and the other one outer fan edge. We sort the edges of the filtration by letting the center fan edges come after the tire edges, followed by the outer fan edges, followed by the final spoke edge. Finally, the fan triangles come after the wheel triangles"
+    },
+    {
+      "block_id": "s25_p7",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Reduction complexity of K_1. This construction yields a filtered simplicial complex whose boundary matrix contains the matrix of as submatrix. Note that is also a submatrix of the construction in [morozov2005worst-case]. The first half of the matrix contains a \"staircase\" of columns with decrementing pivots. The staircase is of size 4 in but can easily be extended to an arbitrary n in the obvious way. The second half consists of columns that all have the same pivot, equal to the lowest step of the staircase. When reducing the matrix (using the standard or twist algorithm), the reduction of each column in the second half causes the algorithm to add each column of the first half to it in order. In total, this causes a quadratic number of column operations. The swap algorithm has the same complexity since here no swapping happens"
+    },
+    {
+      "block_id": "s25_p8",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "The retrospective algorithm, however, sparsifies the first column before it gets added to the second half. This simplification requires linear time (by one iteration through the staircase) and results in a unit vector. In all additions to the second half, the cost is therefore constant. This leads to linear complexity. It is important to note that the third nonzero entry for the left-hand-side columns comes from a tire edge, which is negative. Hence, these indices will be removed when reducing wheel triangles. Therefore, ignoring these indices, we observe that indeed the first column turns into a unit vector. Reducing the fan triangles with the retrospective algorithm thus results in removing the final spoke edge, which makes the outer fan edge the pivot, and the reduction of the column stops after one bitflip"
+    },
+    {
+      "block_id": "s25_p9",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "It remains to be argued that the reduction of the edges in the filtration is linear as well for the retrospective reduction. However, this is simple to see, putting an appropriate order of the vertices in the complex. We omit the details"
+    },
+    {
+      "block_id": "s25_p10",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Existence of simplicial complex K_2. For K_2, we extend the complex K_1 by adding one more vertex, called the apex, and connecting it with every vertex of the wheel via an edge (see ). We call these edges apex edges. We sort the edges of K_2 in the following order: apex edges, center fan edges, initial spoke edge, tire edges, inner spoke edges, outer fan edges, and final spoke edge. The triangles remain in the same order as in K_1"
+    },
+    {
+      "block_id": "s25_p11",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "The two major differences to the situation of K_1 are: the tire edges are now positive edges, so the compression will not remove these entries anymore. Moreover, shifting the outer fan edges later in the filtration creates a block of n edges between the inner spoke edges and the final spoke edge. The filtration boundary matrix therefore looks as depicted in, where the just mentioned block is given between the two horizontal lines"
+    },
+    {
+      "block_id": "s25_p12",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Reduction complexity of K_2. We see now that twist and swap reduction only cause one column addition for every column on the right because the entries in the newly inserted block prevent the algorithm from doing further reductions. Importantly, each column operation only causes a constant number of bitflips, so that the complexity is linear in the end. Again, it can easily be argued that the reduction of the edges for the twist and swap algorithm requires only linear time"
+    },
+    {
+      "block_id": "s25_p13",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "For the retrospective reduction, the addition of the first column to the second half causes a \"sparsification\", as in the previous example. However, in this case, this sparsification actually turns the first column into a column with n nonzero entries because it collects all indices of tire edges while iterating through the staircase. Since we then add this column n times (once to every column on the right) and each addition causes n bitflips, we get quadratic complexity"
+    },
+    {
+      "block_id": "s25_p14",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Reduction complexity of K_3. For K_3, we build up a filtration boundary matrix as depicted in. For reference, we call the horizontal blocks in figure block 1 to block 5, starting from the bottom"
+    },
+    {
+      "block_id": "s25_p15",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "The twist algorithm applied to this boundary matrix reduces the fifth column by adding all columns on the left to it. This results in a fill-in of row indices in block 4, and the pivot being the unique row index of block 2. Since all columns on the right have the same pivot, the reduced fifth column with n entries is added to every column to the right, resulting in quadratic complexity"
+    },
+    {
+      "block_id": "s25_p16",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "In the swap reduction, the fifth column is reduced in the same way. However, when added to the first column to the right, a swap happens so that in the reduction of the subsequent columns, the sixth column is used. We can observe by the block structure in block 3 that all further columns are reduced after one column addition. Also, column six has only 3 nonzero entries, so the total complexity is linear"
+    },
+    {
+      "block_id": "s25_p17",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Existence of simplicial complex K_3. To realize the depicted matrix as the boundary matrix of a simplicial complex, we again construct an open wheel. We attach one triangle to the final spoke edge, joining it with a new vertex (represented by the middle column of the matrix). Then, on the edge of that triangle not incident to the wheel center, we attach a fan of n triangles. It is easily possible to sort the edges of this complex in a way that we get the depicted block structure"
+    },
+    {
+      "block_id": "s25_p18",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Reduction complexity of K_4. For K_4, we build a boundary matrix as in. For general n, the matrix has n columns on the left (group A), n columns on the right (group C), and exactly 3 columns in the middle (group B)"
+    },
+    {
+      "block_id": "s25_p19",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "For the twist reduction, the 2-nd column in group B gets reduced with one column addition, resulting in a column with 4 nonzero entries. The 3-rd column in group B then has the same pivot as the just-reduced column in the middle, and the reduction of the 3-rd column requires the addition of all columns in group A. Still, this process only requires a linear amount of bitflips. All columns in group C get added from the 2-nd column in group B, and because of their entries in the 3-rd row block, the reduction stops after one addition. In total, the twist reduction needs only linear time"
+    },
+    {
+      "block_id": "s25_p20",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "In the swap reduction, the difference is that at the beginning of the reduction of the 3-rd column in group B, a swap happens (as the 3rd column has only 3 nonzero entries, the 2-nd column has 4 entries). That means that the 3-rd column in the middle gets added to all columns in group C. Consequently, for the reduction of every column on the right, the reduction adds all the groups on the left to it, resulting in a quadratic number of column additions"
+    },
+    {
+      "block_id": "s25_p21",
+      "heading": "Differentiating examples",
+      "major_heading": "Differentiating examples",
+      "text": "Existence of simplicial complex K_4. The construction of a complex K_4 that realizes this boundary matrix can be done as follows: Similarly to K_3, we start with an open wheel, attach one new triangle (that is the 3-rd column in group B), and put a fan of n triangles at its outer edge (these are the columns forming group C). To one of these triangles (that is, the 1-st column in group B) we attach another triangle (the 2-nd column in group B). The edge that is shared among the last described triangles is the last row in the matrix. The edges can easily be sorted to yield the matrix of"
+    },
+    {
+      "block_id": "s26_p0",
+      "heading": "Conclusion and Discussion.",
+      "major_heading": "Conclusion and Discussion.",
+      "text": "In this work, we analyzed how the sparsity of the reduced matrix correlates with the efficiency of the reduction by comparing different algorithms that keep the matrix sparse(r). The experiments show that there is no direct relation, as algorithms resulting in less sparse matrices were faster than others that aggressively sparsify. Nevertheless, the idea of keeping the matrix sparse has led us to novel reduction strategies that improve upon state-of-the-art reductions. Hence, sparsity is an important factor in fast matrix reduction"
+    },
+    {
+      "block_id": "s26_p1",
+      "heading": "Conclusion and Discussion.",
+      "major_heading": "Conclusion and Discussion.",
+      "text": "The retrospective algorithm often achieves comparable or even better performance than the twist reduction without clearing columns. Specifically, it outperforms all other tested methods for shuffled filtration. Up to our knowledge, this is the first time that a method without clearing has been proven competitive in practice, which is remarkable as the clearing is the standard optimization that consistently leads to improved performances. In our experiments over a wide range of datasets, the retrospective method has regularly low fill-in compared to the other methods. We believe that the superior performance of the retrospective method is rooted in its sparsity-preserving property"
+    },
+    {
+      "block_id": "s26_p2",
+      "heading": "Conclusion and Discussion.",
+      "major_heading": "Conclusion and Discussion.",
+      "text": "As indicated in, there is no strategy that is strictly better than others, so the best choice of reduction for a specific type of input has to be determined by comparison. We will integrate our novel variants into the PHAT library in the next release of PHAT to facilitate this comparison"
+    }
+  ],
+  "load_seconds": 33.722469778964296
+}
